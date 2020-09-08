@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+  <script>
+    function turnOnAudio() {
+      const context = new AudioContext();
+
+      context.audioWorklet
+        .addModule("pure-script-worklet-processor.js")
+        .then(() => {
+          navigator.mediaDevices
+            .getUserMedia({ audio: true })
+            .then(function (stream) {
+              var source = context.createMediaStreamSource(stream);
+
+              let psWorkletNode = new AudioWorkletNode(
+                context,
+                "pure-script-worklet-processor"
+              );
+              psWorkletNode.port.onmessage = (event) => {
+                console.log(event.data);
+              };
+              source.connect(psWorkletNode);
+              psWorkletNode.connect(context.destination);
+              source.connect(context.destination);
+            });
+        });
+    }
+  </script>
+  <body>
+    <button onclick="turnOnAudio();">turn on</button>
+  </body>
+</html>

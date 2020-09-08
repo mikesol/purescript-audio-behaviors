@@ -1,19 +1,57 @@
-module FRP.Behavior.Audio (SampleFrame, AudioProcessor, makeAudioWorkletProcessor) where
+module FRP.Behavior.Audio (SampleFrame, AudioProcessor, makeAudioWorkletProcessor, audioIO, IdxContext) where
 
 import Prelude
-import Effect (Effect, whileE)
+import Data.Array (head, index, length, replicate, snoc, zipWith, (!!))
+import Data.Int (floor, toNumber)
+import Data.Maybe (fromMaybe)
+import Effect (Effect)
+import Effect.Ref (modify_, new, read, write)
 import FRP.Behavior (Behavior, behavior, sample_)
 import FRP.Event (Event, makeEvent, subscribe)
+import Heterogeneous.Mapping (class HMap, class Mapping, hmap)
+import Type.Row.Homogeneous (class Homogeneous)
+
+-- hack because cpp ffi doesn't have whileE yet
+whileEImpl :: forall a. Effect Boolean -> Effect a -> Effect Unit
+whileEImpl b m = do
+  truthy <- b
+  if truthy then
+    ( do
+        void m
+        whileEImpl b m
+    )
+  else
+    pure unit
+
+newtype IdxContext i
+  = IdxContext i
+
+instance deArr ::
+  Mapping (IdxContext Int) (Array Number) Number where
+  mapping (IdxContext i) = \a -> fromMaybe 0.0 $ (a !! if length a == 1 then 0 else i)
+
+paramGetter ::
+  forall (a :: # Type) (b :: # Type).
+  Homogeneous a (Array Number) =>
+  Homogeneous b Number =>
+  HMap (IdxContext Int) (Record a) (Record b) =>
+  Int ->
+  { | a } ->
+  { | b }
+paramGetter i a = hmap (IdxContext i) a
 
 type SampleFrame
   = Array (Array Number) -- inputs [ channels [ ] ]
 
-type AudioProcessor r
+type Audio
+  = Array (Array (Array Number)) -- inputs [ channels [ samples [] ] ]
+
+type AudioProcessor (r :: # Type)
   = Behavior Number -> -- current time
     ( Number -> -- offset from current time - a positive float. 0.0 = now, 0.58 = 0.58 seconds ago, etc
       Behavior SampleFrame -- a sample frame at that time
     ) ->
-    Behavior r -> -- custom parameters at the current time
+    Behavior (Record r) -> -- custom parameters at the current time
     Behavior SampleFrame -- a sample frame at the current time
 
 type AudioSink
@@ -32,7 +70,7 @@ soundify e scene render = subscribe (sample_ scene e) render
 audioDriver :: Effect Boolean -> Event Unit
 audioDriver incr =
   makeEvent \k -> do
-    whileE incr (k unit)
+    whileEImpl incr (k unit)
     pure (pure unit)
 
 withParam ::
@@ -56,17 +94,22 @@ currentTime = _behavior :: Effect Number -> Behavior Number
 
 sampleFrame = _behavior :: Effect SampleFrame -> Behavior SampleFrame
 
-controlParams = _behavior :: forall r. Effect r -> Behavior r
+controlParams =
+  _behavior ::
+    forall (r :: # Type).
+    Homogeneous r Number =>
+    Effect (Record r) ->
+    Behavior (Record r)
 
 foreign import _makeAudioWorkletProcessor ::
-  forall r.
+  forall (r :: # Type).
   String -> -- name
   Number -> -- retention
-  r -> -- defaults
+  Record r -> -- defaults
   (Effect Boolean -> Event Unit) -> -- driver
   (Effect Number -> Behavior Number) -> -- currentTime
   (Effect SampleFrame -> Behavior SampleFrame) -> -- sampleFrame
-  (Effect r -> Behavior r) -> -- control params
+  (Effect (Record r) -> Behavior (Record r)) -> -- control params
   AudioProcessor r -> -- audio processor
   ( Event Unit ->
     Behavior SampleFrame ->
@@ -85,11 +128,12 @@ foreign import _makeAudioWorkletProcessor ::
 -- |   - a `Behavior` that reports all control parameters at the current time
 -- |   and returns a behavior reporting on a single sample
 makeAudioWorkletProcessor ::
-  forall r.
+  forall (param :: # Type).
+  Homogeneous param Number =>
   String -> -- name
   Number -> -- seconds of audio to retain
-  r -> -- default values
-  AudioProcessor r -> -- the audio processor
+  Record param -> -- default values
+  AudioProcessor param -> -- the audio processor
   Effect Unit
 makeAudioWorkletProcessor name retention defaults proc =
   _makeAudioWorkletProcessor
@@ -102,3 +146,81 @@ makeAudioWorkletProcessor name retention defaults proc =
     controlParams
     proc
     soundify
+
+audiol :: forall a. Array (Array (Array a)) -> Int
+audiol a = length $ fromMaybe [] ((head a) >>= head)
+
+-- | The inner audio loop
+-- | Useful when an audio plugin is an external module and you need to
+-- | import a function to do processing.  Accepts:
+-- | - an audio processor
+-- | - the sample rate
+-- | - the length of the current input
+-- | - the current parameters
+-- | - the current inputs
+-- | - the current sample rate
+-- | - the current buffer
+-- | returns the processed audio in an effect
+audioIO ::
+  forall (params :: # Type) (param :: # Type).
+  Homogeneous params (Array Number) =>
+  Homogeneous param Number =>
+  HMap (IdxContext Int) (Record params) (Record param) =>
+  AudioProcessor param ->
+  Int ->
+  Int ->
+  Record params ->
+  Int ->
+  Audio ->
+  Effect Audio
+audioIO processor sampleRate inputl params currentSample sink = do
+  curpos <- new 0
+  output <- new [ [ [] ] ]
+  let
+    _driver =
+      audioDriver do
+        cp <- read curpos
+        write (cp + 1) curpos
+        pure $ cp < inputl
+  let
+    _behaviorCurrentTime =
+      currentTime do
+        cp <- read curpos
+        let
+          ct = cp + currentSample
+        pure $ (toNumber ct) / (toNumber sampleRate)
+  let
+    _secondsToBehaviorSampleFrame = \lb ->
+      sampleFrame do
+        cp0 <- read curpos
+        let
+          lookback = if lb < 0.0 then 0.0 else lb
+        let
+          lookbackInSamples = floor (lookback * toNumber sampleRate)
+        let
+          cp = (audiol sink) - inputl - lookbackInSamples
+        pure
+          $ if (cp < 0) then
+              replicate
+                (length sink)
+                (replicate (length (fromMaybe [] $ head sink)) 0.0)
+            else
+              map (map (fromMaybe 0.0 <<< flip index cp)) sink
+  let
+    _behaviorControlParams =
+      controlParams
+        $ do
+            cp <- read curpos
+            pure $ paramGetter cp params
+  let
+    chain =
+      processor
+        _behaviorCurrentTime
+        _secondsToBehaviorSampleFrame
+        _behaviorControlParams
+  bam <-
+    soundify _driver chain \frame -> do
+      modify_ (flip (zipWith (zipWith snoc)) frame) output
+      pure unit
+  bam
+  read output

@@ -9,3 +9,5 @@
 /.psa*
 /.spago
 /dist
+/ffi/
+.vscode

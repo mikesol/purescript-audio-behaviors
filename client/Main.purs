@@ -11,7 +11,7 @@ frameZip = zipWith (zipWith (+))
 mulSampleFrame :: Number -> SampleFrame -> SampleFrame
 mulSampleFrame n = map (map (_ * n))
 
-echoProcessor :: AudioProcessor {}
+echoProcessor :: forall (r :: # Type). AudioProcessor r
 echoProcessor _ audio params = do
   frameZip
     <$> ( frameZip
