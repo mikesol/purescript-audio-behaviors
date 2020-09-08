@@ -39,6 +39,8 @@ Compiling to wasm is possible, if not painful. Here are the steps I took.
 1. Find the comment with the word `abovethisline` in `cpptest/purescript-worklet-processor.js` (it's at the beginning of the file, should be on the first line). Copy the entire contents of `cpptest/pure-script-kernel.wasmmodule.js` above this line.
 1. `cd cpptest && python -m http.server`
 
+Even with this, wasm is no better than JavaScript due to the intense amount of memory copying.
+
 Note that `PureScriptKernel.cc` uses a hardcoded function from `cpptest/Main.purs` with some changes. If you want to change the function and recompile, you have to copy these changes from `Main.cpp` to `PureScriptKernel.cc`
 
 Obviously this is not ideal and I'll polish the flow if I have time.
