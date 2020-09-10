@@ -1,4 +1,4 @@
-module Main where
+module Main (frameZip, mulSampleFrame, simpleProcessor, delayProcessor, main) where
 
 import Prelude
 import Data.Array (replicate, zipWith)

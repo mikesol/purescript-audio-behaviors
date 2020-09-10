@@ -12,7 +12,7 @@ import Data.Array (head, index, length, mapWithIndex, range, replicate, snoc, zi
 import Data.Int (floor, toNumber)
 import Data.Maybe (fromMaybe)
 import Data.Traversable (sequence)
-import Effect (Effect)
+import Effect (Effect, whileE)
 import Effect.Ref (modify_, new, read, write)
 import FRP.Behavior (Behavior, behavior, sample_)
 import FRP.Event (Event, makeEvent, subscribe)
@@ -21,7 +21,7 @@ import Type.Row.Homogeneous (class Homogeneous)
 
 -- hack because cpp ffi doesn't have whileE yet
 whileEImpl :: forall a. Effect Boolean -> Effect a -> Effect Unit
-whileEImpl b m = do
+whileEImpl b m = whileE b m {-do
   truthy <- b
   if truthy then
     ( do
@@ -29,7 +29,7 @@ whileEImpl b m = do
         whileEImpl b m
     )
   else
-    pure unit
+    pure unit-}
 
 newtype IdxContext i
   = IdxContext i
