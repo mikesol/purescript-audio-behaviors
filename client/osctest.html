@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+  <script>
+    function turnOnAudio() {
+      const base = 110;
+      const context = new AudioContext();
+      for (var i = 0; i < 10; i++) {
+        // create Oscillator node
+        var oscillator = context.createOscillator();
+        oscillator.type = "sine";
+        oscillator.frequency.value = base * (i + 1); // valeur en hertz
+
+        oscillator.start();
+        var gainNode = context.createGain();
+        gainNode.gain.value = 0.1 / (i + 1);
+        oscillator.connect(gainNode);
+        gainNode.connect(context.destination);
+      }
+    }
+  </script>
+  <body>
+    <button onclick="turnOnAudio();">turn on</button>
+  </body>
+</html>
