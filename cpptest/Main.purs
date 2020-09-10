@@ -4,7 +4,7 @@ import Prelude
 import Data.Array (replicate, zipWith)
 import Effect (Effect)
 import Effect.Class.Console (log)
-import FRP.Behavior.Audio (AudioProcessor, SampleFrame, audioIO)
+import FRP.Behavior.Audio (AudioProcessor, SampleFrame, audioIOInterleaved)
 
 frameZip :: SampleFrame -> SampleFrame -> SampleFrame
 frameZip = zipWith (zipWith (+))
@@ -21,6 +21,14 @@ delayProcessor _ audio params = frameZip <$> (mulSampleFrame 0.25 <$> (audio 0.0
 main ∷ Effect Unit
 main = do
   let
-    audioIn = [ [ replicate 16 0.125 <> replicate 16 1.0 ] ]
-  aud <- audioIO delayProcessor 16 16 {} 0 audioIn
+    audioIn = replicate 16 0.125 <> replicate 16 1.0
+  aud <-
+    audioIOInterleaved
+      delayProcessor
+      44100
+      {}
+      0
+      1
+      128
+      audioIn
   log $ show aud

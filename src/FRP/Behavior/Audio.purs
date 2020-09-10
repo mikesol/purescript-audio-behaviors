@@ -1,9 +1,17 @@
-module FRP.Behavior.Audio (SampleFrame, AudioProcessor, makeAudioWorkletProcessor, audioIO, IdxContext) where
+module FRP.Behavior.Audio
+  ( SampleFrame
+  , AudioProcessor
+  , makeAudioWorkletProcessor
+  , audioIO
+  , audioIOInterleaved
+  , IdxContext
+  ) where
 
 import Prelude
-import Data.Array (head, index, length, replicate, snoc, zipWith, (!!))
+import Data.Array (head, index, length, mapWithIndex, range, replicate, snoc, zipWith, (!!))
 import Data.Int (floor, toNumber)
 import Data.Maybe (fromMaybe)
+import Data.Traversable (sequence)
 import Effect (Effect)
 import Effect.Ref (modify_, new, read, write)
 import FRP.Behavior (Behavior, behavior, sample_)
@@ -224,3 +232,127 @@ audioIO processor sampleRate inputl params currentSample sink = do
       pure unit
   bam
   read output
+
+-- | The inner audio loop
+-- | The same as audioIO, but it keeps the sink interleaved.
+-- | For web audio, this avoids additional memory copying.
+-- | Note that the outer array enclosing the samples is facultative here,
+-- | as interleaved audio is just channels and does not have an extra dimension.
+audioIOInterleaved ::
+  forall (params :: # Type) (param :: # Type).
+  Homogeneous params (Array Number) =>
+  Homogeneous param Number =>
+  HMap (IdxContext Int) (Record params) (Record param) =>
+  AudioProcessor param ->
+  Int ->
+  Record params ->
+  Int ->
+  Int ->
+  Int ->
+  Array Number ->
+  Effect (Array Number)
+audioIOInterleaved processor sampleRate params currentSample nChannels bufferLength sink = do
+  curpos <- new 0
+  output <- sequence (replicate (nChannels * bufferLength) $ new 0.0)
+  let
+    _driver =
+      audioDriver do
+        cp <- read curpos
+        write (cp + 1) curpos
+        pure $ cp < bufferLength
+  let
+    _behaviorCurrentTime =
+      currentTime do
+        cp <- read curpos
+        let
+          ct = cp + currentSample
+        pure $ (toNumber ct) / (toNumber sampleRate)
+  let
+    _secondsToBehaviorSampleFrame = \lb ->
+      sampleFrame do
+        cp0 <- read curpos
+        let -- how far we're looking back in seconds
+          lookback = if lb < 0.0 then 0.0 else lb
+        let -- how many samples we're looking back
+          lookbackInSamples = (bufferLength - cp0) + floor (lookback * toNumber sampleRate)
+        let -- number of blocs to rewind
+          numberOfBlocsToSkip = lookbackInSamples / bufferLength
+        let -- the offset from the end of the bloc we are reading
+          offsetFromEndOfBloc = lookbackInSamples - (numberOfBlocsToSkip * bufferLength)
+        let -- number of floats to read back to get to bloc
+          floatsToSkipUntilDesiredBloc = numberOfBlocsToSkip * bufferLength * nChannels
+        let -- number of floats to read back to get to channel (in stereo, L goes to blocLength, R to 0)
+          floatsToSkipUntilDesiredChannel i = ((nChannels - 1 - i) * bufferLength)
+        let
+          sinkLen = length sink
+        let
+          frame =
+            [ map
+                ( \i ->
+                    fromMaybe 0.0
+                      ( sink
+                          !! ( sinkLen - floatsToSkipUntilDesiredBloc
+                                - (floatsToSkipUntilDesiredChannel i)
+                                - offsetFromEndOfBloc
+                            )
+                      )
+                )
+                (range 0 (nChannels - 1))
+            ]
+        -- useful for debugging
+        --        log
+        --          $ "cp0 "
+        --          <> show cp0
+        --          <> " lb "
+        --          <> show lb
+        --          <> " lookback "
+        --          <> show lookback
+        --          <> " lookbackInSamples "
+        --          <> show lookbackInSamples
+        --          <> " numberOfBlocsToSkip "
+        --          <> show numberOfBlocsToSkip
+        --          <> " offsetFromEndOfBloc "
+        --          <> show offsetFromEndOfBloc
+        --          <> " floatsToSkipUntilDesiredBloc "
+        --          <> show floatsToSkipUntilDesiredBloc
+        --          <> " floatsToSkipUntilDesiredChannel0 "
+        --          <> show (floatsToSkipUntilDesiredChannel 0)
+        --          <> " floatsToSkipUntilDesiredChannel1 "
+        --          <> show (floatsToSkipUntilDesiredChannel 1)
+        --          <> " frame "
+        --          <> show frame
+        pure frame
+  let
+    _behaviorControlParams =
+      controlParams
+        $ do
+            cp <- read curpos
+            pure $ paramGetter cp params
+  let
+    chain =
+      processor
+        _behaviorCurrentTime
+        _secondsToBehaviorSampleFrame
+        _behaviorControlParams
+  bam <-
+    soundify _driver chain \frame -> do
+      cp <- read curpos
+      void
+        $ sequence
+            ( head frame
+                >>= \channels ->
+                    pure
+                      $ sequence
+                          ( mapWithIndex
+                              ( \i sample ->
+                                  sequence
+                                    ( output !! ((i * bufferLength) + cp)
+                                        >>= \ref -> pure $ (write sample ref)
+                                    )
+                              )
+                              channels
+                          )
+            )
+      pure unit
+  bam
+  sequence $ map read output
