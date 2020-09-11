@@ -9,6 +9,7 @@ You can edit this file as you like.
   , "effect"
   , "heterogeneous"
   , "psci-support"
+  , "sized-vectors"
   , "typelevel-prelude"
   ]
 , packages = ./packages.dhall

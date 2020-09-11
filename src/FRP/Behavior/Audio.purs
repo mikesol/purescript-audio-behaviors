@@ -1,6 +1,8 @@
 module FRP.Behavior.Audio
   ( SampleFrame
   , AudioProcessor
+  , soundify
+  , AudioUnit
   , makeAudioWorkletProcessor
   , audioIO
   , audioIOInterleaved
@@ -10,26 +12,20 @@ module FRP.Behavior.Audio
 import Prelude
 import Data.Array (head, index, length, mapWithIndex, range, replicate, snoc, zipWith, (!!))
 import Data.Int (floor, toNumber)
+import Data.List ((:), List(..))
 import Data.Maybe (fromMaybe)
 import Data.Traversable (sequence)
+import Data.Tuple (Tuple(..))
+import Data.Typelevel.Num (D0, D1, D2)
+import Data.Vec (Vec, (+>), empty)
 import Effect (Effect, whileE)
-import Effect.Ref (modify_, new, read, write)
+import Effect.Ref (Ref, modify_, new, read, write)
 import FRP.Behavior (Behavior, behavior, sample_)
 import FRP.Event (Event, makeEvent, subscribe)
+import FRP.Event.Time (interval)
 import Heterogeneous.Mapping (class HMap, class Mapping, hmap)
 import Type.Row.Homogeneous (class Homogeneous)
-
--- hack because cpp ffi doesn't have whileE yet
-whileEImpl :: forall a. Effect Boolean -> Effect a -> Effect Unit
-whileEImpl b m = whileE b m {-do
-  truthy <- b
-  if truthy then
-    ( do
-        void m
-        whileEImpl b m
-    )
-  else
-    pure unit-}
+import Unsafe.Coerce (unsafeCoerce)
 
 newtype IdxContext i
   = IdxContext i
@@ -65,12 +61,12 @@ type AudioProcessor (r :: # Type)
 type AudioSink
   = SampleFrame -> Effect Unit
 
-soundify ::
+writeToOutput ::
   Event Unit ->
   Behavior SampleFrame ->
   (SampleFrame -> Effect Unit) ->
   Effect (Effect Unit)
-soundify e scene render = subscribe (sample_ scene e) render
+writeToOutput e scene render = subscribe (sample_ scene e) render
 
 -- | Create an event which fires for every audio frame.
 -- | Note that this does not have a canceler.  Cancellation from audio
@@ -78,7 +74,7 @@ soundify e scene render = subscribe (sample_ scene e) render
 audioDriver :: Effect Boolean -> Event Unit
 audioDriver incr =
   makeEvent \k -> do
-    whileEImpl incr (k unit)
+    whileE incr (k unit)
     pure (pure unit)
 
 withParam ::
@@ -153,7 +149,7 @@ makeAudioWorkletProcessor name retention defaults proc =
     sampleFrame
     controlParams
     proc
-    soundify
+    writeToOutput
 
 audiol :: forall a. Array (Array (Array a)) -> Int
 audiol a = length $ fromMaybe [] ((head a) >>= head)
@@ -227,7 +223,7 @@ audioIO processor sampleRate inputl params currentSample sink = do
         _secondsToBehaviorSampleFrame
         _behaviorControlParams
   bam <-
-    soundify _driver chain \frame -> do
+    writeToOutput _driver chain \frame -> do
       modify_ (flip (zipWith (zipWith snoc)) frame) output
       pure unit
   bam
@@ -236,8 +232,7 @@ audioIO processor sampleRate inputl params currentSample sink = do
 -- | The inner audio loop
 -- | The same as audioIO, but it keeps the sink interleaved.
 -- | For web audio, this avoids additional memory copying.
--- | Note that the outer array enclosing the samples is facultative here,
--- | as interleaved audio is just channels and does not have an extra dimension.
+-- | Note that the outer array enclosing the samples is not used here.
 audioIOInterleaved ::
   forall (params :: # Type) (param :: # Type).
   Homogeneous params (Array Number) =>
@@ -335,7 +330,7 @@ audioIOInterleaved processor sampleRate params currentSample nChannels bufferLen
         _secondsToBehaviorSampleFrame
         _behaviorControlParams
   bam <-
-    soundify _driver chain \frame -> do
+    writeToOutput _driver chain \frame -> do
       cp <- read curpos
       void
         $ sequence
@@ -356,3 +351,83 @@ audioIOInterleaved processor sampleRate params currentSample nChannels bufferLen
       pure unit
   bam
   sequence $ map read output
+
+type AudioInfo  -- change this
+  = Array Number
+
+data AudioUnit i o
+  = Microphone
+  | Speaker
+  | SinOsc Number
+  | SquareOsc Number
+  | Splitter (AudioUnit i i) (Vec i (AudioUnit D1 D1) -> AudioUnit o o)
+  | Merger (AudioUnit i i)
+  | Panner (AudioUnit i i)
+  | Mul (List (AudioUnit i i))
+  | Add (List (AudioUnit i i))
+  | Swap (Vec o Int) (AudioUnit i i)
+  | Constant Number
+  | Delay Number
+  | Gain Number
+  | NoSound
+
+pt :: forall i o. AudioUnit i o -> AudioUnit o o
+pt = unsafeCoerce
+
+microphone :: AudioUnit D1 D1
+microphone = Microphone
+
+sinOsc :: Number -> AudioUnit D1 D1
+sinOsc = SinOsc
+
+squareOsc :: Number -> AudioUnit D1 D1
+squareOsc = SquareOsc
+
+splitter :: forall i o. AudioUnit i i -> (Vec i (AudioUnit D1 D1) -> AudioUnit o o) -> AudioUnit i o
+splitter = Splitter
+
+merger :: forall i. AudioUnit i i -> AudioUnit i D1
+merger = Merger
+
+panner :: AudioUnit D2 D2 -> AudioUnit D2 D2
+panner = Panner
+
+mul :: forall i. List (AudioUnit i i) -> AudioUnit i i
+mul = Mul
+
+add :: forall i. List (AudioUnit i i) -> AudioUnit i i
+add = Add
+
+swap :: forall i o. Vec o Int -> AudioUnit i i -> AudioUnit o o
+swap v = pt <<< (Swap v)
+
+constant :: forall i. Number -> AudioUnit i i
+constant = Constant
+
+delay :: forall i. Number -> AudioUnit i i
+delay = Delay
+
+gain :: forall i. Number -> AudioUnit i i
+gain = Gain
+
+instance semiringAudioUnit :: Semiring (AudioUnit o o) where
+  zero = Constant 0.0
+  one = Constant 1.0
+  add a b = Add (a : b : Nil)
+  mul a b = Mul (a : b : Nil)
+
+type AudioBehavior i o
+  = Behavior (AudioUnit i o)
+
+-- reconciles the previous graph with the current one
+audioReconciliation :: forall i o i' o'. Ref (AudioUnit i o) -> (AudioUnit i' o') -> Effect Unit
+audioReconciliation prev cur = pure unit
+
+soundify ::
+  forall i o.
+  Int ->
+  (AudioBehavior i o) ->
+  Effect (Effect Unit)
+soundify e scene = do
+  u <- new NoSound
+  subscribe (sample_ scene (interval e)) (audioReconciliation u)
