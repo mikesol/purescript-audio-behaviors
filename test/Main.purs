@@ -3,16 +3,17 @@ module Test.Main where
 import Prelude
 import Data.Array (range, replicate, zipWith)
 import Data.Int (toNumber)
-import Data.List (List(..), (:))
+import Data.List (List(..), (:), tail)
 import Data.List as DL
 import Data.Map (fromFoldable)
+import Data.Maybe (fromMaybe)
 import Data.NonEmpty ((:|))
 import Data.Tuple (Tuple(..))
-import Data.NonEmpty as NE
+import Data.Vec as V
 import Effect (Effect)
 import Effect.Aff (launchAff_)
 import Effect.Class (liftEffect)
-import FRP.Behavior.Audio (AudioProcessor, AudioUnit'(..), SampleFrame, audioIO, audioIOInterleaved, audioToPtr, gain, sinOsc, speaker)
+import FRP.Behavior.Audio (AudioProcessor, AudioUnit'(..), SampleFrame, audioIO, audioIOInterleaved, audioToPtr, gain, speaker', merger, gain', sinOsc, speaker, splitter)
 import Test.Spec (describe, it)
 import Test.Spec.Assertions (shouldEqual)
 import Test.Spec.Reporter.Console (consoleReporter)
@@ -120,19 +121,17 @@ main =
             let
               tree =
                 audioToPtr
-                  $ speaker
-                      ( NE.singleton
-                          ( ( gain 1.0
-                                ( (sinOsc 440.0)
-                                    :| (DL.fromFoldable (replicate 2 (sinOsc 441.0)))
+                  $ speaker'
+                      ( ( gain 1.0
+                            ( (sinOsc 440.0)
+                                :| (DL.fromFoldable (replicate 2 (sinOsc 441.0)))
+                            )
+                        )
+                          + ( gain 0.9
+                                ( (sinOsc 442.0)
+                                    :| (DL.fromFoldable (replicate 2 (sinOsc 443.0)))
                                 )
                             )
-                              + ( gain 0.9
-                                    ( (sinOsc 442.0)
-                                        :| (DL.fromFoldable (replicate 2 (sinOsc 443.0)))
-                                    )
-                                )
-                          )
                       )
             tree
               `shouldEqual`
@@ -171,4 +170,69 @@ main =
                     )
                 , len: 10
                 , p: { au: Speaker', iChan: 1, next: Nil, oChan: 1, prev: (1 : Nil), ptr: 0 }
+                }
+          it "should correctly split" do
+            let
+              tree =
+                audioToPtr
+                  $ splitter
+                      ( ( gain 1.0
+                            ( (sinOsc 440.0)
+                                :| (DL.fromFoldable (replicate 2 (sinOsc 441.0)))
+                            )
+                        )
+                          + ( gain 0.9
+                                ( (sinOsc 442.0)
+                                    :| (DL.fromFoldable (replicate 2 (sinOsc 443.0)))
+                                )
+                            )
+                      )
+                      ( \v ->
+                          speaker'
+                            ( gain' 0.5
+                                $ ( merger
+                                      ((V.head v) :| (fromMaybe Nil $ tail (V.toUnfoldable v)))
+                                  )
+                            )
+                      )
+            tree
+              `shouldEqual`
+                { flat:
+                    ( fromFoldable
+                        [ (Tuple 0 { au: Speaker', iChan: 1, next: Nil, oChan: 1, prev: (1 : Nil), ptr: 0 })
+                        , (Tuple 1 { au: (Gain' 0.5), iChan: 1, next: (0 : Nil), oChan: 1, prev: (2 : Nil), ptr: 1 })
+                        , (Tuple 2 { au: Merger', iChan: 1, next: (1 : Nil), oChan: 1, prev: (3 : Nil), ptr: 2 })
+                        , ( Tuple 3
+                              { au: Splitter'
+                              , iChan:
+                                  1
+                              , next: (2 : Nil)
+                              , oChan: 1
+                              , prev: (4 : Nil)
+                              , ptr: 3
+                              }
+                          )
+                        , (Tuple 4 { au: Add', iChan: 1, next: (0 : Nil), oChan: 1, prev: (9 : 5 : Nil), ptr: 4 })
+                        , (Tuple 5 { au: (Gain' 1.0), iChan: 1, next: (4 : Nil), oChan: 1, prev: (8 : 7 : 6 : Nil), ptr: 5 })
+                        , ( Tuple 6
+                              { au: (SinOsc' 440.0)
+                              , iChan: 1
+                              , next: (5 : Nil)
+                              , oChan: 1
+                              , prev:
+                                  Nil
+                              , ptr: 6
+                              }
+                          )
+                        , (Tuple 7 { au: (SinOsc' 441.0), iChan: 1, next: (5 : Nil), oChan: 1, prev: Nil, ptr: 7 })
+                        , (Tuple 8 { au: (SinOsc' 441.0), iChan: 1, next: (5 : Nil), oChan: 1, prev: Nil, ptr: 8 })
+                        , (Tuple 9 { au: (Gain' 0.9), iChan: 1, next: (4 : Nil), oChan: 1, prev: (12 : 11 : 10 : Nil), ptr: 9 })
+                        , (Tuple 10 { au: (SinOsc' 442.0), iChan: 1, next: (9 : Nil), oChan: 1, prev: Nil, ptr: 10 })
+                        , (Tuple 11 { au: (SinOsc' 443.0), iChan: 1, next: (9 : Nil), oChan: 1, prev: Nil, ptr: 11 })
+                        , (Tuple 12 { au: (SinOsc' 443.0), iChan: 1, next: (9 : Nil), oChan: 1, prev: Nil, ptr: 12 })
+                        ]
+                    )
+                , init: (12 : 11 : 10 : 8 : 7 : 6 : Nil)
+                , len: 13
+                , p: { au: Splitter', iChan: 1, next: (2 : Nil), oChan: 1, prev: (4 : Nil), ptr: 3 }
                 }

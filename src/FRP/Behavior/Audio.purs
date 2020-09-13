@@ -18,10 +18,13 @@ module FRP.Behavior.Audio
   , mul
   , add
   , merger
+  , swap
   , constant
   , delay
   , gain
   , speaker
+  , speaker'
+  , gain'
   ) where
 
 import Prelude
@@ -35,7 +38,7 @@ import Data.Maybe (fromMaybe)
 import Data.NonEmpty (NonEmpty, (:|))
 import Data.NonEmpty as NE
 import Data.Traversable (sequence)
-import Data.Typelevel.Num (class Nat, D1, D2, toInt')
+import Data.Typelevel.Num (class Mul, class Nat, class Pred, D1, D2, toInt')
 import Data.Vec (Vec, fill)
 import Effect (Effect, whileE)
 import Effect.Ref (Ref, modify_, new, read, write)
@@ -396,12 +399,13 @@ data AudioUnit i o
   = Microphone
   | SinOsc Number
   | SquareOsc Number
-  | Splitter (AudioUnit i i) (Vec i (AudioUnit D1 D1) -> AudioUnit o o)
+  | Splitter (AudioUnit i i) (forall s. Pred i s => Vec i (AudioUnit D1 D1) -> AudioUnit o o)
   | Panner (AudioUnit i i)
   | Tagged String (AudioUnit i o)
   | Mul (NonEmpty List (AudioUnit i i))
   | Add (NonEmpty List (AudioUnit i i))
-  | Merger (Vec o Int) (AudioUnit i i)
+  | Swap (Vec o Int) (AudioUnit i i)
+  | Merger (NonEmpty List (AudioUnit i i))
   | Constant Number
   | Delay Number (AudioUnit i i)
   | Gain Number (NonEmpty List (AudioUnit i i))
@@ -418,6 +422,7 @@ data AudioUnit'
   | Tagged' String
   | Mul'
   | Add'
+  | Swap'
   | Merger'
   | Constant' Number
   | Delay' Number
@@ -450,7 +455,9 @@ au' (Mul _) = Mul'
 
 au' (Add _) = Add'
 
-au' (Merger _ _) = Merger'
+au' (Swap _ _) = Swap'
+
+au' (Merger _) = Merger'
 
 au' (Constant n) = Constant' n
 
@@ -478,10 +485,10 @@ a2i a = toInt' (Proxy :: Proxy i)
 a2o :: forall i o. Nat i => Nat o => AudioUnit i o -> Int
 a2o a = toInt' (Proxy :: Proxy o)
 
-audioToPtr :: forall i o. Nat i => Nat o => AudioUnit i o -> AlgStep
+audioToPtr :: forall i i' o o'. Nat i => Nat o => Pred i i' => Pred o o' => AudioUnit i o -> AlgStep
 audioToPtr = go (-1) Nil
   where
-  go :: forall a b. Nat a => Nat b => Int -> List Int -> AudioUnit a b -> AlgStep
+  go :: forall a b a' b'. Nat a => Nat b => Pred a a' => Pred b b' => Int -> List Int -> AudioUnit a b -> AlgStep
   go i next au =
     go'
       { ptr: i + 1
@@ -503,11 +510,15 @@ audioToPtr = go (-1) Nil
       }
 
   passthrough ::
-    forall a b c d.
+    forall a a' b b' c c' d d'.
     Nat a =>
     Nat b =>
     Nat c =>
     Nat d =>
+    Pred a a' =>
+    Pred b b' =>
+    Pred c c' =>
+    Pred d d' =>
     PtrInfo' ->
     AudioUnit a b ->
     AudioUnit c d ->
@@ -530,11 +541,15 @@ audioToPtr = go (-1) Nil
         }
 
   listthrough ::
-    forall a b c d.
+    forall a a' b b' c c' d d'.
     Nat a =>
     Nat b =>
     Nat c =>
     Nat d =>
+    Pred a a' =>
+    Pred b b' =>
+    Pred c c' =>
+    Pred d d' =>
     PtrInfo' ->
     AudioUnit a b ->
     NonEmpty List (AudioUnit c d) ->
@@ -566,7 +581,7 @@ audioToPtr = go (-1) Nil
         , p
         }
 
-  go' :: forall a b. Nat a => Nat b => PtrInfo' -> AudioUnit a b -> AlgStep
+  go' :: forall a b a' b'. Nat a => Pred a a' => Nat b => Pred b b' => PtrInfo' -> AudioUnit a b -> AlgStep
   go' ptr v@Microphone = terminus ptr v
 
   go' ptr v@(SinOsc n) = terminus ptr v
@@ -583,9 +598,11 @@ audioToPtr = go (-1) Nil
 
   go' ptr v@(Delay n a) = passthrough ptr v a
 
-  go' ptr v@(Merger l a) = passthrough ptr v a
+  go' ptr v@(Swap l a) = passthrough ptr v a
 
   go' ptr v@(Mul l) = listthrough ptr v l
+
+  go' ptr v@(Merger l) = listthrough ptr v l
 
   go' ptr v@(Add l) = listthrough ptr v l
 
@@ -601,7 +618,7 @@ audioToPtr = go (-1) Nil
       let
         -- run alg on the inner chain
         -- to get the inner result
-        ir = go ptr.ptr ptr.next ic
+        ir = go (ptr.ptr - 1) ptr.next ic
       in
         let
           -- continuing down, we offset the pointer
@@ -611,18 +628,20 @@ audioToPtr = go (-1) Nil
         in
           let
             p =
-              merge ptr
-                { prev: singleton fr.p.ptr
+              merge
+                { ptr: ptr.ptr + ir.len
+                , prev: singleton fr.p.ptr
                 -- the next nodes are the initial nodes from the inner
                 -- result
                 , next: ir.init
                 , au: au' v
                 }
+                ptr
           in
             { len: fr.len + ir.len + 1
             -- the initial nodes come from downstream
             , init: fr.init
-            , flat: ir.flat <> fr.flat <> (M.singleton ptr.ptr p)
+            , flat: ir.flat <> fr.flat <> (M.singleton (ptr.ptr + ir.len) p)
             , p
             }
 
@@ -645,7 +664,7 @@ sinOsc = SinOsc
 squareOsc :: Number -> AudioUnit D1 D1
 squareOsc = SquareOsc
 
-splitter :: forall i o. Nat i => Nat o => AudioUnit i i -> (Vec i (AudioUnit D1 D1) -> AudioUnit o o) -> AudioUnit i o
+splitter :: forall i o. Nat i => Nat o => AudioUnit i i -> (forall s. Pred i s => Vec i (AudioUnit D1 D1) -> AudioUnit o o) -> AudioUnit i o
 splitter = Splitter
 
 panner :: AudioUnit D2 D2 -> AudioUnit D2 D2
@@ -657,14 +676,27 @@ tagged = Tagged
 speaker :: forall i. Nat i => NonEmpty List (AudioUnit i i) -> AudioUnit i i
 speaker = Speaker
 
+speaker' :: forall i. Nat i => AudioUnit i i -> AudioUnit i i
+speaker' = Speaker <<< NE.singleton
+
+merger ::
+  forall i o n.
+  Nat i =>
+  Nat o =>
+  Nat n =>
+  Mul i n o =>
+  NonEmpty List (AudioUnit i i) ->
+  AudioUnit i o
+merger = Merger
+
 mul :: forall i. Nat i => NonEmpty List (AudioUnit i i) -> AudioUnit i i
 mul = Mul
 
 add :: forall i. Nat i => NonEmpty List (AudioUnit i i) -> AudioUnit i i
 add = Add
 
-merger :: forall i o. Nat i => Nat o => Vec o Int -> AudioUnit i i -> AudioUnit o o
-merger v = pt <<< (Merger v)
+swap :: forall i o. Nat i => Nat o => Vec o Int -> AudioUnit i i -> AudioUnit o o
+swap v = pt <<< (Swap v)
 
 constant :: forall i. Nat i => Number -> AudioUnit i i
 constant = Constant
@@ -674,6 +706,9 @@ delay = Delay
 
 gain :: forall i. Nat i => Number -> NonEmpty List (AudioUnit i i) -> AudioUnit i i
 gain = Gain
+
+gain' :: forall i. Nat i => Number -> AudioUnit i i -> AudioUnit i i
+gain' n = Gain n <<< NE.singleton
 
 instance semiringAudioUnit :: Semiring (AudioUnit o o) where
   zero = Constant 0.0
