@@ -720,14 +720,33 @@ type AudioBehavior i o
   = Behavior (AudioUnit i o)
 
 -- reconciles the previous graph with the current one
-audioReconciliation :: forall i o i' o'. Ref (AudioUnit i o) -> (AudioUnit i' o') -> Effect Unit
+audioReconciliation :: Ref AlgStep -> AlgStep -> Effect Unit
 audioReconciliation prev cur = pure unit
 
 soundify ::
-  forall i o.
+  forall i i' o o'.
+  Nat i =>
+  Nat o =>
+  Pred i i' =>
+  Pred o o' =>
   Int ->
   (AudioBehavior i o) ->
   Effect (Effect Unit)
 soundify e scene = do
-  u <- new NoSound
-  subscribe (sample_ scene (interval e)) (audioReconciliation u)
+  let
+    p =
+      { ptr: 0
+      , iChan: 1
+      , oChan: 1
+      , prev: Nil
+      , next: Nil
+      , au: NoSound'
+      }
+  u <-
+    new
+      { len: 1
+      , flat: M.singleton 0 p
+      , init: singleton 0
+      , p
+      }
+  subscribe (sample_ scene (interval e)) (audioReconciliation u <<< audioToPtr)
