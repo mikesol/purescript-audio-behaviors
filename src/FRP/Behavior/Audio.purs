@@ -7,16 +7,33 @@ module FRP.Behavior.Audio
   , audioIO
   , audioIOInterleaved
   , IdxContext
+  , audioToPtr
+  , AudioUnit'(..)
+  , microphone
+  , sinOsc
+  , squareOsc
+  , splitter
+  , panner
+  , tagged
+  , mul
+  , add
+  , merger
+  , constant
+  , delay
+  , gain
+  , speaker
   ) where
 
 import Prelude
 import Data.Array (foldl, head, index, length, mapWithIndex, range, replicate, snoc, zipWith, (!!))
+import Data.Generic.Rep (class Generic)
+import Data.Generic.Rep.Show (genericShow)
 import Data.Int (floor, toNumber)
-import Data.Map as M
 import Data.List (List(..), (:), singleton)
+import Data.Map as M
 import Data.Maybe (fromMaybe)
-import Data.NonEmpty as NE
 import Data.NonEmpty (NonEmpty, (:|))
+import Data.NonEmpty as NE
 import Data.Traversable (sequence)
 import Data.Typelevel.Num (class Nat, D1, D2, toInt')
 import Data.Vec (Vec, fill)
@@ -409,6 +426,13 @@ data AudioUnit'
   | NoSound'
   | SplitRes'
 
+derive instance genericAudioUnit' :: Generic AudioUnit' _
+
+instance showAudioUnit' :: Show AudioUnit' where
+  show s = genericShow s
+
+derive instance eqAudioUnit' :: Eq AudioUnit'
+
 au' :: forall i o. AudioUnit i o -> AudioUnit'
 au' Microphone = Microphone'
 
@@ -454,8 +478,8 @@ a2i a = toInt' (Proxy :: Proxy i)
 a2o :: forall i o. Nat i => Nat o => AudioUnit i o -> Int
 a2o a = toInt' (Proxy :: Proxy o)
 
-audioToPtr :: forall i o. Nat i => Nat o => AudioUnit i o -> PtrInfo
-audioToPtr = _.p <<< go 0 Nil
+audioToPtr :: forall i o. Nat i => Nat o => AudioUnit i o -> AlgStep
+audioToPtr = go (-1) Nil
   where
   go :: forall a b. Nat a => Nat b => Int -> List Int -> AudioUnit a b -> AlgStep
   go i next au =
@@ -520,14 +544,14 @@ audioToPtr = _.p <<< go 0 Nil
       r =
         foldl
           ( \b@(h :| tl) a ->
-              ( go (h.p.ptr + h.len) (singleton ptr.ptr) a
+              ( go (h.p.ptr + h.len - 1) (singleton ptr.ptr) a
               )
                 :| (h : tl)
           )
           ( NE.singleton
               (go ptr.ptr (singleton ptr.ptr) $ NE.head l)
           )
-          l
+          (NE.tail l)
     in
       let
         p =
