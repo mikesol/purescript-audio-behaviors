@@ -10,20 +10,24 @@ module FRP.Behavior.Audio
   ) where
 
 import Prelude
-import Data.Array (head, index, length, mapWithIndex, range, replicate, snoc, zipWith, (!!))
+import Data.Array (foldl, head, index, length, mapWithIndex, range, replicate, snoc, zipWith, (!!))
 import Data.Int (floor, toNumber)
-import Data.List ((:), List(..))
+import Data.Map as M
+import Data.List (List(..), (:), singleton)
 import Data.Maybe (fromMaybe)
+import Data.NonEmpty as NE
+import Data.NonEmpty (NonEmpty, (:|))
 import Data.Traversable (sequence)
-import Data.Tuple (Tuple(..))
-import Data.Typelevel.Num (D0, D1, D2)
-import Data.Vec (Vec, (+>), empty)
+import Data.Typelevel.Num (class Nat, D1, D2, toInt')
+import Data.Vec (Vec, fill)
 import Effect (Effect, whileE)
 import Effect.Ref (Ref, modify_, new, read, write)
 import FRP.Behavior (Behavior, behavior, sample_)
 import FRP.Event (Event, makeEvent, subscribe)
 import FRP.Event.Time (interval)
 import Heterogeneous.Mapping (class HMap, class Mapping, hmap)
+import Record (merge)
+import Type.Proxy (Proxy(..))
 import Type.Row.Homogeneous (class Homogeneous)
 import Unsafe.Coerce (unsafeCoerce)
 
@@ -355,23 +359,257 @@ audioIOInterleaved processor sampleRate params currentSample nChannels bufferLen
 type AudioInfo  -- change this
   = Array Number
 
+type PtrInfo'
+  = { ptr :: Int
+    , iChan :: Int
+    , oChan :: Int
+    , next :: List Int
+    }
+
+type PtrInfo
+  = { ptr :: Int
+    , iChan :: Int
+    , oChan :: Int
+    , prev :: List Int
+    , next :: List Int
+    , au :: AudioUnit'
+    }
+
 data AudioUnit i o
   = Microphone
-  | Speaker
   | SinOsc Number
   | SquareOsc Number
   | Splitter (AudioUnit i i) (Vec i (AudioUnit D1 D1) -> AudioUnit o o)
-  | Merger (AudioUnit i i)
   | Panner (AudioUnit i i)
-  | Mul (List (AudioUnit i i))
-  | Add (List (AudioUnit i i))
-  | Swap (Vec o Int) (AudioUnit i i)
+  | Tagged String (AudioUnit i o)
+  | Mul (NonEmpty List (AudioUnit i i))
+  | Add (NonEmpty List (AudioUnit i i))
+  | Merger (Vec o Int) (AudioUnit i i)
   | Constant Number
-  | Delay Number
-  | Gain Number
+  | Delay Number (AudioUnit i i)
+  | Gain Number (NonEmpty List (AudioUnit i i))
+  | Speaker (NonEmpty List (AudioUnit i i))
   | NoSound
+  | SplitRes
 
-pt :: forall i o. AudioUnit i o -> AudioUnit o o
+data AudioUnit'
+  = Microphone'
+  | SinOsc' Number
+  | SquareOsc' Number
+  | Splitter'
+  | Panner'
+  | Tagged' String
+  | Mul'
+  | Add'
+  | Merger'
+  | Constant' Number
+  | Delay' Number
+  | Gain' Number
+  | Speaker'
+  | NoSound'
+  | SplitRes'
+
+au' :: forall i o. AudioUnit i o -> AudioUnit'
+au' Microphone = Microphone'
+
+au' (SinOsc n) = (SinOsc' n)
+
+au' (SquareOsc n) = (SquareOsc' n)
+
+au' (Splitter _ _) = Splitter'
+
+au' (Panner _) = Panner'
+
+au' (Tagged s _) = Tagged' s
+
+au' (Mul _) = Mul'
+
+au' (Add _) = Add'
+
+au' (Merger _ _) = Merger'
+
+au' (Constant n) = Constant' n
+
+au' (Delay n _) = Delay' n
+
+au' (Gain n _) = Gain' n
+
+au' (Speaker n) = Speaker'
+
+au' NoSound = NoSound'
+
+au' SplitRes = SplitRes'
+
+type AlgStep
+  = { len :: Int
+    , flat :: M.Map Int PtrInfo
+    , init :: List Int
+    , p :: PtrInfo
+    }
+
+-------------------------------------------- au          ------    len ptr
+a2i :: forall i o. Nat i => Nat o => AudioUnit i o -> Int
+a2i a = toInt' (Proxy :: Proxy i)
+
+a2o :: forall i o. Nat i => Nat o => AudioUnit i o -> Int
+a2o a = toInt' (Proxy :: Proxy o)
+
+audioToPtr :: forall i o. Nat i => Nat o => AudioUnit i o -> PtrInfo
+audioToPtr = _.p <<< go 0 Nil
+  where
+  go :: forall a b. Nat a => Nat b => Int -> List Int -> AudioUnit a b -> AlgStep
+  go i next au =
+    go'
+      { ptr: i + 1
+      , next
+      , iChan: a2i au
+      , oChan: a2o au
+      }
+      au
+
+  terminus :: forall a b. Nat a => Nat b => PtrInfo' -> AudioUnit a b -> AlgStep
+  terminus ptr v =
+    let
+      p = merge ptr { prev: Nil, au: au' v }
+    in
+      { len: 1
+      , init: singleton ptr.ptr
+      , flat: M.singleton ptr.ptr p
+      , p
+      }
+
+  passthrough ::
+    forall a b c d.
+    Nat a =>
+    Nat b =>
+    Nat c =>
+    Nat d =>
+    PtrInfo' ->
+    AudioUnit a b ->
+    AudioUnit c d ->
+    AlgStep
+  passthrough ptr v a =
+    let
+      r = go ptr.ptr (singleton ptr.ptr) a
+    in
+      let
+        p =
+          merge ptr
+            { prev: singleton r.p.ptr
+            , au: au' v
+            }
+      in
+        { len: r.len + 1
+        , init: r.init
+        , p
+        , flat: r.flat <> (M.singleton ptr.ptr p)
+        }
+
+  listthrough ::
+    forall a b c d.
+    Nat a =>
+    Nat b =>
+    Nat c =>
+    Nat d =>
+    PtrInfo' ->
+    AudioUnit a b ->
+    NonEmpty List (AudioUnit c d) ->
+    AlgStep
+  listthrough ptr v l =
+    let
+      r =
+        foldl
+          ( \b@(h :| tl) a ->
+              ( go (h.p.ptr + h.len) (singleton ptr.ptr) a
+              )
+                :| (h : tl)
+          )
+          ( NE.singleton
+              (go ptr.ptr (singleton ptr.ptr) $ NE.head l)
+          )
+          l
+    in
+      let
+        p =
+          merge ptr
+            { prev: let (hd :| tl) = map _.p.ptr r in (hd : tl)
+            , au: au' v
+            }
+      in
+        { len: (foldl (+) 0 (map _.len r)) + 1
+        , init: foldl (<>) Nil (map _.init r)
+        , flat: (foldl (<>) M.empty (map _.flat r)) <> M.singleton ptr.ptr p
+        , p
+        }
+
+  go' :: forall a b. Nat a => Nat b => PtrInfo' -> AudioUnit a b -> AlgStep
+  go' ptr v@Microphone = terminus ptr v
+
+  go' ptr v@(SinOsc n) = terminus ptr v
+
+  go' ptr v@(SquareOsc n) = terminus ptr v
+
+  go' ptr v@(Constant n) = terminus ptr v
+
+  go' ptr v@NoSound = terminus ptr v
+
+  go' ptr v@(Panner a) = passthrough ptr v a
+
+  go' ptr v@(Tagged s a) = passthrough ptr v a
+
+  go' ptr v@(Delay n a) = passthrough ptr v a
+
+  go' ptr v@(Merger l a) = passthrough ptr v a
+
+  go' ptr v@(Mul l) = listthrough ptr v l
+
+  go' ptr v@(Add l) = listthrough ptr v l
+
+  go' ptr v@(Gain n l) = listthrough ptr v l
+
+  go' ptr v@(Speaker l) = listthrough ptr v l
+
+  go' ptr v@(Splitter a f) =
+    let
+      -- determine the inner chain
+      ic = f (fill (const SplitRes))
+    in
+      let
+        -- run alg on the inner chain
+        -- to get the inner result
+        ir = go ptr.ptr ptr.next ic
+      in
+        let
+          -- continuing down, we offset the pointer
+          -- by the number of nodes in the graph
+          -- and point to this one
+          fr = go (ptr.ptr + ir.len) (singleton ptr.ptr) a
+        in
+          let
+            p =
+              merge ptr
+                { prev: singleton fr.p.ptr
+                -- the next nodes are the initial nodes from the inner
+                -- result
+                , next: ir.init
+                , au: au' v
+                }
+          in
+            { len: fr.len + ir.len + 1
+            -- the initial nodes come from downstream
+            , init: fr.init
+            , flat: ir.flat <> fr.flat <> (M.singleton ptr.ptr p)
+            , p
+            }
+
+  go' ptr SplitRes =
+    { len: 0 -- not actually a node
+    , init: ptr.next -- these are the true initial objects
+    , p: merge ptr { prev: Nil, au: au' SplitRes }
+    , flat: M.empty
+    }
+
+pt :: forall i o. Nat i => Nat o => AudioUnit i o -> AudioUnit o o
 pt = unsafeCoerce
 
 microphone :: AudioUnit D1 D1
@@ -383,38 +621,41 @@ sinOsc = SinOsc
 squareOsc :: Number -> AudioUnit D1 D1
 squareOsc = SquareOsc
 
-splitter :: forall i o. AudioUnit i i -> (Vec i (AudioUnit D1 D1) -> AudioUnit o o) -> AudioUnit i o
+splitter :: forall i o. Nat i => Nat o => AudioUnit i i -> (Vec i (AudioUnit D1 D1) -> AudioUnit o o) -> AudioUnit i o
 splitter = Splitter
-
-merger :: forall i. AudioUnit i i -> AudioUnit i D1
-merger = Merger
 
 panner :: AudioUnit D2 D2 -> AudioUnit D2 D2
 panner = Panner
 
-mul :: forall i. List (AudioUnit i i) -> AudioUnit i i
+tagged :: forall i o. Nat i => Nat o => String -> AudioUnit i o -> AudioUnit i o
+tagged = Tagged
+
+speaker :: forall i. Nat i => NonEmpty List (AudioUnit i i) -> AudioUnit i i
+speaker = Speaker
+
+mul :: forall i. Nat i => NonEmpty List (AudioUnit i i) -> AudioUnit i i
 mul = Mul
 
-add :: forall i. List (AudioUnit i i) -> AudioUnit i i
+add :: forall i. Nat i => NonEmpty List (AudioUnit i i) -> AudioUnit i i
 add = Add
 
-swap :: forall i o. Vec o Int -> AudioUnit i i -> AudioUnit o o
-swap v = pt <<< (Swap v)
+merger :: forall i o. Nat i => Nat o => Vec o Int -> AudioUnit i i -> AudioUnit o o
+merger v = pt <<< (Merger v)
 
-constant :: forall i. Number -> AudioUnit i i
+constant :: forall i. Nat i => Number -> AudioUnit i i
 constant = Constant
 
-delay :: forall i. Number -> AudioUnit i i
+delay :: forall i. Nat i => Number -> AudioUnit i i -> AudioUnit i i
 delay = Delay
 
-gain :: forall i. Number -> AudioUnit i i
+gain :: forall i. Nat i => Number -> NonEmpty List (AudioUnit i i) -> AudioUnit i i
 gain = Gain
 
 instance semiringAudioUnit :: Semiring (AudioUnit o o) where
   zero = Constant 0.0
   one = Constant 1.0
-  add a b = Add (a : b : Nil)
-  mul a b = Mul (a : b : Nil)
+  add a b = Add (a :| (b : Nil))
+  mul a b = Mul (a :| (b : Nil))
 
 type AudioBehavior i o
   = Behavior (AudioUnit i o)
