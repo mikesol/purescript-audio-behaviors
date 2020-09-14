@@ -796,7 +796,7 @@ ucomp SplitRes' SplitRes' = true
 ucomp _ _ = false
 
 acomp :: PtrInfo -> PtrInfo -> Boolean
-acomp a b = ucomp a.au b.au && a.iChan == b.iChan && a.oChan == b.oChan
+acomp a b = ucomp a.au b.au && a.name == b.name && a.iChan == b.iChan && a.oChan == b.oChan
 
 audioGrouper :: List PtrInfo -> List (NonEmpty List PtrInfo)
 audioGrouper Nil = Nil
