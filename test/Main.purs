@@ -3,7 +3,7 @@ module Test.Main where
 import Prelude
 import Data.Array (range, replicate, zipWith)
 import Data.Int (toNumber)
-import Data.List (List(..), (:), tail)
+import Data.List (List(..), (:), tail, length)
 import Data.List as DL
 import Data.Map (fromFoldable)
 import Data.Maybe (fromMaybe)
@@ -13,7 +13,7 @@ import Data.Vec as V
 import Effect (Effect)
 import Effect.Aff (launchAff_)
 import Effect.Class (liftEffect)
-import FRP.Behavior.Audio (AudioProcessor, AudioUnit'(..), SampleFrame, audioIO, audioIOInterleaved, audioToPtr, gain, speaker', merger, gain', sinOsc, speaker, splitter)
+import FRP.Behavior.Audio (AudioProcessor, AudioUnit'(..), SampleFrame, audioGrouper, audioIO, audioIOInterleaved, audioToPtr, gain, gain', merger, sinOsc, speaker, speaker', splitter)
 import Test.Spec (describe, it)
 import Test.Spec.Assertions (shouldEqual)
 import Test.Spec.Reporter.Console (consoleReporter)
@@ -236,3 +236,58 @@ main =
                 , len: 13
                 , p: { au: Splitter', iChan: 1, next: (2 : Nil), oChan: 1, prev: (4 : Nil), ptr: 3 }
                 }
+        describe "Audio grouper" do
+          it "should group correctly" do
+            let
+              ag =
+                audioGrouper
+                  ( { au: Speaker', iChan: 1, next: Nil, oChan: 1, prev: (1 : Nil), ptr: 0 }
+                      : { au: (Gain' 0.5), iChan: 1, next: (0 : Nil), oChan: 1, prev: (2 : Nil), ptr: 1 }
+                      : { au: Merger', iChan: 1, next: (1 : Nil), oChan: 1, prev: (3 : Nil), ptr: 2 }
+                      : { au: Splitter'
+                        , iChan:
+                            1
+                        , next: (2 : Nil)
+                        , oChan: 1
+                        , prev: (4 : Nil)
+                        , ptr: 3
+                        }
+                      : { au: Add', iChan: 1, next: (0 : Nil), oChan: 1, prev: (9 : 5 : Nil), ptr: 4 }
+                      : { au: (Gain' 1.0), iChan: 1, next: (4 : Nil), oChan: 1, prev: (8 : 7 : 6 : Nil), ptr: 5 }
+                      : { au: (SinOsc' 440.0)
+                        , iChan: 1
+                        , next: (5 : Nil)
+                        , oChan: 1
+                        , prev:
+                            Nil
+                        , ptr: 6
+                        }
+                      : { au: (SinOsc' 441.0), iChan: 1, next: (5 : Nil), oChan: 1, prev: Nil, ptr: 7 }
+                      : { au: (SinOsc' 441.0), iChan: 1, next: (5 : Nil), oChan: 1, prev: Nil, ptr: 8 }
+                      : { au: (Gain' 0.9), iChan: 1, next: (4 : Nil), oChan: 1, prev: (12 : 11 : 10 : Nil), ptr: 9 }
+                      : { au: (SinOsc' 442.0), iChan: 1, next: (9 : Nil), oChan: 1, prev: Nil, ptr: 10 }
+                      : { au: (SinOsc' 443.0), iChan: 1, next: (9 : Nil), oChan: 1, prev: Nil, ptr: 11 }
+                      : { au: (SinOsc' 443.0), iChan: 1, next: (9 : Nil), oChan: 1, prev: Nil, ptr: 12 }
+                      : Nil
+                  )
+            length ag `shouldEqual` 6
+            ag
+              `shouldEqual`
+                ( ({ au: Speaker', iChan: 1, next: Nil, oChan: 1, prev: (1 : Nil), ptr: 0 } :| Nil) : ({ au: (Gain' 0.5), iChan: 1, next: (0 : Nil), oChan: 1, prev: (2 : Nil), ptr: 1 } :| ({ au: (Gain' 1.0), iChan: 1, next: (4 : Nil), oChan: 1, prev: (8 : 7 : 6 : Nil), ptr: 5 } : { au: (Gain' 0.9), iChan: 1, next: (4 : Nil), oChan: 1, prev: (12 : 11 : 10 : Nil), ptr: 9 } : Nil)) : ({ au: Merger', iChan: 1, next: (1 : Nil), oChan: 1, prev: (3 : Nil), ptr: 2 } :| Nil) : ({ au: Splitter', iChan: 1, next: (2 : Nil), oChan: 1, prev: (4 : Nil), ptr: 3 } :| Nil) : ({ au: Add', iChan: 1, next: (0 : Nil), oChan: 1, prev: (9 : 5 : Nil), ptr: 4 } :| Nil)
+                    : ( { au: (SinOsc' 440.0), iChan: 1, next: (5 : Nil), oChan: 1, prev: Nil, ptr: 6 }
+                          :| ( { au: (SinOsc' 441.0), iChan: 1, next: (5 : Nil), oChan: 1, prev: Nil, ptr: 7 } : { au: (SinOsc' 441.0), iChan: 1, next: (5 : Nil), oChan: 1, prev: Nil, ptr: 8 }
+                                : { au: (SinOsc' 442.0)
+                                  , iChan: 1
+                                  , next:
+                                      (9 : Nil)
+                                  , oChan: 1
+                                  , prev: Nil
+                                  , ptr: 10
+                                  }
+                                : { au: (SinOsc' 443.0), iChan: 1, next: (9 : Nil), oChan: 1, prev: Nil, ptr: 11 }
+                                : { au: (SinOsc' 443.0), iChan: 1, next: (9 : Nil), oChan: 1, prev: Nil, ptr: 12 }
+                                : Nil
+                            )
+                      )
+                    : Nil
+                )

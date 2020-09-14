@@ -25,6 +25,7 @@ module FRP.Behavior.Audio
   , speaker
   , speaker'
   , gain'
+  , audioGrouper
   ) where
 
 import Prelude
@@ -32,7 +33,7 @@ import Data.Array (foldl, head, index, length, mapWithIndex, range, replicate, s
 import Data.Generic.Rep (class Generic)
 import Data.Generic.Rep.Show (genericShow)
 import Data.Int (floor, toNumber)
-import Data.List (List(..), (:), singleton)
+import Data.List (List(..), (:), singleton, partition)
 import Data.Map as M
 import Data.Maybe (fromMaybe)
 import Data.NonEmpty (NonEmpty, (:|))
@@ -652,8 +653,8 @@ audioToPtr = go (-1) Nil
     , flat: M.empty
     }
 
-pt :: forall i o. Nat i => Nat o => AudioUnit i o -> AudioUnit o o
-pt = unsafeCoerce
+normalizeOutput :: forall i o. Nat i => Nat o => AudioUnit i o -> AudioUnit o o
+normalizeOutput = unsafeCoerce
 
 microphone :: AudioUnit D1 D1
 microphone = Microphone
@@ -696,7 +697,7 @@ add :: forall i. Nat i => NonEmpty List (AudioUnit i i) -> AudioUnit i i
 add = Add
 
 swap :: forall i o. Nat i => Nat o => Vec o Int -> AudioUnit i i -> AudioUnit o o
-swap v = pt <<< (Swap v)
+swap v = normalizeOutput <<< (Swap v)
 
 constant :: forall i. Nat i => Number -> AudioUnit i i
 constant = Constant
@@ -750,3 +751,50 @@ soundify e scene = do
       , p
       }
   subscribe (sample_ scene (interval e)) (audioReconciliation u <<< audioToPtr)
+
+ucomp :: AudioUnit' -> AudioUnit' -> Boolean
+ucomp Microphone' Microphone' = true
+
+ucomp (SinOsc' _) (SinOsc' _) = true
+
+ucomp (SquareOsc' _) (SquareOsc' _) = true
+
+ucomp Splitter' Splitter' = true
+
+ucomp Panner' Panner' = true
+
+ucomp (Tagged' s0) (Tagged' s1) = s0 == s1
+
+ucomp Mul' Mul' = true
+
+ucomp Add' Add' = true
+
+ucomp Swap' Swap' = true
+
+ucomp Merger' Merger' = true
+
+ucomp (Constant' _) (Constant' _) = true
+
+ucomp (Delay' _) (Delay' _) = true
+
+ucomp (Gain' _) (Gain' _) = true
+
+ucomp Speaker' Speaker' = true
+
+ucomp NoSound' NoSound' = true
+
+ucomp SplitRes' SplitRes' = true
+
+ucomp _ _ = false
+
+acomp :: PtrInfo -> PtrInfo -> Boolean
+acomp a b = ucomp a.au b.au && a.iChan == b.iChan && a.oChan == b.oChan
+
+audioGrouper :: List PtrInfo -> List (NonEmpty List PtrInfo)
+audioGrouper Nil = Nil
+
+audioGrouper (h : t) =
+  let
+    pt = partition (acomp h) t
+  in
+    ((h :| pt.yes) : audioGrouper pt.no)
