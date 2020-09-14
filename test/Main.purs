@@ -6,7 +6,7 @@ import Data.Int (toNumber)
 import Data.List (List(..), (:), tail, length)
 import Data.List as DL
 import Data.Map (fromFoldable)
-import Data.Maybe (fromMaybe)
+import Data.Maybe (Maybe(..), fromMaybe)
 import Data.NonEmpty ((:|))
 import Data.Tuple (Tuple(..))
 import Data.Vec as V
@@ -106,16 +106,16 @@ main =
               `shouldEqual`
                 { flat:
                     ( fromFoldable
-                        [ (Tuple 0 { au: Speaker', iChan: 1, next: Nil, oChan: 1, prev: (4 : 3 : 2 : 1 : Nil), ptr: 0 })
-                        , (Tuple 1 { au: (SinOsc' 440.0), iChan: 1, next: (0 : Nil), oChan: 1, prev: Nil, ptr: 1 })
-                        , (Tuple 2 { au: (SinOsc' 440.0), iChan: 1, next: (0 : Nil), oChan: 1, prev: Nil, ptr: 2 })
-                        , (Tuple 3 { au: (SinOsc' 440.0), iChan: 1, next: (0 : Nil), oChan: 1, prev: Nil, ptr: 3 })
-                        , (Tuple 4 { au: (SinOsc' 440.0), iChan: 1, next: (0 : Nil), oChan: 1, prev: Nil, ptr: 4 })
+                        [ (Tuple 0 { name: Nothing, au: Speaker', iChan: 1, next: Nil, oChan: 1, prev: (4 : 3 : 2 : 1 : Nil), ptr: 0 })
+                        , (Tuple 1 { name: Nothing, au: (SinOsc' 440.0), iChan: 1, next: (0 : Nil), oChan: 1, prev: Nil, ptr: 1 })
+                        , (Tuple 2 { name: Nothing, au: (SinOsc' 440.0), iChan: 1, next: (0 : Nil), oChan: 1, prev: Nil, ptr: 2 })
+                        , (Tuple 3 { name: Nothing, au: (SinOsc' 440.0), iChan: 1, next: (0 : Nil), oChan: 1, prev: Nil, ptr: 3 })
+                        , (Tuple 4 { name: Nothing, au: (SinOsc' 440.0), iChan: 1, next: (0 : Nil), oChan: 1, prev: Nil, ptr: 4 })
                         ]
                     )
                 , init: (4 : 3 : 2 : 1 : Nil)
                 , len: 5
-                , p: { au: Speaker', iChan: 1, next: Nil, oChan: 1, prev: (4 : 3 : 2 : 1 : Nil), ptr: 0 }
+                , p: { au: Speaker', name: Nothing, iChan: 1, next: Nil, oChan: 1, prev: (4 : 3 : 2 : 1 : Nil), ptr: 0 }
                 }
           it "should correctly transform dense tree" do
             let
@@ -137,14 +137,15 @@ main =
               `shouldEqual`
                 { flat:
                     ( fromFoldable
-                        [ (Tuple 0 { au: Speaker', iChan: 1, next: Nil, oChan: 1, prev: (1 : Nil), ptr: 0 })
-                        , (Tuple 1 { au: Add', iChan: 1, next: (0 : Nil), oChan: 1, prev: (6 : 2 : Nil), ptr: 1 })
-                        , (Tuple 2 { au: (Gain' 1.0), iChan: 1, next: (1 : Nil), oChan: 1, prev: (5 : 4 : 3 : Nil), ptr: 2 })
+                        [ (Tuple 0 { name: Nothing, au: Speaker', iChan: 1, next: Nil, oChan: 1, prev: (1 : Nil), ptr: 0 })
+                        , (Tuple 1 { name: Nothing, au: Add', iChan: 1, next: (0 : Nil), oChan: 1, prev: (6 : 2 : Nil), ptr: 1 })
+                        , (Tuple 2 { name: Nothing, au: (Gain' 1.0), iChan: 1, next: (1 : Nil), oChan: 1, prev: (5 : 4 : 3 : Nil), ptr: 2 })
                         , ( Tuple 3
                               { au:
                                   ( SinOsc'
                                       440.0
                                   )
+                              , name: Nothing
                               , iChan: 1
                               , next: (2 : Nil)
                               , oChan: 1
@@ -152,13 +153,13 @@ main =
                               , ptr: 3
                               }
                           )
-                        , (Tuple 4 { au: (SinOsc' 441.0), iChan: 1, next: (2 : Nil), oChan: 1, prev: Nil, ptr: 4 })
-                        , (Tuple 5 { au: (SinOsc' 441.0), iChan: 1, next: (2 : Nil), oChan: 1, prev: Nil, ptr: 5 })
-                        , (Tuple 6 { au: (Gain' 0.9), iChan: 1, next: (1 : Nil), oChan: 1, prev: (9 : 8 : 7 : Nil), ptr: 6 })
-                        , (Tuple 7 { au: (SinOsc' 442.0), iChan: 1, next: (6 : Nil), oChan: 1, prev: Nil, ptr: 7 })
-                        , (Tuple 8 { au: (SinOsc' 443.0), iChan: 1, next: (6 : Nil), oChan: 1, prev: Nil, ptr: 8 })
+                        , (Tuple 4 { name: Nothing, au: (SinOsc' 441.0), iChan: 1, next: (2 : Nil), oChan: 1, prev: Nil, ptr: 4 })
+                        , (Tuple 5 { name: Nothing, au: (SinOsc' 441.0), iChan: 1, next: (2 : Nil), oChan: 1, prev: Nil, ptr: 5 })
+                        , (Tuple 6 { name: Nothing, au: (Gain' 0.9), iChan: 1, next: (1 : Nil), oChan: 1, prev: (9 : 8 : 7 : Nil), ptr: 6 })
+                        , (Tuple 7 { name: Nothing, au: (SinOsc' 442.0), iChan: 1, next: (6 : Nil), oChan: 1, prev: Nil, ptr: 7 })
+                        , (Tuple 8 { name: Nothing, au: (SinOsc' 443.0), iChan: 1, next: (6 : Nil), oChan: 1, prev: Nil, ptr: 8 })
                         , ( Tuple 9
-                              { au: (SinOsc' 443.0), iChan: 1, next: (6 : Nil), oChan: 1, prev: Nil, ptr: 9 }
+                              { name: Nothing, au: (SinOsc' 443.0), iChan: 1, next: (6 : Nil), oChan: 1, prev: Nil, ptr: 9 }
                           )
                         ]
                     )
@@ -169,7 +170,7 @@ main =
                         : Nil
                     )
                 , len: 10
-                , p: { au: Speaker', iChan: 1, next: Nil, oChan: 1, prev: (1 : Nil), ptr: 0 }
+                , p: { au: Speaker', name: Nothing, iChan: 1, next: Nil, oChan: 1, prev: (1 : Nil), ptr: 0 }
                 }
           it "should correctly split" do
             let
@@ -199,11 +200,12 @@ main =
               `shouldEqual`
                 { flat:
                     ( fromFoldable
-                        [ (Tuple 0 { au: Speaker', iChan: 1, next: Nil, oChan: 1, prev: (1 : Nil), ptr: 0 })
-                        , (Tuple 1 { au: (Gain' 0.5), iChan: 1, next: (0 : Nil), oChan: 1, prev: (2 : Nil), ptr: 1 })
-                        , (Tuple 2 { au: Merger', iChan: 1, next: (1 : Nil), oChan: 1, prev: (3 : Nil), ptr: 2 })
+                        [ (Tuple 0 { name: Nothing, au: Speaker', iChan: 1, next: Nil, oChan: 1, prev: (1 : Nil), ptr: 0 })
+                        , (Tuple 1 { name: Nothing, au: (Gain' 0.5), iChan: 1, next: (0 : Nil), oChan: 1, prev: (2 : Nil), ptr: 1 })
+                        , (Tuple 2 { name: Nothing, au: Merger', iChan: 1, next: (1 : Nil), oChan: 1, prev: (3 : Nil), ptr: 2 })
                         , ( Tuple 3
-                              { au: Splitter'
+                              { name: Nothing
+                              , au: Splitter'
                               , iChan:
                                   1
                               , next: (2 : Nil)
@@ -212,39 +214,41 @@ main =
                               , ptr: 3
                               }
                           )
-                        , (Tuple 4 { au: Add', iChan: 1, next: (0 : Nil), oChan: 1, prev: (9 : 5 : Nil), ptr: 4 })
-                        , (Tuple 5 { au: (Gain' 1.0), iChan: 1, next: (4 : Nil), oChan: 1, prev: (8 : 7 : 6 : Nil), ptr: 5 })
+                        , (Tuple 4 { name: Nothing, au: Add', iChan: 1, next: (0 : Nil), oChan: 1, prev: (9 : 5 : Nil), ptr: 4 })
+                        , (Tuple 5 { name: Nothing, au: (Gain' 1.0), iChan: 1, next: (4 : Nil), oChan: 1, prev: (8 : 7 : 6 : Nil), ptr: 5 })
                         , ( Tuple 6
                               { au: (SinOsc' 440.0)
                               , iChan: 1
                               , next: (5 : Nil)
+                              , name: Nothing
                               , oChan: 1
                               , prev:
                                   Nil
                               , ptr: 6
                               }
                           )
-                        , (Tuple 7 { au: (SinOsc' 441.0), iChan: 1, next: (5 : Nil), oChan: 1, prev: Nil, ptr: 7 })
-                        , (Tuple 8 { au: (SinOsc' 441.0), iChan: 1, next: (5 : Nil), oChan: 1, prev: Nil, ptr: 8 })
-                        , (Tuple 9 { au: (Gain' 0.9), iChan: 1, next: (4 : Nil), oChan: 1, prev: (12 : 11 : 10 : Nil), ptr: 9 })
-                        , (Tuple 10 { au: (SinOsc' 442.0), iChan: 1, next: (9 : Nil), oChan: 1, prev: Nil, ptr: 10 })
-                        , (Tuple 11 { au: (SinOsc' 443.0), iChan: 1, next: (9 : Nil), oChan: 1, prev: Nil, ptr: 11 })
-                        , (Tuple 12 { au: (SinOsc' 443.0), iChan: 1, next: (9 : Nil), oChan: 1, prev: Nil, ptr: 12 })
+                        , (Tuple 7 { name: Nothing, au: (SinOsc' 441.0), iChan: 1, next: (5 : Nil), oChan: 1, prev: Nil, ptr: 7 })
+                        , (Tuple 8 { name: Nothing, au: (SinOsc' 441.0), iChan: 1, next: (5 : Nil), oChan: 1, prev: Nil, ptr: 8 })
+                        , (Tuple 9 { name: Nothing, au: (Gain' 0.9), iChan: 1, next: (4 : Nil), oChan: 1, prev: (12 : 11 : 10 : Nil), ptr: 9 })
+                        , (Tuple 10 { name: Nothing, au: (SinOsc' 442.0), iChan: 1, next: (9 : Nil), oChan: 1, prev: Nil, ptr: 10 })
+                        , (Tuple 11 { name: Nothing, au: (SinOsc' 443.0), iChan: 1, next: (9 : Nil), oChan: 1, prev: Nil, ptr: 11 })
+                        , (Tuple 12 { name: Nothing, au: (SinOsc' 443.0), iChan: 1, next: (9 : Nil), oChan: 1, prev: Nil, ptr: 12 })
                         ]
                     )
                 , init: (12 : 11 : 10 : 8 : 7 : 6 : Nil)
                 , len: 13
-                , p: { au: Splitter', iChan: 1, next: (2 : Nil), oChan: 1, prev: (4 : Nil), ptr: 3 }
+                , p: { au: Splitter', iChan: 1, name: Nothing, next: (2 : Nil), oChan: 1, prev: (4 : Nil), ptr: 3 }
                 }
         describe "Audio grouper" do
           it "should group correctly" do
             let
               ag =
                 audioGrouper
-                  ( { au: Speaker', iChan: 1, next: Nil, oChan: 1, prev: (1 : Nil), ptr: 0 }
-                      : { au: (Gain' 0.5), iChan: 1, next: (0 : Nil), oChan: 1, prev: (2 : Nil), ptr: 1 }
-                      : { au: Merger', iChan: 1, next: (1 : Nil), oChan: 1, prev: (3 : Nil), ptr: 2 }
-                      : { au: Splitter'
+                  ( { name: Nothing, au: Speaker', iChan: 1, next: Nil, oChan: 1, prev: (1 : Nil), ptr: 0 }
+                      : { name: Nothing, au: (Gain' 0.5), iChan: 1, next: (0 : Nil), oChan: 1, prev: (2 : Nil), ptr: 1 }
+                      : { name: Nothing, au: Merger', iChan: 1, next: (1 : Nil), oChan: 1, prev: (3 : Nil), ptr: 2 }
+                      : { name: Nothing
+                        , au: Splitter'
                         , iChan:
                             1
                         , next: (2 : Nil)
@@ -252,9 +256,10 @@ main =
                         , prev: (4 : Nil)
                         , ptr: 3
                         }
-                      : { au: Add', iChan: 1, next: (0 : Nil), oChan: 1, prev: (9 : 5 : Nil), ptr: 4 }
-                      : { au: (Gain' 1.0), iChan: 1, next: (4 : Nil), oChan: 1, prev: (8 : 7 : 6 : Nil), ptr: 5 }
-                      : { au: (SinOsc' 440.0)
+                      : { name: Nothing, au: Add', iChan: 1, next: (0 : Nil), oChan: 1, prev: (9 : 5 : Nil), ptr: 4 }
+                      : { name: Nothing, au: (Gain' 1.0), iChan: 1, next: (4 : Nil), oChan: 1, prev: (8 : 7 : 6 : Nil), ptr: 5 }
+                      : { name: Nothing
+                        , au: (SinOsc' 440.0)
                         , iChan: 1
                         , next: (5 : Nil)
                         , oChan: 1
@@ -262,21 +267,38 @@ main =
                             Nil
                         , ptr: 6
                         }
-                      : { au: (SinOsc' 441.0), iChan: 1, next: (5 : Nil), oChan: 1, prev: Nil, ptr: 7 }
-                      : { au: (SinOsc' 441.0), iChan: 1, next: (5 : Nil), oChan: 1, prev: Nil, ptr: 8 }
-                      : { au: (Gain' 0.9), iChan: 1, next: (4 : Nil), oChan: 1, prev: (12 : 11 : 10 : Nil), ptr: 9 }
-                      : { au: (SinOsc' 442.0), iChan: 1, next: (9 : Nil), oChan: 1, prev: Nil, ptr: 10 }
-                      : { au: (SinOsc' 443.0), iChan: 1, next: (9 : Nil), oChan: 1, prev: Nil, ptr: 11 }
-                      : { au: (SinOsc' 443.0), iChan: 1, next: (9 : Nil), oChan: 1, prev: Nil, ptr: 12 }
+                      : { name: Nothing, au: (SinOsc' 441.0), iChan: 1, next: (5 : Nil), oChan: 1, prev: Nil, ptr: 7 }
+                      : { name: Nothing, au: (SinOsc' 441.0), iChan: 1, next: (5 : Nil), oChan: 1, prev: Nil, ptr: 8 }
+                      : { name: Nothing, au: (Gain' 0.9), iChan: 1, next: (4 : Nil), oChan: 1, prev: (12 : 11 : 10 : Nil), ptr: 9 }
+                      : { name: Nothing, au: (SinOsc' 442.0), iChan: 1, next: (9 : Nil), oChan: 1, prev: Nil, ptr: 10 }
+                      : { name: Nothing, au: (SinOsc' 443.0), iChan: 1, next: (9 : Nil), oChan: 1, prev: Nil, ptr: 11 }
+                      : { name: Nothing, au: (SinOsc' 443.0), iChan: 1, next: (9 : Nil), oChan: 1, prev: Nil, ptr: 12 }
                       : Nil
                   )
             length ag `shouldEqual` 6
             ag
               `shouldEqual`
-                ( ({ au: Speaker', iChan: 1, next: Nil, oChan: 1, prev: (1 : Nil), ptr: 0 } :| Nil) : ({ au: (Gain' 0.5), iChan: 1, next: (0 : Nil), oChan: 1, prev: (2 : Nil), ptr: 1 } :| ({ au: (Gain' 1.0), iChan: 1, next: (4 : Nil), oChan: 1, prev: (8 : 7 : 6 : Nil), ptr: 5 } : { au: (Gain' 0.9), iChan: 1, next: (4 : Nil), oChan: 1, prev: (12 : 11 : 10 : Nil), ptr: 9 } : Nil)) : ({ au: Merger', iChan: 1, next: (1 : Nil), oChan: 1, prev: (3 : Nil), ptr: 2 } :| Nil) : ({ au: Splitter', iChan: 1, next: (2 : Nil), oChan: 1, prev: (4 : Nil), ptr: 3 } :| Nil) : ({ au: Add', iChan: 1, next: (0 : Nil), oChan: 1, prev: (9 : 5 : Nil), ptr: 4 } :| Nil)
-                    : ( { au: (SinOsc' 440.0), iChan: 1, next: (5 : Nil), oChan: 1, prev: Nil, ptr: 6 }
-                          :| ( { au: (SinOsc' 441.0), iChan: 1, next: (5 : Nil), oChan: 1, prev: Nil, ptr: 7 } : { au: (SinOsc' 441.0), iChan: 1, next: (5 : Nil), oChan: 1, prev: Nil, ptr: 8 }
-                                : { au: (SinOsc' 442.0)
+                ( ({ name: Nothing, au: Speaker', iChan: 1, next: Nil, oChan: 1, prev: (1 : Nil), ptr: 0 } :| Nil)
+                    : ( { au: (Gain' 0.5), name: Nothing, iChan: 1, next: (0 : Nil), oChan: 1, prev: (2 : Nil), ptr: 1 }
+                          :| ( { au: (Gain' 1.0), name: Nothing, iChan: 1, next: (4 : Nil), oChan: 1, prev: (8 : 7 : 6 : Nil), ptr: 5 }
+                                : { au: (Gain' 0.9)
+                                  , iChan: 1
+                                  , next: (4 : Nil)
+                                  , name: Nothing
+                                  , oChan: 1
+                                  , prev: (12 : 11 : 10 : Nil)
+                                  , ptr: 9
+                                  }
+                                : Nil
+                            )
+                      )
+                    : ({ name: Nothing, au: Merger', iChan: 1, next: (1 : Nil), oChan: 1, prev: (3 : Nil), ptr: 2 } :| Nil)
+                    : ({ name: Nothing, au: Splitter', iChan: 1, next: (2 : Nil), oChan: 1, prev: (4 : Nil), ptr: 3 } :| Nil)
+                    : ({ name: Nothing, au: Add', iChan: 1, next: (0 : Nil), oChan: 1, prev: (9 : 5 : Nil), ptr: 4 } :| Nil)
+                    : ( { name: Nothing, au: (SinOsc' 440.0), iChan: 1, next: (5 : Nil), oChan: 1, prev: Nil, ptr: 6 }
+                          :| ( { name: Nothing, au: (SinOsc' 441.0), iChan: 1, next: (5 : Nil), oChan: 1, prev: Nil, ptr: 7 } : { name: Nothing, au: (SinOsc' 441.0), iChan: 1, next: (5 : Nil), oChan: 1, prev: Nil, ptr: 8 }
+                                : { name: Nothing
+                                  , au: (SinOsc' 442.0)
                                   , iChan: 1
                                   , next:
                                       (9 : Nil)
@@ -284,8 +306,8 @@ main =
                                   , prev: Nil
                                   , ptr: 10
                                   }
-                                : { au: (SinOsc' 443.0), iChan: 1, next: (9 : Nil), oChan: 1, prev: Nil, ptr: 11 }
-                                : { au: (SinOsc' 443.0), iChan: 1, next: (9 : Nil), oChan: 1, prev: Nil, ptr: 12 }
+                                : { name: Nothing, au: (SinOsc' 443.0), iChan: 1, next: (9 : Nil), oChan: 1, prev: Nil, ptr: 11 }
+                                : { name: Nothing, au: (SinOsc' 443.0), iChan: 1, next: (9 : Nil), oChan: 1, prev: Nil, ptr: 12 }
                                 : Nil
                             )
                       )
