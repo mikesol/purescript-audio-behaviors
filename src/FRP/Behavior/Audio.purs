@@ -6,6 +6,8 @@ module FRP.Behavior.Audio
   , makeAudioWorkletProcessor
   , audioIO
   , audioIOInterleaved
+  , Status(..)
+  , AudioUnit''(..)
   , IdxContext
   , audioToPtr
   , AudioUnit'(..)
@@ -29,16 +31,21 @@ module FRP.Behavior.Audio
 
 import Prelude
 import Data.Array (foldl, head, index, length, mapWithIndex, range, replicate, snoc, zipWith, (!!))
+import Data.Array as A
 import Data.Generic.Rep (class Generic)
 import Data.Generic.Rep.Show (genericShow)
 import Data.Int (floor, toNumber)
-import Data.List (List(..), (:), singleton, partition)
+import Data.List (List(..), (:), singleton, partition, fromFoldable)
+import Data.List as DL
+import Data.Map (Map)
 import Data.Map as M
-import Data.Maybe (fromMaybe, Maybe(..))
+import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.NonEmpty (NonEmpty, (:|))
 import Data.NonEmpty as NE
 import Data.Traversable (sequence)
+import Data.Tuple (Tuple(..), fst, snd)
 import Data.Typelevel.Num (class Mul, class Nat, class Pred, D1, D2, toInt')
+import Data.Unfoldable1 as DU
 import Data.Vec (Vec, fill)
 import Effect (Effect, whileE)
 import Effect.Ref (Ref, modify_, new, read, write)
@@ -46,6 +53,7 @@ import FRP.Behavior (Behavior, behavior, sample_)
 import FRP.Event (Event, makeEvent, subscribe)
 import FRP.Event.Time (interval)
 import Heterogeneous.Mapping (class HMap, class Mapping, hmap)
+import Math as Math
 import Record (merge)
 import Type.Proxy (Proxy(..))
 import Type.Row.Homogeneous (class Homogeneous)
@@ -383,21 +391,34 @@ type PtrInfo'
   = { ptr :: Int
     , iChan :: Int
     , oChan :: Int
-    , next :: List Int
+    , status :: Status
+    , next :: Map Int Int
     }
 
 type PtrInfo
   = { ptr :: Int
     , iChan :: Int
     , oChan :: Int
-    , prev :: List Int
-    , next :: List Int
+    , prev :: Map Int Int
+    , next :: Map Int Int
     , au :: AudioUnit'
+    , status :: Status
     , name :: MString
     }
 
 type MString
   = Maybe String
+
+data Status
+  = On
+  | Off
+
+derive instance genericStatus :: Generic Status _
+
+instance showStatus :: Show Status where
+  show s = genericShow s
+
+derive instance eqStatus :: Eq Status
 
 data AudioUnit i o
   = Microphone MString
@@ -440,6 +461,33 @@ instance showAudioUnit' :: Show AudioUnit' where
 
 derive instance eqAudioUnit' :: Eq AudioUnit'
 
+data AudioUnit''
+  = Microphone''
+  | SinOsc''
+  | SquareOsc''
+  | Splitter''
+  | Panner''
+  | Mul''
+  | Add''
+  | Swap''
+  | Merger''
+  | Constant''
+  | Delay''
+  | Gain''
+  | Speaker''
+  | NoSound''
+  | SplitRes''
+
+derive instance genericAudioUnit'' :: Generic AudioUnit'' _
+
+instance showAudioUnit'' :: Show AudioUnit'' where
+  show s = genericShow s
+
+derive instance eqAudioUnit'' :: Eq AudioUnit''
+
+instance ordAudioUnit'' :: Ord AudioUnit'' where
+  compare a b = compare (show a) (show b)
+
 au' :: forall i o. AudioUnit i o -> { au :: AudioUnit', name :: MString }
 au' (Microphone name) = { au: Microphone', name }
 
@@ -471,10 +519,108 @@ au' (NoSound name) = { au: NoSound', name }
 
 au' SplitRes = { au: SplitRes', name: Nothing }
 
+au'' :: AudioUnit' -> AudioUnit''
+au'' Microphone' = Microphone''
+
+au'' (SinOsc' _) = SinOsc''
+
+au'' (SquareOsc' _) = SquareOsc''
+
+au'' Splitter' = Splitter''
+
+au'' Panner' = Panner''
+
+au'' Mul' = Mul''
+
+au'' Add' = Add''
+
+au'' Swap' = Swap''
+
+au'' Merger' = Merger''
+
+au'' (Constant' _) = Constant''
+
+au'' (Delay' _) = Delay''
+
+au'' (Gain' _) = Gain''
+
+au'' Speaker' = Speaker''
+
+au'' NoSound' = NoSound''
+
+au'' SplitRes' = SplitRes''
+
+tagToAU :: AudioUnit'' -> AudioUnit'
+tagToAU Microphone'' = Microphone'
+
+tagToAU SinOsc'' = SinOsc' 50000.0
+
+tagToAU SquareOsc'' = SquareOsc' 50000.0
+
+tagToAU Splitter'' = Splitter'
+
+tagToAU Panner'' = Panner'
+
+tagToAU Mul'' = Mul'
+
+tagToAU Add'' = Add'
+
+tagToAU Swap'' = Swap'
+
+tagToAU Merger'' = Merger'
+
+tagToAU Constant'' = Constant' 1000.0
+
+tagToAU Delay'' = Delay' 1000.0
+
+tagToAU Gain'' = Gain' 1000.0
+
+tagToAU Speaker'' = Speaker'
+
+tagToAU NoSound'' = NoSound'
+
+tagToAU SplitRes'' = SplitRes'
+
+trivialConstraint :: AudioUnit'' -> Boolean
+trivialConstraint Microphone'' = true
+
+trivialConstraint SinOsc'' = false
+
+trivialConstraint SquareOsc'' = false
+
+trivialConstraint Splitter'' = true
+
+trivialConstraint Panner'' = false
+
+trivialConstraint Mul'' = true
+
+trivialConstraint Add'' = true
+
+trivialConstraint Swap'' = true
+
+trivialConstraint Merger'' = true
+
+trivialConstraint Constant'' = false
+
+trivialConstraint Delay'' = false
+
+trivialConstraint Gain'' = false
+
+trivialConstraint Speaker'' = true
+
+trivialConstraint NoSound'' = true
+
+trivialConstraint SplitRes'' = true
+
+type UnfoldedFlatAudio
+  = Tuple Int PtrInfo
+
+type FlatAudio
+  = M.Map Int PtrInfo
+
 type AlgStep
   = { len :: Int
-    , flat :: M.Map Int PtrInfo
-    , init :: List Int
+    , flat :: FlatAudio
     , p :: PtrInfo
     }
 
@@ -485,14 +631,17 @@ a2i a = toInt' (Proxy :: Proxy i)
 a2o :: forall i o. Nat i => Nat o => AudioUnit i o -> Int
 a2o a = toInt' (Proxy :: Proxy o)
 
+foreign import dEBUG :: forall a. a -> a
+
 audioToPtr :: forall i i' o o'. Nat i => Nat o => Pred i i' => Pred o o' => AudioUnit i o -> AlgStep
-audioToPtr = go (-1) Nil
+audioToPtr = go (-1) M.empty
   where
-  go :: forall a b a' b'. Nat a => Nat b => Pred a a' => Pred b b' => Int -> List Int -> AudioUnit a b -> AlgStep
+  go :: forall a b a' b'. Nat a => Nat b => Pred a a' => Pred b b' => Int -> Map Int Int -> AudioUnit a b -> AlgStep
   go i next au =
     go'
       { ptr: i + 1
       , next
+      , status: On
       , iChan: a2i au
       , oChan: a2o au
       }
@@ -504,10 +653,9 @@ audioToPtr = go (-1) Nil
       au = au' v
     in
       let
-        p = merge ptr { prev: Nil, au: au.au, name: au.name }
+        p = merge { next: map (_ + 1) ptr.next, prev: M.singleton ptr.ptr 0, au: au.au, name: au.name } ptr
       in
         { len: 1
-        , init: singleton ptr.ptr
         , flat: M.singleton ptr.ptr p
         , p
         }
@@ -528,24 +676,28 @@ audioToPtr = go (-1) Nil
     AlgStep
   passthrough ptr v a =
     let
-      r = go ptr.ptr (singleton ptr.ptr) a
+      nxt = map (_ + 1) ptr.next
     in
       let
-        au = au' v
+        r = go ptr.ptr (nxt <> (M.singleton ptr.ptr 0)) a
       in
         let
-          p =
-            merge ptr
-              { prev: singleton r.p.ptr
-              , au: au.au
-              , name: au.name
-              }
+          au = au' v
         in
-          { len: r.len + 1
-          , init: r.init
-          , p
-          , flat: r.flat <> (M.singleton ptr.ptr p)
-          }
+          let
+            p =
+              merge
+                { next: nxt
+                , prev: M.singleton ptr.ptr 0 <> map (_ + 1) r.p.prev
+                , au: au.au
+                , name: au.name
+                }
+                ptr
+          in
+            { len: r.len + 1
+            , p
+            , flat: r.flat <> (M.singleton ptr.ptr p)
+            }
 
   listthrough ::
     forall a a' b b' c c' d d'.
@@ -563,34 +715,49 @@ audioToPtr = go (-1) Nil
     AlgStep
   listthrough ptr v l =
     let
-      r =
-        foldl
-          ( \b@(h :| tl) a ->
-              ( go (h.p.ptr + h.len - 1) (singleton ptr.ptr) a
-              )
-                :| (h : tl)
-          )
-          ( NE.singleton
-              (go ptr.ptr (singleton ptr.ptr) $ NE.head l)
-          )
-          (NE.tail l)
+      nxt = map (_ + 1) ptr.next
     in
       let
-        au = au' v
+        nxtM = (nxt <> (M.singleton ptr.ptr 0))
       in
         let
-          p =
-            merge ptr
-              { prev: let (hd :| tl) = map _.p.ptr r in (hd : tl)
-              , au: au.au
-              , name: au.name
-              }
+          r =
+            foldl
+              ( \b@(h :| tl) a ->
+                  ( go (h.p.ptr + h.len - 1) nxtM a
+                  )
+                    :| (h : tl)
+              )
+              ( NE.singleton
+                  (go ptr.ptr nxtM $ NE.head l)
+              )
+              (NE.tail l)
         in
-          { len: (foldl (+) 0 (map _.len r)) + 1
-          , init: foldl (<>) Nil (map _.init r)
-          , flat: (foldl (<>) M.empty (map _.flat r)) <> M.singleton ptr.ptr p
-          , p
-          }
+          let
+            au = au' v
+          in
+            let
+              p =
+                merge
+                  { prev:
+                      ( let
+                          (hd :| tl) =
+                            map
+                              (map (_ + 1) <<< _.p.prev)
+                              r
+                        in
+                          (foldl M.union hd tl)
+                      )
+                        <> M.singleton ptr.ptr 0
+                  , au: au.au
+                  , name: au.name
+                  }
+                  ptr
+            in
+              { len: (foldl (+) 0 (map _.len r)) + 1
+              , flat: (foldl (<>) M.empty (map _.flat r)) <> M.singleton ptr.ptr p
+              , p
+              }
 
   go' :: forall a b a' b'. Nat a => Pred a a' => Nat b => Pred b b' => PtrInfo' -> AudioUnit a b -> AlgStep
   go' ptr v@(Microphone name) = terminus ptr v
@@ -627,46 +794,57 @@ audioToPtr = go (-1) Nil
       let
         -- run alg on the inner chain
         -- to get the inner result
+        ----------------------------------------------------------
+        ------------------------------------------------
+        ------------------------------
+        -----------
+        -----
+        -- go needs to have the result of this appended
         ir = go (ptr.ptr - 1) ptr.next ic
       in
         let
-          -- continuing down, we offset the pointer
-          -- by the number of nodes in the graph
-          -- and point to this one
-          fr = go (ptr.ptr + ir.len) (singleton ptr.ptr) a
+          ir' = dEBUG $ show ir
         in
           let
-            au = au' v
+            -- continuing down, we offset the pointer
+            -- by the number of nodes in the graph
+            -- and point to this one
+            fr = go (ptr.ptr + ir.len) (map (_ + 2) ir.p.prev <> (M.singleton (ptr.ptr + ir.len) 1)) a
           in
             let
-              p =
-                merge
-                  { ptr: ptr.ptr + ir.len
-                  , prev: singleton fr.p.ptr
-                  -- the next nodes are the initial nodes from the inner
-                  -- result
-                  , next: ir.init
-                  , au: au.au
-                  , name: au.name
-                  }
-                  ptr
+              au = au' v
             in
-              { len: fr.len + ir.len + 1
-              -- the initial nodes come from downstream
-              , init: fr.init
-              , flat: ir.flat <> fr.flat <> (M.singleton (ptr.ptr + ir.len) p)
-              , p
-              }
+              let
+                maxPrev = foldl max 0 ir.p.prev
+              in
+                let
+                  subPrev = M.singleton (ptr.ptr + ir.len) 0 <> map (_ + 1) fr.p.prev
+                in
+                  let
+                    p =
+                      merge
+                        { ptr: ptr.ptr + ir.len
+                        , prev: subPrev
+                        ----- need to pivot this to work backwards
+                        , next: map (\i -> maxPrev - i + 1) ir.p.prev
+                        , au: au.au
+                        , name: au.name
+                        }
+                        ptr
+                  in
+                    { len: fr.len + ir.len + 1
+                    -- everything in IR flat is wrong because it is lacking BOTH the splitter
+                    -- AND everything after it
+                    -- fix, adding graph offset as necessary
+                    , flat: map (\p -> p { prev = M.union (map (_ + maxPrev + 1) subPrev) p.prev }) ir.flat <> fr.flat <> (M.singleton (ptr.ptr + ir.len) p)
+                    , p
+                    }
 
   go' ptr SplitRes =
     { len: 0 -- not actually a node
-    , init: ptr.next -- these are the true initial objects
-    , p: merge ptr { prev: Nil, au: SplitRes', name: Nothing }
+    , p: merge ptr { prev: M.empty :: Map Int Int, au: SplitRes', name: Nothing }
     , flat: M.empty
     }
-
-normalizeOutput :: forall i o. Nat i => Nat o => AudioUnit i o -> AudioUnit o o
-normalizeOutput = unsafeCoerce
 
 microphone :: AudioUnit D1 D1
 microphone = Microphone Nothing
@@ -706,7 +884,7 @@ add :: forall i. Nat i => NonEmpty List (AudioUnit i i) -> AudioUnit i i
 add = Add Nothing
 
 swap :: forall i o. Nat i => Nat o => Vec o Int -> AudioUnit i i -> AudioUnit o o
-swap v = normalizeOutput <<< (Swap Nothing v)
+swap v u = unsafeCoerce (Swap Nothing v u)
 
 constant :: forall i. Nat i => Number -> AudioUnit i i
 constant = Constant Nothing
@@ -729,38 +907,10 @@ instance semiringAudioUnit :: Semiring (AudioUnit o o) where
 type AudioBehavior i o
   = Behavior (AudioUnit i o)
 
--- reconciles the previous graph with the current one
-audioReconciliation :: Ref AlgStep -> AlgStep -> Effect Unit
-audioReconciliation prev cur = pure unit
-
-soundify ::
-  forall i i' o o'.
-  Nat i =>
-  Nat o =>
-  Pred i i' =>
-  Pred o o' =>
-  Int ->
-  (AudioBehavior i o) ->
-  Effect (Effect Unit)
-soundify e scene = do
-  let
-    p =
-      { ptr: 0
-      , iChan: 1
-      , oChan: 1
-      , prev: Nil
-      , next: Nil
-      , name: Nothing
-      , au: NoSound'
-      }
-  u <-
-    new
-      { len: 1
-      , flat: M.singleton 0 p
-      , init: singleton 0
-      , p
-      }
-  subscribe (sample_ scene (interval e)) (audioReconciliation u <<< audioToPtr)
+type Reconcilable
+  = { grouped :: GroupedAudio
+    , flat :: FlatAudio
+    }
 
 ucomp :: AudioUnit' -> AudioUnit' -> Boolean
 ucomp Microphone' Microphone' = true
@@ -795,14 +945,224 @@ ucomp SplitRes' SplitRes' = true
 
 ucomp _ _ = false
 
+oscMULT = 1.0 / 22100.0
+
+gainMULT = 1.0
+
+constMULT = 1.0
+
+delayMULT = 0.1
+
+toCoef :: AudioUnit' -> AudioUnit' -> Number
+toCoef Microphone' Microphone' = 0.0
+
+toCoef (SinOsc' f0) (SinOsc' f1) = (Math.abs $ f0 - f1) * oscMULT
+
+toCoef (SquareOsc' f0) (SquareOsc' f1) = (Math.abs $ f0 - f1) * oscMULT
+
+toCoef Splitter' Splitter' = 0.0
+
+toCoef Panner' Panner' = 0.0
+
+toCoef Mul' Mul' = 0.0
+
+toCoef Add' Add' = 0.0
+
+toCoef Swap' Swap' = 0.0
+
+toCoef Merger' Merger' = 0.0
+
+toCoef (Constant' c0) (Constant' c1) = (Math.abs $ c0 - c1) * constMULT
+
+toCoef (Delay' d0) (Delay' d1) = (Math.abs $ d0 - d1) * delayMULT
+
+toCoef (Gain' g0) (Gain' g1) = (Math.abs $ g0 - g1) * gainMULT
+
+toCoef Speaker' Speaker' = 0.0
+
+toCoef NoSound' NoSound' = 0.0
+
+toCoef SplitRes' SplitRes' = 0.0
+
+toCoef _ _ = 0.0
+
 acomp :: PtrInfo -> PtrInfo -> Boolean
 acomp a b = ucomp a.au b.au && a.name == b.name && a.iChan == b.iChan && a.oChan == b.oChan
 
-audioGrouper :: List PtrInfo -> List (NonEmpty List PtrInfo)
-audioGrouper Nil = Nil
+type AudioTag
+  = { tag :: AudioUnit'', iChan :: Int, oChan :: Int, name :: MString }
+
+type UnfoldedGroupedAudio
+  = Tuple AudioTag (NonEmpty List PtrInfo)
+
+type GroupedAudio
+  = Map AudioTag (NonEmpty List PtrInfo)
+
+audioGrouper ::
+  List PtrInfo ->
+  GroupedAudio
+audioGrouper Nil = M.empty
 
 audioGrouper (h : t) =
   let
     pt = partition (acomp h) t
   in
-    ((h :| pt.yes) : audioGrouper pt.no)
+    ( ( M.singleton
+          { tag: au'' h.au, iChan: h.iChan, oChan: h.oChan, name: h.name
+          }
+          (h :| pt.yes)
+      )
+        <> audioGrouper pt.no
+    )
+
+makeContiguousUnits :: AudioTag -> Int -> Int -> List PtrInfo
+makeContiguousUnits _ _ 0 = Nil
+
+makeContiguousUnits t start n =
+  map
+    ( \i ->
+        { au: tagToAU t.tag
+        , iChan: t.iChan
+        -- name should always be nothing
+        , name: t.name
+        , status: Off
+        , next: M.empty
+        , oChan: t.oChan
+        , prev: M.empty
+        , ptr: i
+        }
+    )
+    (DU.range start (start + n - 1))
+
+maybeNel :: forall a. List a -> Maybe (NonEmpty List a)
+maybeNel Nil = Nothing
+
+maybeNel (h : t) = Just $ h :| t
+
+addContiguousNewUnits :: UnfoldedGroupedAudio -> Reconcilable -> Reconcilable
+addContiguousNewUnits ug toModify =
+  let
+    nu = makeContiguousUnits (fst ug) (M.size toModify.flat) (1 + (DL.length $ NE.tail (snd ug)))
+  in
+    ( { grouped:
+          maybe
+            toModify.grouped
+            (\nel -> M.insertWith (\(h0 :| t0) (h1 :| t1) -> h0 :| (t0 <> (h1 : t1))) (fst ug) nel toModify.grouped)
+            $ maybeNel nu
+      , flat:
+          toModify.flat <> (M.fromFoldable (map (\i -> Tuple i.ptr i) nu))
+      }
+    )
+
+normalizeReconcilable :: Reconcilable -> Reconcilable -> Reconcilable
+normalizeReconcilable target tom = go (M.toUnfoldable target.grouped) tom
+  where
+  go :: List UnfoldedGroupedAudio -> Reconcilable -> Reconcilable
+  go Nil toModify = toModify
+
+  go (h : t) toModify = let tm = addContiguousNewUnits h toModify in go t tm
+
+type LPVar
+  = { name :: String, coef :: Number }
+
+type LPObjective
+  = { direction :: Int
+    , name :: String
+    , vars :: Array LPVar
+    }
+
+type LPBound
+  = { type :: Int, ub :: Number, lb :: Number }
+
+type LPConstraint
+  = { name :: String
+    , vars :: Array LPVar
+    , bnds :: { type :: Int, ub :: Number, lb :: Number }
+    }
+
+type LinearProgram
+  = { name :: String
+    , objective :: LPObjective
+    , subjectTo :: Array LPConstraint
+    , generals :: Array String
+    , binaries :: Array String
+    }
+
+glpMIN = 1
+
+-- for now, there are no edge constraints
+-- finding edges requires numerous graph traversals in the target,
+-- and the complexity gets out of hand quickly
+-- we can add as an experiment later
+audioToLP :: Reconcilable -> Reconcilable -> LinearProgram
+audioToLP r0 r1 =
+  { name: "LP"
+  , objective:
+      { direction: glpMIN
+      , name: "obj"
+      , vars:
+          join
+            ( map
+                ( \(Tuple k v0) ->
+                    if trivialConstraint k.tag then
+                      []
+                    else
+                      ( maybe []
+                          ( \v1 ->
+                              join
+                                ( map
+                                    ( \i ->
+                                        map
+                                          ( \o ->
+                                              { name: show k.tag <> "_" <> show i.ptr <> "_" <> show o.ptr
+                                              , coef: toCoef i.au o.au
+                                              }
+                                          )
+                                          $ A.fromFoldable v1
+                                    )
+                                    $ A.fromFoldable v0
+                                )
+                          )
+                          $ M.lookup k r1.grouped
+                      )
+                )
+                $ M.toUnfoldable r0.grouped
+            )
+      }
+  , binaries: []
+  , generals: []
+  , subjectTo: []
+  }
+
+-- reconciles the previous graph with the current one
+audioReconciliation :: Ref Reconcilable -> Reconcilable -> Effect Unit
+audioReconciliation prev' cur = do
+  prev <- read prev'
+  let
+    cur_ = normalizeReconcilable prev cur
+  let
+    prev_ = normalizeReconcilable cur prev
+  let
+    mapping = audioToLP prev_ cur_
+  pure unit
+
+soundify ::
+  forall i i' o o'.
+  Nat i =>
+  Nat o =>
+  Pred i i' =>
+  Pred o o' =>
+  Int ->
+  (AudioBehavior i o) ->
+  Effect (Effect Unit)
+soundify e scene = do
+  u <-
+    new
+      { grouped: M.empty
+      , flat: M.empty
+      }
+  subscribe (sample_ scene (interval e))
+    ( audioReconciliation u
+        <<< (\i -> { flat: i.flat, grouped: audioGrouper (fromFoldable i.flat) })
+        <<< audioToPtr
+    )

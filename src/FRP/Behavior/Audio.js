@@ -35,6 +35,10 @@ function mergeAudio(retention, prev, inputs) {
   ) -> -- soundify
   Effect Unit
  */
+exports.dEBUG = function (i) {
+  console.log("debug", i);
+  return i;
+};
 exports._makeAudioWorkletProcessor = function (name) {
   return function (retention) {
     return function (defaults) {
