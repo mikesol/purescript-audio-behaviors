@@ -919,13 +919,13 @@ ucomp SplitRes' SplitRes' = true
 
 ucomp _ _ = false
 
-oscMULT = 1.0 / 22100.0
+oscMULT = 1.0 / 22100.0 :: Number
 
-gainMULT = 1.0
+gainMULT = 1.0 :: Number
 
-constMULT = 1.0
+constMULT = 1.0 :: Number
 
-delayMULT = 0.1
+delayMULT = 0.1 :: Number
 
 toCoef :: AudioUnit' -> AudioUnit' -> Number
 toCoef Microphone' Microphone' = 0.0
@@ -1061,7 +1061,7 @@ type LinearProgram
     , binaries :: Array String
     }
 
-glpMIN = 1
+glpMIN = 1 :: Int
 
 -- for now, there are no edge constraints
 -- finding edges requires numerous graph traversals in the target,

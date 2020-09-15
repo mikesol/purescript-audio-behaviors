@@ -3,15 +3,13 @@ module Test.Main where
 import Prelude
 import Data.Array (range, replicate, zipWith)
 import Data.Int (toNumber)
-import Data.List (List(..), (:), tail, length)
+import Data.List (List(..), (:))
 import Data.List as DL
 import Data.Map (fromFoldable)
-import Data.Map as M
-import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Maybe (Maybe(..))
 import Data.NonEmpty ((:|), NonEmpty(..))
 import Data.Tuple (Tuple(..), snd)
 import Data.Typelevel.Num (d3)
-import Data.Vec ((+>))
 import Data.Vec as V
 import Effect (Effect)
 import Effect.Aff (launchAff_)
@@ -188,6 +186,43 @@ main =
                             ]
                         )
                     , ptr: 0
+                    , status: On
+                    }
+                }
+          it "should correctly dual split" do
+            let
+              sp =
+                audioToPtr
+                  $ splitter
+                      (sinOsc 440.0)
+                      ( \v0 ->
+                          splitter
+                            (V.head v0)
+                            (\v1 -> splitter (V.head v1) (\v2 -> speaker ((V.head v0) :| ((V.head v1) : (V.head v2) : Nil))))
+                      )
+            sp
+              `shouldEqual`
+                { flat:
+                    ( fromFoldable
+                        [ (Tuple 0 { au: Speaker', chan: 1, name: Nothing, next: (fromFoldable []), prev: (fromFoldable [ (Tuple 0 0), (Tuple 1 1), (Tuple 2 1), (Tuple 3 1), (Tuple 4 2) ]), ptr: 0, status: On })
+                        , (Tuple 1 { au: Splitter', chan: 1, name: Nothing, next: (fromFoldable [ (Tuple 0 1) ]), prev: (fromFoldable [ (Tuple 1 0), (Tuple 2 1), (Tuple 3 1), (Tuple 4 2) ]), ptr: 1, status: On })
+                        , (Tuple 2 { au: Splitter', chan: 1, name: Nothing, next: (fromFoldable [ (Tuple 1 1) ]), prev: (fromFoldable [ (Tuple 2 0), (Tuple 3 1), (Tuple 4 2) ]), ptr: 2, status: On })
+                        , (Tuple 3 { au: Splitter', chan: 1, name: Nothing, next: (fromFoldable [ (Tuple 2 1) ]), prev: (fromFoldable [ (Tuple 3 0), (Tuple 4 1) ]), ptr: 3, status: On })
+                        , (Tuple 4 { au: (SinOsc' 440.0), chan: 1, name: Nothing, next: (fromFoldable [ (Tuple 2 3), (Tuple 3 2) ]), prev: (fromFoldable [ (Tuple 4 0) ]), ptr: 4, status: On })
+                        ]
+                    )
+                , len: 5
+                , p:
+                    { au: Splitter'
+                    , chan: 1
+                    , name: Nothing
+                    , next: (fromFoldable [ (Tuple 2 1) ])
+                    , prev:
+                        ( fromFoldable
+                            [ (Tuple 3 0), (Tuple 4 1)
+                            ]
+                        )
+                    , ptr: 3
                     , status: On
                     }
                 }
