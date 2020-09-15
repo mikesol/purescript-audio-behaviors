@@ -815,10 +815,8 @@ audioToPtr = go (-1) M.empty
                         ptr
                   in
                     { len: fr.len + ir.len + 1
-                    -- everything in IR flat is wrong because it is lacking BOTH the splitter
-                    -- AND everything after it
-                    -- fix, adding graph offset as necessary
-                    , flat: map (\p -> p { prev = M.union (map (_ + maxPrev + 1) subPrev) p.prev }) ir.flat <> fr.flat <> (M.singleton (ptr.ptr + ir.len) p)
+                    -- correct flat structure
+                    , flat: map (\rec -> rec { prev = M.union (map (_ + maxPrev + 1) subPrev) rec.prev }) ir.flat <> fr.flat <> (M.singleton (ptr.ptr + ir.len) p)
                     , p
                     }
 
