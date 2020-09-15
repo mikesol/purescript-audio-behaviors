@@ -224,6 +224,49 @@ main =
                     , status: On
                     }
                 }
+          it "should ignore split given to split" do
+            let
+              sp =
+                audioToPtr
+                  $ splitter
+                      (sinOsc 440.0)
+                      ( \v0 ->
+                          splitter
+                            (V.head v0)
+                            ( \v1 ->
+                                splitter
+                                  (V.head v1)
+                                  ( \v2 ->
+                                      speaker
+                                        ((V.head v0) :| ((V.head v1) : (V.head v2) : Nil))
+                                  )
+                            )
+                      )
+            sp
+              `shouldEqual`
+                { flat:
+                    ( fromFoldable
+                        [ (Tuple 0 { au: Speaker', chan: 1, name: Nothing, next: (fromFoldable []), prev: (fromFoldable [ (Tuple 0 0), (Tuple 1 1), (Tuple 2 2) ]), ptr: 0, status: On })
+                        , (Tuple 1 { au: Splitter', chan: 1, name: Nothing, next: (fromFoldable [ (Tuple 0 1) ]), prev: (fromFoldable [ (Tuple 1 0), (Tuple 2 1) ]), ptr: 1, status: On })
+                        , (Tuple 2 { au: (SinOsc' 440.0), chan: 1, name: Nothing, next: (fromFoldable [ (Tuple 0 2), (Tuple 1 1) ]), prev: (fromFoldable [ (Tuple 2 0) ]), ptr: 2, status: On })
+                        ]
+                    )
+                , len: 3
+                , p:
+                    { au: Splitter'
+                    , chan: 1
+                    , name: Nothing
+                    , next: (fromFoldable [ (Tuple 0 1) ])
+                    , prev:
+                        ( fromFoldable
+                            [ (Tuple 1 0)
+                            , (Tuple 2 1)
+                            ]
+                        )
+                    , ptr: 1
+                    , status: On
+                    }
+                }
           it "should correctly split" do
             let
               tree =
