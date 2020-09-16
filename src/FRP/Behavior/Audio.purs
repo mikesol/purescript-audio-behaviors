@@ -7,6 +7,7 @@ module FRP.Behavior.Audio
   , AudioUnit
   , makeAudioWorkletProcessor
   , audioIO
+  , Instruction(..)
   , getGlpkImpl
   , audioIOInterleaved
   , Status(..)
@@ -38,7 +39,7 @@ import Control.Promise (Promise)
 import Data.Array (catMaybes, filter, foldl, groupBy, head, index, length, mapWithIndex, range, replicate, snoc, sortWith, takeEnd, zipWith, (!!))
 import Data.Array as A
 import Data.Array.NonEmpty (toArray)
-import Data.Either (Either(..))
+import Data.Either (Either(..), either)
 import Data.Generic.Rep (class Generic)
 import Data.Generic.Rep.Show (genericShow)
 import Data.Int (floor, toNumber)
@@ -50,13 +51,15 @@ import Data.Map as M
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.NonEmpty (NonEmpty, (:|))
 import Data.NonEmpty as NE
+import Data.Set (member)
 import Data.String (Pattern(..), split, take)
 import Data.Traversable (sequence)
-import Data.Tuple (Tuple(..), fst, snd)
+import Data.Tuple (Tuple(..), fst, snd, swap, uncurry)
 import Data.Typelevel.Num (class Pos, D1, D2, toInt')
 import Data.Unfoldable1 as DU
 import Data.Vec (Vec, fill)
 import Data.Vec as V
+import Debug.Trace (spy, trace)
 import Effect (Effect, whileE)
 import Effect.Ref (Ref, modify_, new, read, write)
 import FRP.Behavior (Behavior, behavior, sample_)
@@ -459,7 +462,7 @@ data AudioUnit'
   | Mul'
   | Add'
   | Swap'
-  | Merger'
+  | Merger' (List Int)
   | Constant' Number
   | Delay' Number
   | Gain' Number
@@ -516,7 +519,9 @@ au' (Mul name _) = { au: Mul', name }
 
 au' (Add name _) = { au: Add', name }
 
-au' (Merger name _) = { au: Merger', name }
+-------------- this is a hack and is corrected for the merger
+-------------- specifically later on
+au' (Merger name _) = { au: (Merger' Nil), name }
 
 au' (Constant name n) = { au: (Constant' n), name }
 
@@ -547,7 +552,7 @@ au'' Add' = Add''
 
 au'' Swap' = Swap''
 
-au'' Merger' = Merger''
+au'' (Merger' _) = Merger''
 
 au'' (Constant' _) = Constant''
 
@@ -578,7 +583,7 @@ tagToAU Add'' = Add'
 
 tagToAU Swap'' = Swap'
 
-tagToAU Merger'' = Merger'
+tagToAU Merger'' = Merger' Nil
 
 tagToAU Constant'' = Constant' 1000.0
 
@@ -637,6 +642,11 @@ type AlgStep
 
 a2c :: forall ch. Pos ch => AudioUnit ch -> Int
 a2c a = toInt' (Proxy :: Proxy ch)
+
+mergerHack :: AudioUnit' -> NonEmpty List Int -> AudioUnit'
+mergerHack (Merger' _) (h :| t) = Merger' (h : t)
+
+mergerHack a _ = a
 
 audioToPtr ::
   forall channels.
@@ -728,7 +738,11 @@ audioToPtr = go (-1) M.empty
               (NE.tail l)
         in
           let
-            au = au' v
+            au =
+              ( \{ au: awd, name } ->
+                  { au: mergerHack awd (map _.p.ptr r), name }
+              )
+                (au' v)
           in
             let
               p =
@@ -891,7 +905,7 @@ mul = Mul Nothing
 add :: forall ch. Pos ch => NonEmpty List (AudioUnit ch) -> AudioUnit ch
 add = Add Nothing
 
-constant :: forall ch. Pos ch => Number -> AudioUnit ch
+constant :: Number -> AudioUnit D1
 constant = Constant Nothing
 
 delay :: forall ch. Pos ch => Number -> AudioUnit ch -> AudioUnit ch
@@ -934,7 +948,7 @@ ucomp Add' Add' = true
 
 ucomp Swap' Swap' = true
 
-ucomp Merger' Merger' = true
+ucomp (Merger' _) (Merger' _) = true
 
 ucomp (Constant' _) (Constant' _) = true
 
@@ -979,7 +993,7 @@ toCoef Add' Add' = 0.0
 
 toCoef Swap' Swap' = 0.0
 
-toCoef Merger' Merger' = 0.0
+toCoef (Merger' _) (Merger' _) = 0.0
 
 toCoef (Constant' c0) (Constant' c1) = (Math.abs $ c0 - c1) * constMULT
 
@@ -1386,25 +1400,160 @@ type Reconciled
   = { prev :: Reconcilable
     , cur :: Reconcilable
     , reconciliation :: Either String (Map Int Int)
+    , instructionSet :: List Instruction
     }
 
 -- "Assembly like" instruction
 -- for sequential programming with audio units
 -- treating them as pointers.
 data Instruction
-  = DisconnectAll Int
-  | DisconnectFrom Int Int
-  | ConnectTo Int Int (List (Tuple Int Int))
-  | Move Int Int
-  | NewUnit Int
-  | SetFrequency Int Number
-  | SetGain Int Number
-  | SetType Int String
+  = DisconnectFrom Int Int -- id id
+  | ConnectTo Int Int (List (Tuple Int Int)) -- id id channelConnections
+  | Shuffle (List (Tuple Int Int)) -- id id, shuffles the map
+  | NewUnit Int AudioUnit'' -- new audio unit
+  | SetFrequency Int Number -- frequency for an osc
+  | SetPan Int Number -- pan for pan node
+  | SetGain Int Number -- gain for gain node
+  | SetType Int String -- type for oscil node
+  | SetDelay Int Number -- delay for delay node
+  | SetOffset Int Number -- offset for const node
+
+derive instance genericInstruction :: Generic Instruction _
+
+instance showInstruction :: Show Instruction where
+  show s = genericShow s
+
+derive instance eqInstruction :: Eq Instruction
+
+describeConnection :: Reconcilable -> Reconcilable -> Map Int Int -> List (Tuple Int Int)
+describeConnection start end passage =
+  (DL.fromFoldable <<< M.keys)
+    ( M.filter
+        ( \(Tuple f s) ->
+            fromMaybe false
+              ((not <<< member s <<< M.keys <<< map (_ == 1) <<< _.next) <$> (M.lookup f end.flat))
+        )
+        ( M.fromFoldable
+            ( DL.catMaybes
+                ( map
+                    ( \it@(Tuple f s) ->
+                        Tuple it
+                          <$> ( Tuple
+                                <$> M.lookup f passage
+                                <*> M.lookup s passage
+                            )
+                    )
+                    $ join
+                        ( map
+                            ( \au ->
+                                map (Tuple au.ptr)
+                                  $ ( DL.fromFoldable
+                                        <<< M.keys
+                                        <<< M.filter (_ == 1)
+                                    )
+                                      au.next
+                            )
+                            (M.values start.flat)
+                        )
+                )
+            )
+        )
+    )
 
 reconciliationToInstructionSet :: Reconciled' -> Reconciled
 reconciliationToInstructionSet { prev, cur, reconciliation } =
-  { prev, cur, reconciliation
+  { prev
+  , cur
+  , reconciliation
+  , instructionSet: disconnect <> (pure shuffle) <> new <> connect <> set
   }
+  where
+  reversed =
+    ( map
+        ( M.fromFoldable
+            <<< map swap
+            <<< (M.toUnfoldable :: Map Int Int -> Array (Tuple Int Int))
+        )
+        reconciliation
+    )
+
+  reconciliationAsMap = either (const M.empty) identity reconciliation
+
+  reversedAsMap = either (const M.empty) identity reversed
+
+  -- disconnections that we need to make
+  disconnect = (map (uncurry DisconnectFrom) $ describeConnection prev cur reconciliationAsMap)
+
+  -- shuffle instructions represent the new array that we will make out of the old
+  shuffle =
+    Shuffle
+      ( M.toUnfoldable
+          $ M.filter
+              ( \v ->
+                  ( map (_.status)
+                      $ M.lookup v cur.flat
+                  )
+                    /= Just Off
+              )
+              ( M.filterKeys
+                  (\k -> (map (_.status) $ M.lookup k prev.flat) /= Just Off)
+                  reconciliationAsMap
+              )
+      )
+
+  -- new units that were not in the old array
+  new =
+    map
+      (uncurry NewUnit)
+      ( DL.catMaybes
+          ( map (\i -> map (\ptr -> (Tuple i $ au'' ptr.au)) $ M.lookup i cur.flat)
+              ( DL.catMaybes
+                  ( map
+                      ( \k ->
+                          M.lookup k reconciliationAsMap
+                      )
+                      $ (DL.fromFoldable <<< M.keys) (M.filter (\i -> i.status == Off) prev.flat)
+                  )
+              )
+          )
+      )
+
+  harmonizeCurrChannels' :: PtrInfo -> PtrInfo -> List (Tuple Int Int)
+  harmonizeCurrChannels' _ { au: SplitRes' n } = DL.singleton (Tuple n 0)
+
+  harmonizeCurrChannels' { ptr } { au: Merger' l } = map (Tuple 0 <<< fst) (DL.filter (\(Tuple chan pt) -> ptr == pt) $ DL.mapWithIndex (\i a -> Tuple i a) l)
+
+  harmonizeCurrChannels' { chan } _ = map (\i -> Tuple i i) $ DL.range 0 (chan - 1)
+
+  harmonizeCurrChannels :: Tuple Int Int -> List (Tuple Int Int)
+  harmonizeCurrChannels (Tuple l r) =
+    fromMaybe Nil
+      $ harmonizeCurrChannels'
+      <$> (M.lookup l cur.flat)
+      <*> (M.lookup r cur.flat)
+
+  connect =
+    let
+      conn = describeConnection cur prev reversedAsMap
+    in
+      (map (uncurry $ uncurry ConnectTo) $ map (\i -> Tuple i $ harmonizeCurrChannels i) conn)
+
+  -- for now, set all
+  set' i (SinOsc' n) = Just $ SetFrequency i n
+
+  set' i (SquareOsc' n) = Just $ SetFrequency i n
+
+  set' i (StereoPanner' n) = Just $ SetPan i n
+
+  set' i (Constant' n) = Just $ SetOffset i n
+
+  set' i (Delay' n) = Just $ SetDelay i n
+
+  set' i (Gain' n) = Just $ SetGain i n
+
+  set' i _ = Nothing
+
+  set = DL.catMaybes (map (\v -> set' v.ptr v.au) $ M.values cur.flat)
 
 -- reconciles the previous graph with the current one
 audioReconciliation'' :: Foreign -> Reconcilable -> Reconcilable -> Reconciled
@@ -1412,7 +1561,9 @@ audioReconciliation'' g prev cur =
   let
     prog = makeProgram prev cur
   in
-    { prev: prog.prev, cur: prog.cur, reconciliation: map objectToMapping $ glpk g prog.prog }
+    reconciliationToInstructionSet
+      { prev: prog.prev, cur: prog.cur, reconciliation: map objectToMapping $ glpk g prog.prog
+      }
 
 -- reconciles the previous graph with the current one
 audioReconciliation' :: Foreign -> Ref Reconcilable -> Reconcilable -> (Reconciled -> Effect Unit) -> Effect Unit

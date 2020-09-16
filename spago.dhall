@@ -3,6 +3,7 @@
   [ "aff-promise"
   , "behaviors"
   , "console"
+  , "debug"
   , "effect"
   , "foreign-object"
   , "heterogeneous"
