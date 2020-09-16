@@ -448,7 +448,7 @@ data AudioUnit ch
   | Gain MString Number (NonEmpty List (AudioUnit ch))
   | Speaker MString (NonEmpty List (AudioUnit ch))
   | NoSound MString
-  | SplitRes
+  | SplitRes Int
 
 data AudioUnit'
   = Microphone'
@@ -465,7 +465,7 @@ data AudioUnit'
   | Gain' Number
   | Speaker'
   | NoSound'
-  | SplitRes'
+  | SplitRes' Int
 
 derive instance genericAudioUnit' :: Generic AudioUnit' _
 
@@ -528,7 +528,7 @@ au' (Speaker name _) = { au: Speaker', name }
 
 au' (NoSound name) = { au: NoSound', name }
 
-au' SplitRes = { au: SplitRes', name: Nothing }
+au' (SplitRes n) = { au: (SplitRes' n), name: Nothing }
 
 au'' :: AudioUnit' -> AudioUnit''
 au'' Microphone' = Microphone''
@@ -559,7 +559,7 @@ au'' Speaker' = Speaker''
 
 au'' NoSound' = NoSound''
 
-au'' SplitRes' = SplitRes''
+au'' (SplitRes' _) = SplitRes''
 
 tagToAU :: AudioUnit'' -> AudioUnit'
 tagToAU Microphone'' = Microphone'
@@ -590,7 +590,7 @@ tagToAU Speaker'' = Speaker'
 
 tagToAU NoSound'' = NoSound'
 
-tagToAU SplitRes'' = SplitRes'
+tagToAU SplitRes'' = (SplitRes' (-1))
 
 trivialConstraint :: AudioUnit'' -> Boolean
 trivialConstraint Microphone'' = true
@@ -765,6 +765,8 @@ audioToPtr = go (-1) M.empty
 
   go' ptr v@(NoSound name) = terminus ptr v
 
+  go' ptr v@(SplitRes n) = terminus ptr v
+
   go' ptr v@(StereoPanner name n a) = passthrough ptr v a
 
   go' ptr v@(Delay name n a) = passthrough ptr v a
@@ -782,7 +784,7 @@ audioToPtr = go (-1) M.empty
   go' ptr v@(Splitter name a f) =
     let
       -- determine the inner chain
-      ic = f (fill (const SplitRes))
+      ic = f (fill SplitRes)
     in
       let
         -- run alg on the inner chain
@@ -848,12 +850,11 @@ audioToPtr = go (-1) M.empty
                   , p
                   }
 
-  go' ptr SplitRes =
-    { len: 0 -- not actually a node
-    , p: merge ptr { prev: M.empty :: Map Int Int, au: SplitRes', name: Nothing }
-    , flat: M.empty
-    }
-
+--go' ptr SplitRes =
+--  { len: 1 -- not actually a node
+--  , p: merge ptr { prev: M.empty :: Map Int Int, au: SplitRes', name: Nothing }
+--  , flat: M.empty
+--  }
 microphone :: AudioUnit D1
 microphone = Microphone Nothing
 
@@ -864,7 +865,7 @@ squareOsc :: Number -> AudioUnit D1
 squareOsc = SquareOsc Nothing
 
 splitter :: forall ch. Pos ch => AudioUnit ch -> (Vec ch (AudioUnit D1) -> AudioUnit ch) -> AudioUnit ch
-splitter SplitRes f = f (fill (const SplitRes))
+splitter (SplitRes i) f = f (fill $ const (SplitRes i))
 
 splitter x f = Splitter Nothing x f
 
@@ -945,7 +946,7 @@ ucomp Speaker' Speaker' = true
 
 ucomp NoSound' NoSound' = true
 
-ucomp SplitRes' SplitRes' = true
+ucomp (SplitRes' _) (SplitRes' _) = true
 
 ucomp _ _ = false
 
@@ -958,6 +959,8 @@ constMULT = 1.0 :: Number
 delayMULT = 0.1 :: Number
 
 panMULT = 0.5 :: Number
+
+srMULT = 100.0 :: Number -- should never happen
 
 toCoef :: AudioUnit' -> AudioUnit' -> Number
 toCoef Microphone' Microphone' = 0.0
@@ -988,7 +991,7 @@ toCoef Speaker' Speaker' = 0.0
 
 toCoef NoSound' NoSound' = 0.0
 
-toCoef SplitRes' SplitRes' = 0.0
+toCoef (SplitRes' i0) (SplitRes' i1) = (Math.abs $ toNumber (i0 - i1)) * srMULT
 
 toCoef _ _ = 0.0
 
