@@ -439,7 +439,7 @@ data AudioUnit ch
   | SinOsc MString Number
   | SquareOsc MString Number
   | Splitter MString (AudioUnit ch) (Vec ch (AudioUnit D1) -> AudioUnit ch)
-  | Panner MString (AudioUnit ch)
+  | StereoPanner MString Number (AudioUnit ch)
   | Mul MString (NonEmpty List (AudioUnit ch))
   | Add MString (NonEmpty List (AudioUnit ch))
   | Merger MString (Vec ch (AudioUnit D1))
@@ -455,7 +455,7 @@ data AudioUnit'
   | SinOsc' Number
   | SquareOsc' Number
   | Splitter'
-  | Panner'
+  | StereoPanner' Number
   | Mul'
   | Add'
   | Swap'
@@ -479,7 +479,7 @@ data AudioUnit''
   | SinOsc''
   | SquareOsc''
   | Splitter''
-  | Panner''
+  | StereoPanner''
   | Mul''
   | Add''
   | Swap''
@@ -510,7 +510,7 @@ au' (SquareOsc name n) = { au: (SquareOsc' n), name }
 
 au' (Splitter name _ _) = { au: Splitter', name }
 
-au' (Panner name _) = { au: Panner', name }
+au' (StereoPanner name n _) = { au: (StereoPanner' n), name }
 
 au' (Mul name _) = { au: Mul', name }
 
@@ -539,7 +539,7 @@ au'' (SquareOsc' _) = SquareOsc''
 
 au'' Splitter' = Splitter''
 
-au'' Panner' = Panner''
+au'' (StereoPanner' _) = StereoPanner''
 
 au'' Mul' = Mul''
 
@@ -570,7 +570,7 @@ tagToAU SquareOsc'' = SquareOsc' 50000.0
 
 tagToAU Splitter'' = Splitter'
 
-tagToAU Panner'' = Panner'
+tagToAU StereoPanner'' = (StereoPanner' 3.0)
 
 tagToAU Mul'' = Mul'
 
@@ -601,7 +601,7 @@ trivialConstraint SquareOsc'' = false
 
 trivialConstraint Splitter'' = true
 
-trivialConstraint Panner'' = false
+trivialConstraint StereoPanner'' = false
 
 trivialConstraint Mul'' = true
 
@@ -765,7 +765,7 @@ audioToPtr = go (-1) M.empty
 
   go' ptr v@(NoSound name) = terminus ptr v
 
-  go' ptr v@(Panner name a) = passthrough ptr v a
+  go' ptr v@(StereoPanner name n a) = passthrough ptr v a
 
   go' ptr v@(Delay name n a) = passthrough ptr v a
 
@@ -868,8 +868,8 @@ splitter SplitRes f = f (fill (const SplitRes))
 
 splitter x f = Splitter Nothing x f
 
-panner :: AudioUnit D2 -> AudioUnit D2
-panner = Panner Nothing
+panner :: Number -> AudioUnit D2 -> AudioUnit D2
+panner = StereoPanner Nothing
 
 speaker :: forall ch. Pos ch => NonEmpty List (AudioUnit ch) -> AudioUnit ch
 speaker = Speaker Nothing
@@ -925,7 +925,7 @@ ucomp (SquareOsc' _) (SquareOsc' _) = true
 
 ucomp Splitter' Splitter' = true
 
-ucomp Panner' Panner' = true
+ucomp (StereoPanner' _) (StereoPanner' _) = true
 
 ucomp Mul' Mul' = true
 
@@ -957,6 +957,8 @@ constMULT = 1.0 :: Number
 
 delayMULT = 0.1 :: Number
 
+panMULT = 0.5 :: Number
+
 toCoef :: AudioUnit' -> AudioUnit' -> Number
 toCoef Microphone' Microphone' = 0.0
 
@@ -966,7 +968,7 @@ toCoef (SquareOsc' f0) (SquareOsc' f1) = (Math.abs $ f0 - f1) * oscMULT
 
 toCoef Splitter' Splitter' = 0.0
 
-toCoef Panner' Panner' = 0.0
+toCoef (StereoPanner' p0) (StereoPanner' p1) = (Math.abs $ p0 - p1) * panMULT
 
 toCoef Mul' Mul' = 0.0
 
@@ -1371,11 +1373,35 @@ objectToMapping o =
             $ O.keys (filterWithKey (\k v -> take 2 k == "n@" && v == 1) o)
         )
 
+type Reconciled'
+  = { prev :: Reconcilable
+    , cur :: Reconcilable
+    , reconciliation :: Either String (Map Int Int)
+    }
+
 type Reconciled
   = { prev :: Reconcilable
     , cur :: Reconcilable
     , reconciliation :: Either String (Map Int Int)
     }
+
+-- "Assembly like" instruction
+-- for sequential programming with audio units
+-- treating them as pointers.
+data Instruction
+  = DisconnectAll Int
+  | DisconnectFrom Int Int
+  | ConnectTo Int Int (List (Tuple Int Int))
+  | Move Int Int
+  | NewUnit Int
+  | SetFrequency Int Number
+  | SetGain Int Number
+  | SetType Int String
+
+reconciliationToInstructionSet :: Reconciled' -> Reconciled
+reconciliationToInstructionSet { prev, cur, reconciliation } =
+  { prev, cur, reconciliation
+  }
 
 -- reconciles the previous graph with the current one
 audioReconciliation'' :: Foreign -> Reconcilable -> Reconcilable -> Reconciled
