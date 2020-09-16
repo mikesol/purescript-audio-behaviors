@@ -1,0 +1,26 @@
+{
+  "name": "purescript-audio-behaviors",
+  "version": "0.0.0",
+  "description": "Somewhat broken, flaky, unready for production experiment in using [`purescript-behaviors`](https://github.com/paf31/purescript-behaviors) for web audio.",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "postinstall": "spago install",
+    "test": "spago -x test.dhall test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mikesol/purescript-audio-behaviors.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/mikesol/purescript-audio-behaviors/issues"
+  },
+  "homepage": "https://github.com/mikesol/purescript-audio-behaviors#readme",
+  "dependencies": {
+    "glpk.js": "^3.2.0"
+  }
+}
