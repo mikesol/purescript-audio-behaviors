@@ -1,10 +1,13 @@
 module FRP.Behavior.Audio
   ( SampleFrame
   , AudioProcessor
-  , soundify
+  , audioReconciliation
+  , audioReconciliation'
+  , audioReconciliation''
   , AudioUnit
   , makeAudioWorkletProcessor
   , audioIO
+  , getGlpkImpl
   , audioIOInterleaved
   , Status(..)
   , AudioUnit''(..)
@@ -31,10 +34,11 @@ module FRP.Behavior.Audio
 
 import Prelude
 import Control.Bind (bindFlipped)
+import Control.Promise (Promise)
 import Data.Array (catMaybes, filter, foldl, groupBy, head, index, length, mapWithIndex, range, replicate, snoc, sortWith, takeEnd, zipWith, (!!))
 import Data.Array as A
 import Data.Array.NonEmpty (toArray)
-import Data.Either (Either(..), either)
+import Data.Either (Either(..))
 import Data.Generic.Rep (class Generic)
 import Data.Generic.Rep.Show (genericShow)
 import Data.Int (floor, toNumber)
@@ -54,11 +58,9 @@ import Data.Unfoldable1 as DU
 import Data.Vec (Vec, fill)
 import Data.Vec as V
 import Effect (Effect, whileE)
-import Effect.Exception (throw)
 import Effect.Ref (Ref, modify_, new, read, write)
 import FRP.Behavior (Behavior, behavior, sample_)
 import FRP.Event (Event, makeEvent, subscribe)
-import FRP.Event.Time (interval)
 import Foreign (Foreign)
 import Foreign.Object (Object, filterWithKey)
 import Foreign.Object as O
@@ -1321,7 +1323,13 @@ audioToLP r0 r1 =
               <> makeLPNodeEdgeConstraints ev
         }
 
-makeProgram :: Reconcilable -> Reconcilable -> LinearProgram
+makeProgram ::
+  Reconcilable ->
+  Reconcilable ->
+  { prev :: Reconcilable
+  , cur :: Reconcilable
+  , prog :: LinearProgram
+  }
 makeProgram prev cur =
   let
     cur_ = normalizeReconcilable prev cur
@@ -1329,7 +1337,9 @@ makeProgram prev cur =
     let
       prev_ = normalizeReconcilable cur prev
     in
-      audioToLP prev_ cur_
+      { prev: prev_, cur: cur_, prog: audioToLP prev_ cur_ }
+
+foreign import getGlpkImpl :: Effect (Promise Foreign)
 
 foreign import _glpk ::
   Foreign ->
@@ -1361,39 +1371,36 @@ objectToMapping o =
             $ O.keys (filterWithKey (\k v -> take 2 k == "n@" && v == 1) o)
         )
 
-touchAudioUnits :: Foreign -> Ref (Map Int Foreign) -> Reconcilable -> Reconcilable -> Map Int Int -> Effect Unit
-touchAudioUnits gtx raw prev cur objMap = pure unit
+type Reconciled
+  = { prev :: Reconcilable
+    , cur :: Reconcilable
+    , reconciliation :: Either String (Map Int Int)
+    }
 
 -- reconciles the previous graph with the current one
-audioReconciliation :: Foreign -> Foreign -> Ref (Map Int Foreign) -> Ref Reconcilable -> Reconcilable -> Effect Unit
-audioReconciliation g ctx raw prev' cur = do
-  prev <- read prev'
+audioReconciliation'' :: Foreign -> Reconcilable -> Reconcilable -> Reconciled
+audioReconciliation'' g prev cur =
   let
     prog = makeProgram prev cur
-  either throw (touchAudioUnits ctx raw prev cur <<< objectToMapping) $ glpk g prog
+  in
+    { prev: prog.prev, cur: prog.cur, reconciliation: map objectToMapping $ glpk g prog.prog }
 
--- | The main sound loop
--- | - glpk: The linear solver
--- | - ctx: The audio context
--- | - milli: The number of milliseconds between render cycles. Try 150...
--- | - scene: The sound
-soundify ::
+-- reconciles the previous graph with the current one
+audioReconciliation' :: Foreign -> Ref Reconcilable -> Reconcilable -> (Reconciled -> Effect Unit) -> Effect Unit
+audioReconciliation' g prev' cur f = do
+  prev <- read prev'
+  f $ audioReconciliation'' g prev cur
+
+audioReconciliation ::
   forall ch.
   Pos ch =>
   Foreign ->
-  Foreign ->
-  Int ->
-  AudioBehavior ch ->
-  Effect (Effect Unit)
-soundify g ctx e scene = do
-  raw <- new (M.empty :: Map Int Foreign)
-  u <-
-    new
-      { grouped: M.empty
-      , flat: M.empty
-      }
-  subscribe (sample_ scene (interval e))
-    ( audioReconciliation g ctx raw u
-        <<< (\i -> { flat: i.flat, grouped: audioGrouper (fromFoldable i.flat) })
-        <<< audioToPtr
-    )
+  Ref Reconcilable ->
+  AudioUnit ch ->
+  (Reconciled -> Effect Unit) ->
+  Effect Unit
+audioReconciliation g u =
+  ( audioReconciliation' g u
+      <<< (\i -> { flat: i.flat, grouped: audioGrouper (fromFoldable i.flat) })
+      <<< audioToPtr
+  )

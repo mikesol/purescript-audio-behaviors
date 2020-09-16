@@ -171,6 +171,9 @@ exports._makeAudioWorkletProcessor = function (name) {
     };
   };
 };
+exports.getGlpkImpl = function () {
+  return require("glpk.js");
+};
 
 exports._glpk = function (glpk) {
   return function (lp) {
@@ -178,7 +181,7 @@ exports._glpk = function (glpk) {
       return function (right) {
         try {
           var o = glpk.solve(lp, glpk.GLP_MSG_OFF);
-          return o.result.status !== 4 ? left : right(o.result.vars);
+          return o.result.status !== 5 ? left : right(o.result.vars);
         } catch (e) {
           return left;
         }
