@@ -21,7 +21,7 @@ function mergeAudio(retention, prev, inputs) {
   }
 }
 /**
- *   String -> -- name
+  String -> -- name
   Number -> -- retention
   (Effect Boolean -> Event Unit) -> -- driver
   (Effect Number -> Behavior Number) -> -- currentTime
@@ -35,10 +35,7 @@ function mergeAudio(retention, prev, inputs) {
   ) -> -- soundify
   Effect Unit
  */
-exports.dEBUG = function (i) {
-  console.log("debug", i);
-  return i;
-};
+
 exports._makeAudioWorkletProcessor = function (name) {
   return function (retention) {
     return function (defaults) {
@@ -170,6 +167,21 @@ exports._makeAudioWorkletProcessor = function (name) {
             };
           };
         };
+      };
+    };
+  };
+};
+
+exports._glpk = function (glpk) {
+  return function (lp) {
+    return function (left) {
+      return function (right) {
+        try {
+          var o = glpk.solve(lp, glpk.GLP_MSG_OFF);
+          return o.result.status !== 4 ? left : right(o.result.vars);
+        } catch (e) {
+          return left;
+        }
       };
     };
   };

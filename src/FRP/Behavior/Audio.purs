@@ -30,12 +30,15 @@ module FRP.Behavior.Audio
   ) where
 
 import Prelude
-import Data.Array (filter, foldl, groupBy, head, index, length, mapWithIndex, range, replicate, snoc, sortWith, zipWith, (!!))
+import Control.Bind (bindFlipped)
+import Data.Array (catMaybes, filter, foldl, groupBy, head, index, length, mapWithIndex, range, replicate, snoc, sortWith, takeEnd, zipWith, (!!))
 import Data.Array as A
 import Data.Array.NonEmpty (toArray)
+import Data.Either (Either(..), either)
 import Data.Generic.Rep (class Generic)
 import Data.Generic.Rep.Show (genericShow)
 import Data.Int (floor, toNumber)
+import Data.Int.Parse (parseInt, toRadix)
 import Data.List (List(..), fromFoldable, partition, (:))
 import Data.List as DL
 import Data.Map (Map)
@@ -43,6 +46,7 @@ import Data.Map as M
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.NonEmpty (NonEmpty, (:|))
 import Data.NonEmpty as NE
+import Data.String (Pattern(..), split, take)
 import Data.Traversable (sequence)
 import Data.Tuple (Tuple(..), fst, snd)
 import Data.Typelevel.Num (class Pos, D1, D2, toInt')
@@ -50,10 +54,14 @@ import Data.Unfoldable1 as DU
 import Data.Vec (Vec, fill)
 import Data.Vec as V
 import Effect (Effect, whileE)
+import Effect.Exception (throw)
 import Effect.Ref (Ref, modify_, new, read, write)
 import FRP.Behavior (Behavior, behavior, sample_)
 import FRP.Event (Event, makeEvent, subscribe)
 import FRP.Event.Time (interval)
+import Foreign (Foreign)
+import Foreign.Object (Object, filterWithKey)
+import Foreign.Object as O
 import Heterogeneous.Mapping (class HMap, class Mapping, hmap)
 import Math as Math
 import Record (merge)
@@ -628,8 +636,6 @@ type AlgStep
 a2c :: forall ch. Pos ch => AudioUnit ch -> Int
 a2c a = toInt' (Proxy :: Proxy ch)
 
-foreign import dEBUG :: forall a. a -> a
-
 audioToPtr ::
   forall channels.
   Pos channels =>
@@ -1100,7 +1106,7 @@ makeLPNodeConstraints cptr a =
   mapWithIndex
     ( \i x ->
         { name: "nodec_" <> show i
-        , vars: toArray $ map (\{ node: (LPNode tag b c) } -> { name: show tag <> "_" <> show b <> "_" <> show c, coef: 1.0 }) x
+        , vars: toArray $ map (\{ node } -> { name: nodeToString node, coef: 1.0 }) x
         , bnds: { type: 5, ub: 1.0, lb: 1.0 }
         }
     )
@@ -1133,7 +1139,7 @@ makeLPEdgeConstraints cptr a =
 
 edgeToString :: LPEdge -> String
 edgeToString (LPEdge tag b c d e f) =
-  show tag <> "_"
+  "e@" <> show tag <> "_"
     <> show b
     <> "_"
     <> show c
@@ -1146,7 +1152,7 @@ edgeToString (LPEdge tag b c d e f) =
 
 nodeToString :: LPNode -> String
 nodeToString (LPNode tag b c) =
-  show tag <> "_"
+  "n@" <> show tag <> "_"
     <> show b
     <> "_"
     <> show c
@@ -1325,28 +1331,69 @@ makeProgram prev cur =
     in
       audioToLP prev_ cur_
 
+foreign import _glpk ::
+  Foreign ->
+  LinearProgram ->
+  Either String (Object Int) ->
+  (Object Int -> Either String (Object Int)) ->
+  Either String (Object Int)
+
+glpk :: Foreign -> LinearProgram -> Either String (Object Int)
+glpk g lp = _glpk g lp (Left "Could not complete linear program") Right
+
+toTuple :: Array Int -> Maybe (Tuple Int Int)
+toTuple a = do
+  l <- a !! 0
+  r <- a !! 1
+  pure $ Tuple l r
+
+objectToMapping :: Object Int -> Map Int Int
+objectToMapping o =
+  M.fromFoldable
+    $ catMaybes
+        ( map
+            ( bindFlipped toTuple
+                <<< sequence
+                <<< map (flip parseInt (toRadix 10))
+                <<< takeEnd 2
+                <<< split (Pattern "_")
+            )
+            $ O.keys (filterWithKey (\k v -> take 2 k == "n@" && v == 1) o)
+        )
+
+touchAudioUnits :: Foreign -> Ref (Map Int Foreign) -> Reconcilable -> Reconcilable -> Map Int Int -> Effect Unit
+touchAudioUnits gtx raw prev cur objMap = pure unit
+
 -- reconciles the previous graph with the current one
-audioReconciliation :: Ref Reconcilable -> Reconcilable -> Effect Unit
-audioReconciliation prev' cur = do
+audioReconciliation :: Foreign -> Foreign -> Ref (Map Int Foreign) -> Ref Reconcilable -> Reconcilable -> Effect Unit
+audioReconciliation g ctx raw prev' cur = do
   prev <- read prev'
   let
     prog = makeProgram prev cur
-  pure unit
+  either throw (touchAudioUnits ctx raw prev cur <<< objectToMapping) $ glpk g prog
 
+-- | The main sound loop
+-- | - glpk: The linear solver
+-- | - ctx: The audio context
+-- | - milli: The number of milliseconds between render cycles. Try 150...
+-- | - scene: The sound
 soundify ::
   forall ch.
   Pos ch =>
+  Foreign ->
+  Foreign ->
   Int ->
-  (AudioBehavior ch) ->
+  AudioBehavior ch ->
   Effect (Effect Unit)
-soundify e scene = do
+soundify g ctx e scene = do
+  raw <- new (M.empty :: Map Int Foreign)
   u <-
     new
       { grouped: M.empty
       , flat: M.empty
       }
   subscribe (sample_ scene (interval e))
-    ( audioReconciliation u
+    ( audioReconciliation g ctx raw u
         <<< (\i -> { flat: i.flat, grouped: audioGrouper (fromFoldable i.flat) })
         <<< audioToPtr
     )
