@@ -2,7 +2,6 @@ module FRP.Behavior.Audio.Example.HelloWorld where
 
 import Prelude
 import Data.Newtype (unwrap)
-import Data.Time.Duration (Seconds)
 import Data.Typelevel.Num (D1)
 import Effect (Effect)
 import Data.NonEmpty ((:|))

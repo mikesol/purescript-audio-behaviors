@@ -1444,7 +1444,7 @@ type Reconciled
 -- treating them as pointers.
 data Instruction
   = DisconnectFrom Int Int -- id id
-  | ConnectTo Int Int (Array (Tuple Int Int)) -- id id channelConnections
+  | ConnectTo Int Int (Maybe (Tuple Int Int)) -- id id channelConnections
   | Shuffle (Array (Tuple Int Int)) -- id id, shuffles the map
   | NewUnit Int AudioUnit'' -- new audio unit
   | SetFrequency Int Number -- frequency for an osc
@@ -1552,16 +1552,16 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
           )
       )
 
-  harmonizeCurrChannels' :: PtrInfo -> PtrInfo -> List (Tuple Int Int)
-  harmonizeCurrChannels' _ { au: SplitRes' n } = DL.singleton (Tuple n 0)
+  harmonizeCurrChannels' :: PtrInfo -> PtrInfo -> Maybe (Tuple Int Int)
+  harmonizeCurrChannels' _ { au: SplitRes' n } = Just (Tuple n 0)
 
-  harmonizeCurrChannels' { ptr } { au: Merger' l } = map (Tuple 0 <<< fst) (DL.filter (\(Tuple chan pt) -> ptr == pt) $ DL.mapWithIndex (\i a -> Tuple i a) l)
+  harmonizeCurrChannels' { ptr } { au: Merger' l } = DL.head $ map (Tuple 0 <<< fst) (DL.filter (\(Tuple chan pt) -> ptr == pt) $ DL.mapWithIndex (\i a -> Tuple i a) l)
 
-  harmonizeCurrChannels' { chan } _ = map (\i -> Tuple i i) $ DL.range 0 (chan - 1)
+  harmonizeCurrChannels' { chan } _ = Nothing
 
-  harmonizeCurrChannels :: Tuple Int Int -> List (Tuple Int Int)
+  harmonizeCurrChannels :: Tuple Int Int -> Maybe (Tuple Int Int)
   harmonizeCurrChannels (Tuple l r) =
-    fromMaybe Nil
+    fromMaybe Nothing
       $ harmonizeCurrChannels'
       <$> (M.lookup l cur.flat)
       <*> (M.lookup r cur.flat)
@@ -1570,7 +1570,7 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
     let
       conn = describeConnection cur prev reversedAsMap
     in
-      (map (uncurry $ uncurry ConnectTo) $ map (\i -> Tuple i $ A.fromFoldable (harmonizeCurrChannels i)) conn)
+      (map (uncurry $ uncurry ConnectTo) $ map (\i -> Tuple i (harmonizeCurrChannels i)) conn)
 
   -- for now, set all
   set' i (SinOsc' n) = Just $ SetFrequency i n

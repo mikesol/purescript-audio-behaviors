@@ -185,8 +185,15 @@ exports.touchAudio = function (instructions) {
           if (c.constructor.name == "DisconnectFrom") {
             generators[c.value0].disconnect(generators[c.value1]);
           } else if (c.constructor.name == "ConnectTo") {
-            // for now ignore channel matching
-            generators[c.value0].connect(generators[c.value1]);
+            if (c.value2.constructor.name == "Nothing") {
+              generators[c.value0].connect(generators[c.value1]);
+            } else {
+              generators[c.value0].connect(
+                generators[c.value1],
+                c.value2.value0.value0,
+                c.value2.value0.value1
+              );
+            }
           } else if (c.constructor.name == "Shuffle") {
             var old = generators;
             var generators = generators.slice(0);
@@ -201,6 +208,8 @@ exports.touchAudio = function (instructions) {
                 ? context.createOscillator()
                 : c.value1.constructor.name == "Gain$prime$prime"
                 ? context.createGain()
+                : c.value1.constructor.name == "SplitRes$prime$prime"
+                ? context.createGain()
                 : null;
             if (c.value1.constructor.name == "SinOsc$prime$prime") {
               generators[c.value0].type = "sine";
@@ -209,6 +218,12 @@ exports.touchAudio = function (instructions) {
             if (c.value1.constructor.name == "SquareOsc$prime$prime") {
               generators[c.value0].type = "square";
               generators[c.value0].start();
+            }
+            if (c.value1.constructor.name == "SplitRes$prime$prime") {
+              generators[c.value0].gain.setValueAtTime(
+                1.0,
+                context.currentTime
+              );
             }
           } else if (c.constructor.name == "SetFrequency") {
             generators[c.value0].frequency.setValueAtTime(
