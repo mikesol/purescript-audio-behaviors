@@ -11,3 +11,6 @@
 /dist
 /ffi/
 .vscode
+examples/hello-world/index.js
+examples/hello-world/glpk-worker.js
+examples/hello-world/glpk-worker.wasm

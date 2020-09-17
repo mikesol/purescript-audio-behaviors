@@ -5,9 +5,25 @@ module FRP.Behavior.Audio
   , audioReconciliation'
   , audioReconciliation''
   , AudioUnit
+  , reconciliationToInstructionSet
+  , touchAudio
+  , objectToMapping
+  , glpkWorkerImpl
+  , LinearProgram
+  , runInBrowser
+  , LPObjective
+  , LPConstraint
+  , LPVar
   , makeAudioWorkletProcessor
   , audioIO
   , Instruction(..)
+  , Reconcilable
+  , GroupedAudio
+  , FlatAudio
+  , AudioTag
+  , PtrInfo
+  , MString
+  , Reconciled
   , getGlpkImpl
   , audioIOInterleaved
   , Status(..)
@@ -35,10 +51,11 @@ module FRP.Behavior.Audio
 
 import Prelude
 import Control.Bind (bindFlipped)
-import Control.Promise (Promise)
+import Control.Promise (Promise, toAffE)
 import Data.Array (catMaybes, filter, foldl, groupBy, head, index, length, mapWithIndex, range, replicate, snoc, sortWith, takeEnd, zipWith, (!!))
 import Data.Array as A
 import Data.Array.NonEmpty (toArray)
+import Data.DateTime.Instant (unInstant)
 import Data.Either (Either(..), either)
 import Data.Generic.Rep (class Generic)
 import Data.Generic.Rep.Show (genericShow)
@@ -49,6 +66,7 @@ import Data.List as DL
 import Data.Map (Map)
 import Data.Map as M
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
+import Data.Newtype (unwrap)
 import Data.NonEmpty (NonEmpty, (:|))
 import Data.NonEmpty as NE
 import Data.Set (member)
@@ -59,11 +77,14 @@ import Data.Typelevel.Num (class Pos, D1, D2, toInt')
 import Data.Unfoldable1 as DU
 import Data.Vec (Vec, fill)
 import Data.Vec as V
-import Debug.Trace (spy, trace)
 import Effect (Effect, whileE)
+import Effect.Aff (launchAff_)
+import Effect.Class (liftEffect)
+import Effect.Exception (throw)
 import Effect.Ref (Ref, modify_, new, read, write)
-import FRP.Behavior (Behavior, behavior, sample_)
+import FRP.Behavior (Behavior, behavior, sampleBy, sample_)
 import FRP.Event (Event, makeEvent, subscribe)
+import FRP.Event.Time (interval)
 import Foreign (Foreign)
 import Foreign.Object (Object, filterWithKey)
 import Foreign.Object as O
@@ -1360,12 +1381,27 @@ makeProgram prev cur =
 
 foreign import getGlpkImpl :: Effect (Promise Foreign)
 
+foreign import glpkWorkerImpl ::
+  Foreign ->
+  LinearProgram ->
+  Effect (Promise (Object Int))
+
 foreign import _glpk ::
   Foreign ->
   LinearProgram ->
   Either String (Object Int) ->
   (Object Int -> Either String (Object Int)) ->
   Either String (Object Int)
+
+-- | instructions
+-- | audio context
+-- | audio units
+-- | audio units
+foreign import touchAudio ::
+  Array Instruction ->
+  Foreign ->
+  Array Foreign ->
+  Effect (Array Foreign)
 
 glpk :: Foreign -> LinearProgram -> Either String (Object Int)
 glpk g lp = _glpk g lp (Left "Could not complete linear program") Right
@@ -1393,13 +1429,13 @@ objectToMapping o =
 type Reconciled'
   = { prev :: Reconcilable
     , cur :: Reconcilable
-    , reconciliation :: Either String (Map Int Int)
+    , reconciliation :: Map Int Int
     }
 
 type Reconciled
   = { prev :: Reconcilable
     , cur :: Reconcilable
-    , reconciliation :: Either String (Map Int Int)
+    , reconciliation :: Map Int Int
     , instructionSet :: List Instruction
     }
 
@@ -1408,13 +1444,12 @@ type Reconciled
 -- treating them as pointers.
 data Instruction
   = DisconnectFrom Int Int -- id id
-  | ConnectTo Int Int (List (Tuple Int Int)) -- id id channelConnections
-  | Shuffle (List (Tuple Int Int)) -- id id, shuffles the map
+  | ConnectTo Int Int (Array (Tuple Int Int)) -- id id channelConnections
+  | Shuffle (Array (Tuple Int Int)) -- id id, shuffles the map
   | NewUnit Int AudioUnit'' -- new audio unit
   | SetFrequency Int Number -- frequency for an osc
   | SetPan Int Number -- pan for pan node
   | SetGain Int Number -- gain for gain node
-  | SetType Int String -- type for oscil node
   | SetDelay Int Number -- delay for delay node
   | SetOffset Int Number -- offset for const node
 
@@ -1469,17 +1504,15 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
   }
   where
   reversed =
-    ( map
-        ( M.fromFoldable
-            <<< map swap
-            <<< (M.toUnfoldable :: Map Int Int -> Array (Tuple Int Int))
-        )
-        reconciliation
+    ( M.fromFoldable
+        <<< map swap
+        <<< (M.toUnfoldable :: Map Int Int -> Array (Tuple Int Int))
     )
+      reconciliation
 
-  reconciliationAsMap = either (const M.empty) identity reconciliation
+  reconciliationAsMap = reconciliation
 
-  reversedAsMap = either (const M.empty) identity reversed
+  reversedAsMap = reversed
 
   -- disconnections that we need to make
   disconnect = (map (uncurry DisconnectFrom) $ describeConnection prev cur reconciliationAsMap)
@@ -1487,19 +1520,20 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
   -- shuffle instructions represent the new array that we will make out of the old
   shuffle =
     Shuffle
-      ( M.toUnfoldable
-          $ M.filter
-              ( \v ->
-                  ( map (_.status)
-                      $ M.lookup v cur.flat
+      $ A.filter (\(Tuple i j) -> i /= j)
+          ( M.toUnfoldable
+              $ M.filter
+                  ( \v ->
+                      ( map (_.status)
+                          $ M.lookup v cur.flat
+                      )
+                        /= Just Off
                   )
-                    /= Just Off
-              )
-              ( M.filterKeys
-                  (\k -> (map (_.status) $ M.lookup k prev.flat) /= Just Off)
-                  reconciliationAsMap
-              )
-      )
+                  ( M.filterKeys
+                      (\k -> (map (_.status) $ M.lookup k prev.flat) /= Just Off)
+                      reconciliationAsMap
+                  )
+          )
 
   -- new units that were not in the old array
   new =
@@ -1536,7 +1570,7 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
     let
       conn = describeConnection cur prev reversedAsMap
     in
-      (map (uncurry $ uncurry ConnectTo) $ map (\i -> Tuple i $ harmonizeCurrChannels i) conn)
+      (map (uncurry $ uncurry ConnectTo) $ map (\i -> Tuple i $ A.fromFoldable (harmonizeCurrChannels i)) conn)
 
   -- for now, set all
   set' i (SinOsc' n) = Just $ SetFrequency i n
@@ -1562,7 +1596,11 @@ audioReconciliation'' g prev cur =
     prog = makeProgram prev cur
   in
     reconciliationToInstructionSet
-      { prev: prog.prev, cur: prog.cur, reconciliation: map objectToMapping $ glpk g prog.prog
+      { prev: prog.prev
+      , cur: prog.cur
+      -- todo: this swallows error
+      -- fix?
+      , reconciliation: (either (const M.empty) objectToMapping $ glpk g prog.prog)
       }
 
 -- reconciles the previous graph with the current one
@@ -1576,11 +1614,61 @@ audioReconciliation ::
   Pos ch =>
   Foreign ->
   Ref Reconcilable ->
-  AudioUnit ch ->
   (Reconciled -> Effect Unit) ->
+  AudioUnit ch ->
   Effect Unit
-audioReconciliation g u =
-  ( audioReconciliation' g u
-      <<< (\i -> { flat: i.flat, grouped: audioGrouper (fromFoldable i.flat) })
-      <<< audioToPtr
-  )
+audioReconciliation g u f x = do
+  let
+    i = audioToPtr x
+  let
+    ipt = { flat: i.flat, grouped: audioGrouper (fromFoldable i.flat) }
+  audioReconciliation' g u ipt f
+
+-- | The main executor loop in the browser
+-- | - How many milliseconds between pings
+-- | - An array of web workers with glpk.js preloaded
+-- | - A function that takes:
+-- |   - The amount of clock time execution took in MS
+-- |   - The instructions of what to do with the audio array
+-- |   - Returns a closure that does the audio magic
+runInBrowser ::
+  forall ch.
+  Pos ch =>
+  Behavior (AudioUnit ch) ->
+  Int ->
+  Foreign ->
+  Array Foreign ->
+  (Number -> Array Instruction -> Foreign -> Array Foreign -> Effect (Array Foreign)) ->
+  Effect (Effect Unit)
+runInBrowser scene pingEvery ctx workers executor = do
+  reconRef <-
+    new
+      { grouped: M.empty
+      , flat: M.empty
+      }
+  ciRef <- new 0
+  units <- new ([] :: Array Foreign)
+  subscribe (sampleBy Tuple scene (interval pingEvery))
+    ( \(Tuple aud inst) -> do
+        let
+          i = audioToPtr aud
+        let
+          cur = { flat: i.flat, grouped: audioGrouper (DL.fromFoldable i.flat) }
+        prev <- read reconRef
+        write cur reconRef
+        curIt <- read ciRef
+        write (curIt + 1) ciRef
+        worker <- maybe (throw "Worker out of range") pure (workers !! (mod curIt (A.length workers)))
+        let
+          prog = makeProgram prev cur
+        launchAff_ do
+          res <- toAffE (glpkWorkerImpl worker prog.prog)
+          let
+            instr =
+              reconciliationToInstructionSet
+                { prev: prog.prev, cur: prog.cur, reconciliation: objectToMapping res
+                }
+          uts <- liftEffect $ read units
+          uts' <- liftEffect $ executor ((unwrap <<< unInstant) inst) (A.fromFoldable instr.instructionSet) ctx uts
+          liftEffect $ write uts' units
+    )

@@ -175,6 +175,93 @@ exports.getGlpkImpl = function () {
   return require("glpk.js");
 };
 
+exports.touchAudio = function (instructions) {
+  return function (context) {
+    return function (g) {
+      return function () {
+        var generators = g;
+        for (var i = 0; i < instructions.length; i++) {
+          var c = instructions[i];
+          if (c.constructor.name == "DisconnectFrom") {
+            generators[c.value0].disconnect(generators[c.value1]);
+          } else if (c.constructor.name == "ConnectTo") {
+            // for now ignore channel matching
+            generators[c.value0].connect(generators[c.value1]);
+          } else if (c.constructor.name == "Shuffle") {
+            var old = generators;
+            var generators = generators.slice(0);
+            for (var j = 0; j < c.value0.length; j++) {
+              generators[c.value0[j].value1] = old[c.value0[j].value0];
+            }
+          } else if (c.constructor.name == "NewUnit") {
+            generators[c.value0] =
+              c.value1.constructor.name == "Speaker$prime$prime"
+                ? context.destination
+                : c.value1.constructor.name == "SinOsc$prime$prime"
+                ? context.createOscillator()
+                : c.value1.constructor.name == "Gain$prime$prime"
+                ? context.createGain()
+                : null;
+            if (c.value1.constructor.name == "SinOsc$prime$prime") {
+              generators[c.value0].type = "sine";
+              generators[c.value0].start();
+            }
+            if (c.value1.constructor.name == "SquareOsc$prime$prime") {
+              generators[c.value0].type = "square";
+              generators[c.value0].start();
+            }
+          } else if (c.constructor.name == "SetFrequency") {
+            generators[c.value0].frequency.setValueAtTime(
+              c.value1,
+              context.currentTime
+            );
+          } else if (c.constructor.name == "SetPan") {
+            generators[c.value0].pan.setValueAtTime(
+              c.value1,
+              context.currentTime
+            );
+          } else if (c.constructor.name == "SetGain") {
+            generators[c.value0].gain.setValueAtTime(
+              c.value1,
+              context.currentTime
+            );
+          } else if (c.constructor.name == "SetDelay") {
+            generators[c.value0].delayTime.setValueAtTime(
+              c.value1,
+              context.currentTime
+            );
+          } else if (c.constructor.name == "SetOffset") {
+            generators[c.value0].offset.setValueAtTime(
+              c.value1,
+              context.currentTime
+            );
+          }
+        }
+        return generators;
+      };
+    };
+  };
+};
+
+exports.glpkWorkerImpl = function (worker) {
+  return function (program) {
+    return function () {
+      return new Promise(function (resolve, reject) {
+        worker.onmessage = function (e) {
+          var o = e.data;
+          return o.result.status !== 5
+            ? reject("Error")
+            : resolve(o.result.vars);
+        };
+        worker.onerror = function (err) {
+          reject(err);
+        };
+        worker.postMessage(program);
+      });
+    };
+  };
+};
+
 exports._glpk = function (glpk) {
   return function (lp) {
     return function (left) {

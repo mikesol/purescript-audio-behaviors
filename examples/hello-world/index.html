@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+  <script src="index.js"></script>
+  <script>
+    const workers = [
+      new Worker("glpk-worker.js"),
+      new Worker("glpk-worker.js"),
+      new Worker("glpk-worker.js"),
+      new Worker("glpk-worker.js"),
+    ];
+    var offCb = null;
+    var audioCtx = null;
+    function turnOnAudio() {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      var now = new Date().getTime();
+      var ctr = 0;
+      offCb = PS["FRP.Behavior.Audio.Example.HelloWorld"].run(16)(audioCtx)(
+        workers
+      )(function (startTime) {
+        return function (instructions) {
+          return function (ctx) {
+            return function (units) {
+              return function () {
+                /*
+                var x = new Date().getTime();
+                if (ctr % 100 == 0) {
+                  console.log(instructions);
+                  console.log((x - startTime) / 1000, (x - now) / 1000);
+                }
+                ctr = ctr + 1;
+                now = x;
+                return [];
+                */
+                return PS["FRP.Behavior.Audio.Example.HelloWorld"].touchAudio(
+                  instructions
+                )(ctx)(units)();
+              };
+            };
+          };
+        };
+      })();
+    }
+    function turnOffAudio() {
+      offCb ? offCb() : null;
+      offCB = null;
+      audioCtx ? audioCtx.close() : null;
+      audioCtx = null;
+    }
+  </script>
+  <body>
+    <button onclick="turnOnAudio();">turn on</button>
+    <button onclick="turnOffAudio();">turn off</button>
+  </body>
+</html>
