@@ -53,6 +53,7 @@ module FRP.Behavior.Audio
 import Prelude
 import Control.Bind (bindFlipped)
 import Control.Promise (Promise, toAffE)
+import Control.Alt ((<|>))
 import Data.Array (catMaybes, filter, foldl, groupBy, head, index, length, mapWithIndex, range, replicate, snoc, sortWith, takeEnd, zipWith, (!!))
 import Data.Array as A
 import Data.Array.NonEmpty (toArray)
@@ -1677,44 +1678,50 @@ runInBrowser scene pingEvery ctx mic workers executor = do
   needToProcess <- new 0
   units <- new ([] :: Array Foreign)
   instructionStash <- new (M.empty :: M.Map Int (Array Instruction))
-  subscribe (sampleBy Tuple scene (interval pingEvery))
-    ( \(Tuple aud inst) -> do
-        let
-          i = audioToPtr aud
-        let
-          cur = { flat: i.flat, grouped: audioGrouper (DL.fromFoldable i.flat) }
-        prev <- read reconRef
-        write cur reconRef
-        curIt <- read ciRef
-        write (curIt + 1) ciRef
-        worker <- maybe (throw "Worker out of range") pure (workers !! (mod curIt (A.length workers)))
-        let
-          prog = makeProgram prev cur
-        launchAff_ do
-          res <- toAffE (glpkWorkerImpl worker prog.prog)
-          liftEffect do
-            let
-              instr =
-                reconciliationToInstructionSet
-                  { prev: prog.prev, cur: prog.cur, reconciliation: objectToMapping res
-                  }
-            n2p <- read needToProcess
-            void $ modify (append (M.singleton curIt (A.fromFoldable instr.instructionSet))) instructionStash
-            if n2p /= curIt then do
-              -- useful for debugging
-              --log $ "Warning: async processing out of order. Correcting..." <> show n2p <> " " <> show curIt
-              pure unit
-            else
-              untilE do
-                needNow <- read needToProcess
-                stash <- read instructionStash
-                case M.lookup needNow stash of
-                  Nothing -> pure true
-                  Just instructions -> do
-                    uts <- read units
-                    uts' <- executor ((unwrap <<< unInstant) inst) instructions ctx mic uts
-                    write uts' units
-                    write (needNow + 1) needToProcess
-                    _ <- modify (M.delete needNow) instructionStash
-                    pure false
-    )
+  unsub <- new (pure unit :: Effect Unit)
+  bam <-
+    subscribe (sampleBy Tuple scene (interval pingEvery))
+      ( \(Tuple aud inst) -> do
+          let
+            i = audioToPtr aud
+          let
+            cur = { flat: i.flat, grouped: audioGrouper (DL.fromFoldable i.flat) }
+          prev <- read reconRef
+          write cur reconRef
+          curIt <- read ciRef
+          write (curIt + 1) ciRef
+          worker <- maybe (throw "Worker out of range") pure (workers !! (mod curIt (A.length workers)))
+          let
+            prog = makeProgram prev cur
+          launchAff_ do
+            res <-
+              toAffE (glpkWorkerImpl worker prog.prog)
+                <|> (liftEffect (read unsub >>= identity >>= const (throw "Glpk failed to execute")))
+            liftEffect do
+              let
+                instr =
+                  reconciliationToInstructionSet
+                    { prev: prog.prev, cur: prog.cur, reconciliation: objectToMapping res
+                    }
+              n2p <- read needToProcess
+              void $ modify (append (M.singleton curIt (A.fromFoldable instr.instructionSet))) instructionStash
+              if n2p /= curIt then do
+                -- useful for debugging
+                --log $ "Warning: async processing out of order. Correcting..." <> show n2p <> " " <> show curIt
+                pure unit
+              else
+                untilE do
+                  needNow <- read needToProcess
+                  stash <- read instructionStash
+                  case M.lookup needNow stash of
+                    Nothing -> pure true
+                    Just instructions -> do
+                      uts <- read units
+                      uts' <- executor ((unwrap <<< unInstant) inst) instructions ctx mic uts
+                      write uts' units
+                      write (needNow + 1) needToProcess
+                      _ <- modify (M.delete needNow) instructionStash
+                      pure false
+      )
+  write bam unsub
+  pure bam
