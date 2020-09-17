@@ -1581,22 +1581,34 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
     in
       (map (uncurry $ uncurry ConnectTo) $ map (\i -> Tuple i (harmonizeCurrChannels i)) conn)
 
-  -- for now, set all
-  set' i (SinOsc' n) = Just $ SetFrequency i n
+  -- not clear if gating against double setting is effective
+  -- it may be more trouble than it's worth
+  -- we can always get rid of the gate if we find out it is faster to pass everything
+  -- through than to gate
+  -- the gating was added to fix problems with choppy audio, but it didn't really work
+  set' i (SinOsc' n) (SinOsc' nx) = if n /= nx then Just $ SetFrequency i n else Nothing
 
-  set' i (SquareOsc' n) = Just $ SetFrequency i n
+  set' i (SquareOsc' n) (SquareOsc' nx) = if n /= nx then Just $ SetFrequency i n else Nothing
 
-  set' i (StereoPanner' n) = Just $ SetPan i n
+  set' i (StereoPanner' n) (StereoPanner' nx) = if n /= nx then Just $ SetPan i n else Nothing
 
-  set' i (Constant' n) = Just $ SetOffset i n
+  set' i (Constant' n) (Constant' nx) = if n /= nx then Just $ SetOffset i n else Nothing
 
-  set' i (Delay' n) = Just $ SetDelay i n
+  set' i (Delay' n) (Delay' nx) = if n /= nx then Just $ SetDelay i n else Nothing
 
-  set' i (Gain' n) = Just $ SetGain i n
+  set' i (Gain' n) (Gain' nx) = if n /= nx then Just $ SetGain i n else Nothing
 
-  set' i _ = Nothing
+  set' i _ _ = Nothing
 
-  set = DL.catMaybes (map (\v -> set' v.ptr v.au) $ M.values cur.flat)
+  set =
+    DL.catMaybes
+      ( map
+          ( \v ->
+              set' v.ptr v.au
+                (fromMaybe v.au $ (map _.au $ M.lookup v.ptr reversedAsMap >>= flip M.lookup prev.flat))
+          )
+          $ M.values cur.flat
+      )
 
 -- reconciles the previous graph with the current one
 audioReconciliation'' :: Foreign -> Reconcilable -> Reconcilable -> Reconciled

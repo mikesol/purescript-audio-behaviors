@@ -24,6 +24,7 @@ scene = f <$> (unwrap <$> seconds)
         $ ( (gain' 0.1 $ sinOsc (440.0 + (10.0 * sin (2.3 * rad))))
               :| (gain' 0.25 $ sinOsc (235.0 + (10.0 * sin (1.7 * rad))))
               : (gain' 0.2 $ sinOsc (337.0 + (10.0 * sin rad)))
+              : (gain' 0.1 $ sinOsc (530.0 + (19.0 * (5.0 * sin rad))))
               : Nil
           )
 
