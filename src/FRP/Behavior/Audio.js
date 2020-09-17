@@ -177,82 +177,102 @@ exports.getGlpkImpl = function () {
 
 exports.touchAudio = function (instructions) {
   return function (context) {
-    return function (g) {
-      return function () {
-        var generators = g;
-        for (var i = 0; i < instructions.length; i++) {
-          var c = instructions[i];
-          if (c.constructor.name == "DisconnectFrom") {
-            generators[c.value0].disconnect(generators[c.value1]);
-          } else if (c.constructor.name == "ConnectTo") {
-            if (c.value2.constructor.name == "Nothing") {
-              generators[c.value0].connect(generators[c.value1]);
-            } else {
-              generators[c.value0].connect(
-                generators[c.value1],
-                c.value2.value0.value0,
-                c.value2.value0.value1
+    return function (stream) {
+      return function (g) {
+        return function () {
+          var generators = g;
+          for (var i = 0; i < instructions.length; i++) {
+            var c = instructions[i];
+            if (c.constructor.name == "DisconnectFrom") {
+              generators[c.value0].disconnect(generators[c.value1]);
+            } else if (c.constructor.name == "ConnectTo") {
+              if (c.value2.constructor.name == "Nothing") {
+                generators[c.value0].connect(generators[c.value1]);
+              } else {
+                generators[c.value0].connect(
+                  generators[c.value1],
+                  c.value2.value0.value0,
+                  c.value2.value0.value1
+                );
+              }
+            } else if (c.constructor.name == "Shuffle") {
+              var old = generators;
+              var generators = generators.slice(0);
+              for (var j = 0; j < c.value0.length; j++) {
+                generators[c.value0[j].value1] = old[c.value0[j].value0];
+              }
+            } else if (c.constructor.name == "NewUnit") {
+              generators[c.value0] =
+                c.value1.constructor.name == "Speaker$prime$prime"
+                  ? context.destination
+                  : c.value1.constructor.name == "Microphone$prime$prime"
+                  ? context.createMediaStreamSource(stream)
+                  : c.value1.constructor.name == "StereoPanner$prime$prime"
+                  ? context.createStereoPanner()
+                  : c.value1.constructor.name == "SinOsc$prime$prime"
+                  ? context.createOscillator()
+                  : c.value1.constructor.name == "SquareOsc$prime$prime"
+                  ? context.createOscillator()
+                  : c.value1.constructor.name == "Mul$prime$prime"
+                  ? new AudioWorkletNode(context, "ps-aud-mul")
+                  : c.value1.constructor.name == "Add$prime$prime"
+                  ? context.createGain()
+                  : c.value1.constructor.name == "Delay$prime$prime"
+                  ? context.createDelay(10.0) // magic number for 10 seconds...make tweakable?
+                  : c.value1.constructor.name == "Constant$prime$prime"
+                  ? context.createConstantSource()
+                  : c.value1.constructor.name == "Gain$prime$prime"
+                  ? context.createGain()
+                  : c.value1.constructor.name == "SplitRes$prime$prime"
+                  ? context.createGain()
+                  : c.value1.constructor.name == "Splitter$prime$prime"
+                  ? context.createChannelSplitter(c.value2.value0)
+                  : c.value1.constructor.name == "Merger$prime$prime"
+                  ? context.createChannelMerger(c.value2.value0)
+                  : null;
+              if (c.value1.constructor.name == "SinOsc$prime$prime") {
+                generators[c.value0].type = "sine";
+                generators[c.value0].start();
+              }
+              if (c.value1.constructor.name == "SquareOsc$prime$prime") {
+                generators[c.value0].type = "square";
+                generators[c.value0].start();
+              }
+              if (c.value1.constructor.name == "SplitRes$prime$prime") {
+                generators[c.value0].gain.setValueAtTime(
+                  1.0,
+                  context.currentTime
+                );
+              }
+            } else if (c.constructor.name == "SetFrequency") {
+              generators[c.value0].frequency.setValueAtTime(
+                c.value1,
+                context.currentTime
               );
-            }
-          } else if (c.constructor.name == "Shuffle") {
-            var old = generators;
-            var generators = generators.slice(0);
-            for (var j = 0; j < c.value0.length; j++) {
-              generators[c.value0[j].value1] = old[c.value0[j].value0];
-            }
-          } else if (c.constructor.name == "NewUnit") {
-            generators[c.value0] =
-              c.value1.constructor.name == "Speaker$prime$prime"
-                ? context.destination
-                : c.value1.constructor.name == "SinOsc$prime$prime"
-                ? context.createOscillator()
-                : c.value1.constructor.name == "Gain$prime$prime"
-                ? context.createGain()
-                : c.value1.constructor.name == "SplitRes$prime$prime"
-                ? context.createGain()
-                : null;
-            if (c.value1.constructor.name == "SinOsc$prime$prime") {
-              generators[c.value0].type = "sine";
-              generators[c.value0].start();
-            }
-            if (c.value1.constructor.name == "SquareOsc$prime$prime") {
-              generators[c.value0].type = "square";
-              generators[c.value0].start();
-            }
-            if (c.value1.constructor.name == "SplitRes$prime$prime") {
+            } else if (c.constructor.name == "SetPan") {
+              generators[c.value0].pan.setValueAtTime(
+                c.value1,
+                context.currentTime
+              );
+            } else if (c.constructor.name == "SetGain") {
               generators[c.value0].gain.setValueAtTime(
-                1.0,
+                c.value1,
+                context.currentTime
+              );
+            } else if (c.constructor.name == "SetDelay") {
+              generators[c.value0].delayTime.setValueAtTime(
+                c.value1,
+                context.currentTime
+              );
+            } else if (c.constructor.name == "SetOffset") {
+              generators[c.value0].offset.setValueAtTime(
+                c.value1,
                 context.currentTime
               );
             }
-          } else if (c.constructor.name == "SetFrequency") {
-            generators[c.value0].frequency.setValueAtTime(
-              c.value1,
-              context.currentTime
-            );
-          } else if (c.constructor.name == "SetPan") {
-            generators[c.value0].pan.setValueAtTime(
-              c.value1,
-              context.currentTime
-            );
-          } else if (c.constructor.name == "SetGain") {
-            generators[c.value0].gain.setValueAtTime(
-              c.value1,
-              context.currentTime
-            );
-          } else if (c.constructor.name == "SetDelay") {
-            generators[c.value0].delayTime.setValueAtTime(
-              c.value1,
-              context.currentTime
-            );
-          } else if (c.constructor.name == "SetOffset") {
-            generators[c.value0].offset.setValueAtTime(
-              c.value1,
-              context.currentTime
-            );
           }
-        }
-        return generators;
+          return generators;
+        };
       };
     };
   };

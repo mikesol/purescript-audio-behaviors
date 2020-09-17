@@ -30,12 +30,13 @@ scene = f <$> (unwrap <$> seconds)
 run ::
   Int ->
   Foreign ->
+  Foreign ->
   Array Foreign ->
-  (Number -> Array Instruction -> Foreign -> Array Foreign -> Effect (Array Foreign)) ->
+  (Number -> Array Instruction -> Foreign -> Foreign -> Array Foreign -> Effect (Array Foreign)) ->
   Effect (Effect Unit)
 run = runInBrowser scene
 
-touchAudio :: Array Instruction → Foreign → Array Foreign → Effect (Array Foreign)
+touchAudio :: Array Instruction → Foreign → Foreign → Array Foreign → Effect (Array Foreign)
 touchAudio = Aud.touchAudio
 
 main :: Effect Unit

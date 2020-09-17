@@ -75,6 +75,7 @@ import Data.Traversable (sequence)
 import Data.Tuple (Tuple(..), fst, snd, swap, uncurry)
 import Data.Typelevel.Num (class Pos, D1, D2, toInt')
 import Data.Unfoldable1 as DU
+import Type.Proxy (Proxy(..))
 import Data.Vec (Vec, fill)
 import Data.Vec as V
 import Effect (Effect, whileE)
@@ -91,7 +92,6 @@ import Foreign.Object as O
 import Heterogeneous.Mapping (class HMap, class Mapping, hmap)
 import Math as Math
 import Record (merge)
-import Type.Proxy (Proxy(..))
 import Type.Row.Homogeneous (class Homogeneous)
 
 newtype IdxContext i
@@ -478,7 +478,7 @@ data AudioUnit'
   = Microphone'
   | SinOsc' Number
   | SquareOsc' Number
-  | Splitter'
+  | Splitter' Int
   | StereoPanner' Number
   | Mul'
   | Add'
@@ -525,14 +525,14 @@ derive instance eqAudioUnit'' :: Eq AudioUnit''
 instance ordAudioUnit'' :: Ord AudioUnit'' where
   compare a b = compare (show a) (show b)
 
-au' :: forall ch. AudioUnit ch -> { au :: AudioUnit', name :: MString }
+au' :: forall ch. Pos ch => AudioUnit ch -> { au :: AudioUnit', name :: MString }
 au' (Microphone name) = { au: Microphone', name }
 
 au' (SinOsc name n) = { au: (SinOsc' n), name }
 
 au' (SquareOsc name n) = { au: (SquareOsc' n), name }
 
-au' (Splitter name _ _) = { au: Splitter', name }
+au' (Splitter name _ _) = { au: (Splitter' (toInt' (Proxy :: Proxy ch))), name }
 
 au' (StereoPanner name n _) = { au: (StereoPanner' n), name }
 
@@ -563,7 +563,7 @@ au'' (SinOsc' _) = SinOsc''
 
 au'' (SquareOsc' _) = SquareOsc''
 
-au'' Splitter' = Splitter''
+au'' (Splitter' _) = Splitter''
 
 au'' (StereoPanner' _) = StereoPanner''
 
@@ -594,7 +594,7 @@ tagToAU SinOsc'' = SinOsc' 50000.0
 
 tagToAU SquareOsc'' = SquareOsc' 50000.0
 
-tagToAU Splitter'' = Splitter'
+tagToAU Splitter'' = Splitter' (-1)
 
 tagToAU StereoPanner'' = (StereoPanner' 3.0)
 
@@ -959,7 +959,7 @@ ucomp (SinOsc' _) (SinOsc' _) = true
 
 ucomp (SquareOsc' _) (SquareOsc' _) = true
 
-ucomp Splitter' Splitter' = true
+ucomp (Splitter' _) (Splitter' _) = true
 
 ucomp (StereoPanner' _) (StereoPanner' _) = true
 
@@ -1004,7 +1004,7 @@ toCoef (SinOsc' f0) (SinOsc' f1) = (Math.abs $ f0 - f1) * oscMULT
 
 toCoef (SquareOsc' f0) (SquareOsc' f1) = (Math.abs $ f0 - f1) * oscMULT
 
-toCoef Splitter' Splitter' = 0.0
+toCoef (Splitter' _) (Splitter' _) = 0.0
 
 toCoef (StereoPanner' p0) (StereoPanner' p1) = (Math.abs $ p0 - p1) * panMULT
 
@@ -1395,10 +1395,12 @@ foreign import _glpk ::
 
 -- | instructions
 -- | audio context
+-- | audio stream (ie microphone)
 -- | audio units
 -- | audio units
 foreign import touchAudio ::
   Array Instruction ->
+  Foreign ->
   Foreign ->
   Array Foreign ->
   Effect (Array Foreign)
@@ -1446,7 +1448,7 @@ data Instruction
   = DisconnectFrom Int Int -- id id
   | ConnectTo Int Int (Maybe (Tuple Int Int)) -- id id channelConnections
   | Shuffle (Array (Tuple Int Int)) -- id id, shuffles the map
-  | NewUnit Int AudioUnit'' -- new audio unit
+  | NewUnit Int AudioUnit'' (Maybe Int) -- new audio unit, maybe with channel info
   | SetFrequency Int Number -- frequency for an osc
   | SetPan Int Number -- pan for pan node
   | SetGain Int Number -- gain for gain node
@@ -1459,6 +1461,13 @@ instance showInstruction :: Show Instruction where
   show s = genericShow s
 
 derive instance eqInstruction :: Eq Instruction
+
+channelConstructor :: AudioUnit' -> Maybe Int
+channelConstructor (Merger' l) = Just $ DL.length l
+
+channelConstructor (Splitter' n) = Just n
+
+channelConstructor _ = Nothing
 
 describeConnection :: Reconcilable -> Reconcilable -> Map Int Int -> List (Tuple Int Int)
 describeConnection start end passage =
@@ -1538,9 +1547,9 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
   -- new units that were not in the old array
   new =
     map
-      (uncurry NewUnit)
+      (uncurry $ uncurry NewUnit)
       ( DL.catMaybes
-          ( map (\i -> map (\ptr -> (Tuple i $ au'' ptr.au)) $ M.lookup i cur.flat)
+          ( map (\i -> map (\ptr -> (Tuple (Tuple i $ au'' ptr.au) (channelConstructor ptr.au))) $ M.lookup i cur.flat)
               ( DL.catMaybes
                   ( map
                       ( \k ->
@@ -1626,6 +1635,8 @@ audioReconciliation g u f x = do
 
 -- | The main executor loop in the browser
 -- | - How many milliseconds between pings
+-- | - The audio context
+-- | - The microphone stream (which may be null)
 -- | - An array of web workers with glpk.js preloaded
 -- | - A function that takes:
 -- |   - The amount of clock time execution took in MS
@@ -1637,10 +1648,11 @@ runInBrowser ::
   Behavior (AudioUnit ch) ->
   Int ->
   Foreign ->
+  Foreign ->
   Array Foreign ->
-  (Number -> Array Instruction -> Foreign -> Array Foreign -> Effect (Array Foreign)) ->
+  (Number -> Array Instruction -> Foreign -> Foreign -> Array Foreign -> Effect (Array Foreign)) ->
   Effect (Effect Unit)
-runInBrowser scene pingEvery ctx workers executor = do
+runInBrowser scene pingEvery ctx mic workers executor = do
   reconRef <-
     new
       { grouped: M.empty
@@ -1669,6 +1681,6 @@ runInBrowser scene pingEvery ctx workers executor = do
                 { prev: prog.prev, cur: prog.cur, reconciliation: objectToMapping res
                 }
           uts <- liftEffect $ read units
-          uts' <- liftEffect $ executor ((unwrap <<< unInstant) inst) (A.fromFoldable instr.instructionSet) ctx uts
+          uts' <- liftEffect $ executor ((unwrap <<< unInstant) inst) (A.fromFoldable instr.instructionSet) ctx mic uts
           liftEffect $ write uts' units
     )

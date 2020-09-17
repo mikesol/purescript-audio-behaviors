@@ -12,16 +12,19 @@
     var audioCtx = null;
     function turnOnAudio() {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      var now = new Date().getTime();
-      var ctr = 0;
-      offCb = PS["FRP.Behavior.Audio.Example.HelloWorld"].run(16)(audioCtx)(
-        workers
-      )(function (startTime) {
-        return function (instructions) {
-          return function (ctx) {
-            return function (units) {
-              return function () {
-                /*
+      audioCtx.audioWorklet.addModule("ps-aud-mul.js").then(function () {
+        var now = new Date().getTime();
+        var ctr = 0;
+        // null for the microphone
+        offCb = PS["FRP.Behavior.Audio.Example.HelloWorld"].run(16)(audioCtx)(
+          null
+        )(workers)(function (startTime) {
+          return function (instructions) {
+            return function (ctx) {
+              return function (stream) {
+                return function (units) {
+                  return function () {
+                    /*
                 var x = new Date().getTime();
                 if (ctr % 100 == 0) {
                   console.log(instructions);
@@ -31,14 +34,16 @@
                 now = x;
                 return [];
                 */
-                return PS["FRP.Behavior.Audio.Example.HelloWorld"].touchAudio(
-                  instructions
-                )(ctx)(units)();
+                    return PS[
+                      "FRP.Behavior.Audio.Example.HelloWorld"
+                    ].touchAudio(instructions)(ctx)(stream)(units)();
+                  };
+                };
               };
             };
           };
-        };
-      })();
+        })();
+      });
     }
     function turnOffAudio() {
       offCb ? offCb() : null;
