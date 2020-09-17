@@ -1,10 +1,26 @@
 # purescript-audio-behaviors
 
-Somewhat broken, flaky, unready for production experiment in using [`purescript-behaviors`](https://github.com/paf31/purescript-behaviors) for web audio.
+[`purescript-behaviors`](https://github.com/paf31/purescript-behaviors) for web audio.
 
 ## Demo
 
-[Here](https://spiritual-trade.surge.sh/). Kind of works in Firefox (a bit garbled). Chrome isn't fast enough yet.
+[Here](https://klank-hello-world.surge.sh/). If it doesn't turn on when you click "turn on", reload and try again.
+
+```haskell
+scene :: Behavior (AudioUnit D1)
+scene = f <$> (unwrap <$> seconds)
+  where
+  f s =
+    let
+      rad = pi * s
+    in
+      speaker
+        $ ( (gain' 0.1 $ sinOsc (440.0 + (10.0 * sin (2.3 * rad))))
+              :| (gain' 0.25 $ sinOsc (235.0 + (10.0 * sin (1.7 * rad))))
+              : (gain' 0.2 $ sinOsc (337.0 + (10.0 * sin rad)))
+              : Nil
+          )
+```
 
 ## Installation
 
@@ -18,29 +34,18 @@ spago install
 spago build
 ```
 
-## Running
+## Example
 
-Test with Firefox at http://localhost:8000 by using the command below.
+A working example is in the [examples](./examples) directory.
+
+To compile the JS for the hello world example, issue the following command:
 
 ```bash
-mkdir dist && cp client/index.html dist/ && spago -x client.dhall bundle-app --main Client.Main -t dist/index.js
-cd dist
-python -m http.server
+spago -x examples.dhall bundle-app --main FRP.Behavior.Audio.Example.HelloWorld --to examples/hello-world/index.js
 ```
 
-## Wasm
+Other examples will work the same way, with the directory and module name changing.
 
-Compiling to wasm is possible, if not painful. Here are the steps I took.
+This example relies on `glpk.js`, which can be found [here](https://github.com/jvail/glpk.js). The files `glpk-worker.js` and `glpk-worker.wasm` need to be compiled by running `make all` copied to the directory of the project (ie [examples/hello-world](./examples/hello-world)) to work.  You'll need an [emscripten toolchain](https://emscripten.org/docs/getting_started/downloads.html#platform-notes-installation-instructions-sdk) to compile this.
 
-1. Install [`purescript-native`](https://github.com/andyarvanitis/purescript-native)
-1. Clone my fork of the [`purescript-native-ffi`](https://github.com/mikesol/purescript-native-ffi) into a directory called ffi.
-1. Make sure that you have [emscripten](https://emscripten.org/docs/getting_started/downloads.html#platform-notes-installation-instructions-sdk) installed and the toolchain is in your path.
-1. Run `make release`. You may hit issues with `purescript-native` not compiling some files. Just edit these by hand - the fix is usually a one liner. For examples of issues I reported and how to resolve them, check [here](https://github.com/andyarvanitis/purescript-native/issues/57) and [here](https://github.com/andyarvanitis/purescript-native/issues/58).
-1. Find the comment with the word `abovethisline` in `cpptest/purescript-worklet-processor.js` (it's at the beginning of the file, should be on the first line). Copy the entire contents of `cpptest/pure-script-kernel.wasmmodule.js` above this line.
-1. `cd cpptest && python -m http.server`
-
-Even with this, wasm is no better than JavaScript due to the intense amount of memory copying.
-
-Note that `PureScriptKernel.cc` uses a hardcoded function from `cpptest/Main.purs` with some changes. If you want to change the function and recompile, you have to copy these changes from `Main.cpp` to `PureScriptKernel.cc`
-
-Obviously this is not ideal and I'll polish the flow if I have time.
+Note that, due to a bug in `glpk-4.65`, there is a spurious console message that sometimes prints.  The way around it is to apply [this patch](https://bugs.debian.org/cgi-bin/bugreport.cgi?att=1;bug=891465;filename=simplex-warning.patch;msg=5) to glpk before compiling it.
