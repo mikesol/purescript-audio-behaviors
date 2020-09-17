@@ -2,12 +2,10 @@
 <html>
   <script src="index.js"></script>
   <script>
-    const workers = [
-      new Worker("glpk-worker.js"),
-      new Worker("glpk-worker.js"),
-      new Worker("glpk-worker.js"),
-      new Worker("glpk-worker.js"),
-    ];
+    const workers = PS["FRP.Behavior.Audio.Example.HelloWorld"].makeWorkers(
+      4
+    )();
+
     var offCb = null;
     var audioCtx = null;
     function turnOnAudio() {
@@ -24,16 +22,6 @@
               return function (stream) {
                 return function (units) {
                   return function () {
-                    /*
-                var x = new Date().getTime();
-                if (ctr % 100 == 0) {
-                  console.log(instructions);
-                  console.log((x - startTime) / 1000, (x - now) / 1000);
-                }
-                ctr = ctr + 1;
-                now = x;
-                return [];
-                */
                     return PS[
                       "FRP.Behavior.Audio.Example.HelloWorld"
                     ].touchAudio(instructions)(ctx)(stream)(units)();

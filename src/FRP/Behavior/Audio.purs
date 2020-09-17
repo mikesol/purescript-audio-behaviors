@@ -7,6 +7,7 @@ module FRP.Behavior.Audio
   , AudioUnit
   , reconciliationToInstructionSet
   , touchAudio
+  , makeWorkers
   , objectToMapping
   , glpkWorkerImpl
   , LinearProgram
@@ -75,14 +76,13 @@ import Data.Traversable (sequence)
 import Data.Tuple (Tuple(..), fst, snd, swap, uncurry)
 import Data.Typelevel.Num (class Pos, D1, D2, toInt')
 import Data.Unfoldable1 as DU
-import Type.Proxy (Proxy(..))
 import Data.Vec (Vec, fill)
 import Data.Vec as V
-import Effect (Effect, whileE)
+import Effect (Effect, untilE, whileE)
 import Effect.Aff (launchAff_)
 import Effect.Class (liftEffect)
 import Effect.Exception (throw)
-import Effect.Ref (Ref, modify_, new, read, write)
+import Effect.Ref (Ref, modify, modify_, new, read, write)
 import FRP.Behavior (Behavior, behavior, sampleBy, sample_)
 import FRP.Event (Event, makeEvent, subscribe)
 import FRP.Event.Time (interval)
@@ -92,6 +92,7 @@ import Foreign.Object as O
 import Heterogeneous.Mapping (class HMap, class Mapping, hmap)
 import Math as Math
 import Record (merge)
+import Type.Proxy (Proxy(..))
 import Type.Row.Homogeneous (class Homogeneous)
 
 newtype IdxContext i
@@ -1379,6 +1380,8 @@ makeProgram prev cur =
     in
       { prev: prev_, cur: cur_, prog: audioToLP prev_ cur_ }
 
+foreign import makeWorkers :: Int -> Effect (Array Foreign)
+
 foreign import getGlpkImpl :: Effect (Promise Foreign)
 
 foreign import glpkWorkerImpl ::
@@ -1671,7 +1674,9 @@ runInBrowser scene pingEvery ctx mic workers executor = do
       , flat: M.empty
       }
   ciRef <- new 0
+  needToProcess <- new 0
   units <- new ([] :: Array Foreign)
+  instructionStash <- new (M.empty :: M.Map Int (Array Instruction))
   subscribe (sampleBy Tuple scene (interval pingEvery))
     ( \(Tuple aud inst) -> do
         let
@@ -1687,12 +1692,29 @@ runInBrowser scene pingEvery ctx mic workers executor = do
           prog = makeProgram prev cur
         launchAff_ do
           res <- toAffE (glpkWorkerImpl worker prog.prog)
-          let
-            instr =
-              reconciliationToInstructionSet
-                { prev: prog.prev, cur: prog.cur, reconciliation: objectToMapping res
-                }
-          uts <- liftEffect $ read units
-          uts' <- liftEffect $ executor ((unwrap <<< unInstant) inst) (A.fromFoldable instr.instructionSet) ctx mic uts
-          liftEffect $ write uts' units
+          liftEffect do
+            let
+              instr =
+                reconciliationToInstructionSet
+                  { prev: prog.prev, cur: prog.cur, reconciliation: objectToMapping res
+                  }
+            n2p <- read needToProcess
+            void $ modify (append (M.singleton curIt (A.fromFoldable instr.instructionSet))) instructionStash
+            if n2p /= curIt then do
+              -- useful for debugging
+              --log $ "Warning: async processing out of order. Correcting..." <> show n2p <> " " <> show curIt
+              pure unit
+            else
+              untilE do
+                needNow <- read needToProcess
+                stash <- read instructionStash
+                case M.lookup needNow stash of
+                  Nothing -> pure true
+                  Just instructions -> do
+                    uts <- read units
+                    uts' <- executor ((unwrap <<< unInstant) inst) instructions ctx mic uts
+                    write uts' units
+                    write (needNow + 1) needToProcess
+                    _ <- modify (M.delete needNow) instructionStash
+                    pure false
     )
