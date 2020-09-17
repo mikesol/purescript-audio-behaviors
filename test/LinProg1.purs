@@ -2,7 +2,6 @@ module Test.LinProg1 where
 
 import Prelude
 import Control.Promise (toAffE)
-import Data.Either (Either(..))
 import Data.Int (toNumber)
 import Data.List (range, List(..), (:))
 import Data.List as DL
@@ -95,7 +94,7 @@ linprogTestSuite =
                             , (Tuple 10 9)
                             ]
                         )
-                      : (ConnectTo 9 5 [ Tuple 0 0 ])
+                      : (ConnectTo 9 5 Nothing)
                       : (SetGain 2 0.4)
                       : (SetFrequency 3 481.0)
                       : (SetFrequency 4 962.0)
