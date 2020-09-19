@@ -83,7 +83,9 @@ linprogTestSuite =
               , instructionSet:
                   ( (DisconnectFrom 10 7)
                       : ( Shuffle
-                            [ (Tuple 2 5)
+                            [ (Tuple 0 0)
+                            , (Tuple 1 1)
+                            , (Tuple 2 5)
                             , (Tuple 3 6)
                             , (Tuple 4 7)
                             , (Tuple 5 8)

@@ -79,6 +79,7 @@ import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
 import Data.Traversable (sequence)
 import Data.Tuple (Tuple(..), fst, snd, swap, uncurry)
 import Data.Typelevel.Num (class Pos, D1, D2, toInt')
+import Data.Unfoldable (class Unfoldable)
 import Data.Unfoldable1 as DU
 import Data.Vec (Vec, fill)
 import Data.Vec as V
@@ -1991,7 +1992,8 @@ type Reconciled
 -- for sequential programming with audio units
 -- treating them as pointers.
 data Instruction
-  = DisconnectFrom Int Int -- id id
+  = Stop Int
+  | DisconnectFrom Int Int -- id id
   | ConnectTo Int Int (Maybe (Tuple Int Int)) -- id id channelConnections
   | Shuffle (Array (Tuple Int Int)) -- id id, shuffles the map
   | NewUnit Int AudioUnit'' (Maybe Int) (Maybe String) -- new audio unit, maybe with channel info, maybe with a source
@@ -2082,12 +2084,41 @@ describeConnection start end passage =
         )
     )
 
+isGen :: AudioUnit' -> Boolean
+isGen (Microphone') = true
+
+isGen (Play' _) = true
+
+isGen (PlayBuf' _ _) = true
+
+isGen (LoopBuf' _ _ _ _) = true
+
+isGen (PlayDynamicBuf' _ _) = true
+
+isGen (LoopDynamicBuf' _ _ _ _) = true
+
+isGen (SawtoothOsc' _) = true
+
+isGen (TriangleOsc' _) = true
+
+isGen (PeriodicOsc' _ _) = true
+
+isGen (DynamicPeriodicOsc' _ _ _) = true
+
+isGen (SinOsc' _) = true
+
+isGen (SquareOsc' _) = true
+
+isGen (Constant' _) = true
+
+isGen _ = false
+
 reconciliationToInstructionSet :: Reconciled' -> Reconciled
 reconciliationToInstructionSet { prev, cur, reconciliation } =
   { prev
   , cur
   , reconciliation
-  , instructionSet: disconnect <> (pure shuffle) <> new <> connect <> set
+  , instructionSet: disconnect <> stop <> (pure shuffle) <> new <> connect <> set
   }
   where
   reversed =
@@ -2104,23 +2135,32 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
   -- disconnections that we need to make
   disconnect = (map (uncurry DisconnectFrom) $ describeConnection prev cur reconciliationAsMap)
 
+  statusChange :: forall f. Unfoldable f ⇒ Maybe Status -> Maybe Status -> f (Tuple Int Int)
+  statusChange isNow was =
+    ( M.toUnfoldable
+        $ M.filter
+            ( \v ->
+                ( map (_.status)
+                    $ M.lookup v cur.flat
+                )
+                  == isNow
+            )
+            ( M.filterKeys
+                (\k -> (map (_.status) $ M.lookup k prev.flat) == was)
+                reconciliationAsMap
+            )
+    )
+
+  -- turning off
+  stop =
+    map (Stop <<< fst)
+      ( DL.filter
+          (maybe false (isGen <<< _.au) <<< flip M.lookup prev.flat <<< fst)
+          $ statusChange (Just Off) (Just On)
+      )
+
   -- shuffle instructions represent the new array that we will make out of the old
-  shuffle =
-    Shuffle
-      $ A.filter (\(Tuple i j) -> i /= j)
-          ( M.toUnfoldable
-              $ M.filter
-                  ( \v ->
-                      ( map (_.status)
-                          $ M.lookup v cur.flat
-                      )
-                        /= Just Off
-                  )
-                  ( M.filterKeys
-                      (\k -> (map (_.status) $ M.lookup k prev.flat) /= Just Off)
-                      reconciliationAsMap
-                  )
-          )
+  shuffle = Shuffle $ statusChange (Just On) (Just On)
 
   -- new units that were not in the old array
   new =

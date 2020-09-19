@@ -12,6 +12,7 @@ import FRP.Behavior.Audio as Aud
 import FRP.Behavior.Time (seconds)
 import Foreign (Foreign)
 import Math (pi, sin)
+import Type.Row.Homogeneous (class Homogeneous)
 
 scene :: Behavior (AudioUnit D1)
 scene = f <$> (unwrap <$> seconds)
@@ -28,16 +29,20 @@ scene = f <$> (unwrap <$> seconds)
               : Nil
           )
 
+type Sources
+  = {}
+
 run ::
   Int ->
   Foreign ->
   Foreign ->
+  Sources ->
   Array Foreign ->
-  (Number -> Array Instruction -> Foreign -> Foreign -> Array Foreign -> Effect (Array Foreign)) ->
+  (Number -> Array Instruction -> Foreign -> Foreign -> Sources -> Array Foreign -> Effect (Array Foreign)) ->
   Effect (Effect Unit)
 run = runInBrowser scene
 
-touchAudio :: Array Instruction → Foreign → Foreign → Array Foreign → Effect (Array Foreign)
+touchAudio :: Array Instruction → Foreign → Foreign → Sources → Array Foreign → Effect (Array Foreign)
 touchAudio = Aud.touchAudio
 
 makeWorkers :: Int -> Effect (Array Foreign)
