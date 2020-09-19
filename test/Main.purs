@@ -5,6 +5,7 @@ import Effect (Effect)
 import Effect.Aff (launchAff_)
 import Test.Basic (basicTestSuite)
 import Test.LinProg1 (linprogTestSuite)
+import Test.LinProg2 (linprogTestSuite2)
 import Test.Spec.Reporter.Console (consoleReporter)
 import Test.Spec.Runner (runSpec)
 
@@ -14,3 +15,4 @@ main =
     $ runSpec [ consoleReporter ] do
         basicTestSuite
         linprogTestSuite
+        linprogTestSuite2

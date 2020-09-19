@@ -33,9 +33,33 @@ module FRP.Behavior.Audio
   , AudioUnit''(..)
   , IdxContext
   , audioToPtr
+  , class Has
   , AudioUnit'(..)
   , microphone
+  , play
+  , playBuf
+  , loopBuf
+  , playDynamicBuf
+  , loopDynamicBuf
+  , lowpass
+  , highpass
+  , bandpass
+  , lowshelf
+  , highshelf
+  , peaking
+  , notch
+  , allpass
+  , convolver
+  , dynamicConvolver
+  , dynamicsCompressor
+  , dup
+  , waveShaper
+  , dynamicWaveShaper
+  , periodicOsc
+  , dynamicPeriodicOsc
   , sinOsc
+  , sawtoothOsc
+  , traingleOsc
   , squareOsc
   , splitter
   , panner

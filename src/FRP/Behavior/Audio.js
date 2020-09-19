@@ -508,6 +508,8 @@ exports.touchAudio = function (/**dictHomogeneous */) {
                     c.value1,
                     context.currentTime
                   );
+                } else if (c.constructor.name == "Stop") {
+                  generators[c.value0].stop();
                 }
               }
               return generators;
