@@ -4,6 +4,7 @@ module FRP.Behavior.Audio
   , audioReconciliation
   , audioReconciliation'
   , audioReconciliation''
+  , AudioBuffer
   , AudioUnit
   , reconciliationToInstructionSet
   , touchAudio
@@ -12,6 +13,7 @@ module FRP.Behavior.Audio
   , glpkWorkerImpl
   , LinearProgram
   , runInBrowser
+  , Oversample
   , LPObjective
   , LPConstraint
   , LPVar
@@ -51,9 +53,9 @@ module FRP.Behavior.Audio
   ) where
 
 import Prelude
+import Control.Alt ((<|>))
 import Control.Bind (bindFlipped)
 import Control.Promise (Promise, toAffE)
-import Control.Alt ((<|>))
 import Data.Array (catMaybes, filter, foldl, groupBy, head, index, length, mapWithIndex, range, replicate, snoc, sortWith, takeEnd, zipWith, (!!))
 import Data.Array as A
 import Data.Array.NonEmpty (toArray)
@@ -73,6 +75,7 @@ import Data.NonEmpty (NonEmpty, (:|))
 import Data.NonEmpty as NE
 import Data.Set (member)
 import Data.String (Pattern(..), split, take)
+import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
 import Data.Traversable (sequence)
 import Data.Tuple (Tuple(..), fst, snd, swap, uncurry)
 import Data.Typelevel.Num (class Pos, D1, D2, toInt')
@@ -92,6 +95,7 @@ import Foreign.Object (Object, filterWithKey)
 import Foreign.Object as O
 import Heterogeneous.Mapping (class HMap, class Mapping, hmap)
 import Math as Math
+import Prim.Row (class Cons)
 import Record (merge)
 import Type.Proxy (Proxy(..))
 import Type.Row.Homogeneous (class Homogeneous)
@@ -460,8 +464,53 @@ instance showStatus :: Show Status where
 
 derive instance eqStatus :: Eq Status
 
+data AudioBuffer
+  = AudioBuffer Int (Array (Array Number))
+
+derive instance genericAudioBuffer :: Generic AudioBuffer _
+
+instance showAudioBuffer :: Show AudioBuffer where
+  show s = genericShow s
+
+derive instance eqAudioBuffer :: Eq AudioBuffer
+
+data Oversample
+  = None
+  | TwoX
+  | FourX
+
+derive instance genericOversample :: Generic Oversample _
+
+instance showOversampler :: Show Oversample where
+  show s = genericShow s
+
+derive instance eqOversample :: Eq Oversample
+
 data AudioUnit ch
   = Microphone MString
+  | Play MString String
+  | PlayBuf MString String Number
+  | LoopBuf MString String Number Number Number
+  | PlayDynamicBuf MString AudioBuffer Number
+  | LoopDynamicBuf MString AudioBuffer Number Number Number
+  | Lowpass MString Number Number Number (AudioUnit ch)
+  | Highpass MString Number Number Number (AudioUnit ch)
+  | Bandpass MString Number Number Number (AudioUnit ch)
+  | Lowshelf MString Number Number Number (AudioUnit ch)
+  | Highshelf MString Number Number Number (AudioUnit ch)
+  | Peaking MString Number Number Number (AudioUnit ch)
+  | Notch MString Number Number Number (AudioUnit ch)
+  | Allpass MString Number Number Number (AudioUnit ch)
+  | Convolver MString String (AudioUnit ch)
+  | DynamicConvolver MString AudioBuffer (AudioUnit ch)
+  | DynamicsCompressor MString Number Number Number Number Number (AudioUnit ch)
+  | SawtoothOsc MString Number
+  | TriangleOsc MString Number
+  | PeriodicOsc MString Number String
+  | DynamicPeriodicOsc MString Number (Array Number) (Array Number)
+  | WaveShaper MString String Oversample (AudioUnit ch)
+  | DynamicWaveShaper MString (Array Number) Oversample (AudioUnit ch)
+  | Dup MString (AudioUnit ch) (AudioUnit ch -> AudioUnit ch)
   | SinOsc MString Number
   | SquareOsc MString Number
   | Splitter MString (AudioUnit ch) (Vec ch (AudioUnit D1) -> AudioUnit ch)
@@ -475,9 +524,33 @@ data AudioUnit ch
   | Speaker MString (NonEmpty List (AudioUnit ch))
   | NoSound MString
   | SplitRes Int
+  | DupRes
 
 data AudioUnit'
   = Microphone'
+  | Play' String
+  | PlayBuf' String Number
+  | LoopBuf' String Number Number Number
+  | PlayDynamicBuf' AudioBuffer Number
+  | LoopDynamicBuf' AudioBuffer Number Number Number
+  | Lowpass' Number Number Number
+  | Highpass' Number Number Number
+  | Bandpass' Number Number Number
+  | Lowshelf' Number Number Number
+  | Highshelf' Number Number Number
+  | Peaking' Number Number Number
+  | Notch' Number Number Number
+  | Allpass' Number Number Number
+  | Convolver' String
+  | DynamicConvolver' AudioBuffer
+  | DynamicsCompressor' Number Number Number Number Number
+  | SawtoothOsc' Number
+  | TriangleOsc' Number
+  | PeriodicOsc' Number String
+  | DynamicPeriodicOsc' Number (Array Number) (Array Number)
+  | WaveShaper' String Oversample
+  | DynamicWaveShaper' (Array Number) Oversample
+  | Dup'
   | SinOsc' Number
   | SquareOsc' Number
   | Splitter' Int
@@ -492,6 +565,7 @@ data AudioUnit'
   | Speaker'
   | NoSound'
   | SplitRes' Int
+  | DupRes'
 
 derive instance genericAudioUnit' :: Generic AudioUnit' _
 
@@ -502,6 +576,29 @@ derive instance eqAudioUnit' :: Eq AudioUnit'
 
 data AudioUnit''
   = Microphone''
+  | Play''
+  | PlayBuf''
+  | LoopBuf''
+  | PlayDynamicBuf''
+  | LoopDynamicBuf''
+  | Lowpass''
+  | Highpass''
+  | Bandpass''
+  | Lowshelf''
+  | Highshelf''
+  | Peaking''
+  | Notch''
+  | Allpass''
+  | Convolver''
+  | DynamicConvolver''
+  | DynamicsCompressor''
+  | SawtoothOsc''
+  | TriangleOsc''
+  | PeriodicOsc''
+  | DynamicPeriodicOsc''
+  | WaveShaper''
+  | DynamicWaveShaper''
+  | Dup''
   | SinOsc''
   | SquareOsc''
   | Splitter''
@@ -516,6 +613,7 @@ data AudioUnit''
   | Speaker''
   | NoSound''
   | SplitRes''
+  | DupRes''
 
 derive instance genericAudioUnit'' :: Generic AudioUnit'' _
 
@@ -529,6 +627,55 @@ instance ordAudioUnit'' :: Ord AudioUnit'' where
 
 au' :: forall ch. Pos ch => AudioUnit ch -> { au :: AudioUnit', name :: MString }
 au' (Microphone name) = { au: Microphone', name }
+
+au' (Play name file) = { au: Play' file, name }
+
+au' (PlayBuf name buf speed) = { au: PlayBuf' buf speed, name }
+
+au' (LoopBuf name buf speed start end) = { au: LoopBuf' buf speed start end, name }
+
+au' (PlayDynamicBuf name buf speed) = { au: PlayDynamicBuf' buf speed, name }
+
+au' (LoopDynamicBuf name buf speed start end) = { au: LoopDynamicBuf' buf speed start end, name }
+
+au' (Lowpass name f q g _) = { au: Lowpass' f q g, name }
+
+au' (Highpass name f q g _) = { au: Highpass' f q g, name }
+
+au' (Bandpass name f q g _) = { au: Bandpass' f q g, name }
+
+au' (Lowshelf name f q g _) = { au: Lowshelf' f q g, name }
+
+au' (Highshelf name f q g _) = { au: Highshelf' f q g, name }
+
+au' (Peaking name f q g _) = { au: Peaking' f q g, name }
+
+au' (Notch name f q g _) = { au: Notch' f q g, name }
+
+au' (Allpass name f q g _) = { au: Allpass' f q g, name }
+
+au' (Convolver name buf _) = { au: Convolver' buf, name }
+
+au' (DynamicConvolver name buf _) = { au: DynamicConvolver' buf, name }
+
+au' (DynamicsCompressor name thresh knee ratio attack release _) =
+  { au: DynamicsCompressor' thresh knee ratio attack release
+  , name
+  }
+
+au' (SawtoothOsc name n) = { au: (SawtoothOsc' n), name }
+
+au' (TriangleOsc name n) = { au: (TriangleOsc' n), name }
+
+au' (PeriodicOsc name n s) = { au: (PeriodicOsc' n s), name }
+
+au' (DynamicPeriodicOsc name n r i) = { au: (DynamicPeriodicOsc' n r i), name }
+
+au' (WaveShaper name curve os _) = { au: (WaveShaper' curve os), name }
+
+au' (DynamicWaveShaper name curve os _) = { au: (DynamicWaveShaper' curve os), name }
+
+au' (Dup name _ _) = { au: Dup', name } -- hack, we set the actual value later
 
 au' (SinOsc name n) = { au: (SinOsc' n), name }
 
@@ -558,8 +705,56 @@ au' (NoSound name) = { au: NoSound', name }
 
 au' (SplitRes n) = { au: (SplitRes' n), name: Nothing }
 
+au' DupRes = { au: DupRes', name: Nothing }
+
 au'' :: AudioUnit' -> AudioUnit''
 au'' Microphone' = Microphone''
+
+au'' (Play' _) = Play''
+
+au'' (PlayBuf' _ _) = PlayBuf''
+
+au'' (LoopBuf' _ _ _ _) = LoopBuf''
+
+au'' (PlayDynamicBuf' _ _) = PlayDynamicBuf''
+
+au'' (LoopDynamicBuf' _ _ _ _) = LoopDynamicBuf''
+
+au'' (Lowpass' _ _ _) = Lowpass''
+
+au'' (Highpass' _ _ _) = Highpass''
+
+au'' (Bandpass' _ _ _) = Bandpass''
+
+au'' (Lowshelf' _ _ _) = Lowshelf''
+
+au'' (Highshelf' _ _ _) = Highshelf''
+
+au'' (Peaking' _ _ _) = Peaking''
+
+au'' (Notch' _ _ _) = Notch''
+
+au'' (Allpass' _ _ _) = Allpass''
+
+au'' (Convolver' _) = Convolver''
+
+au'' (DynamicConvolver' _) = DynamicConvolver''
+
+au'' (DynamicsCompressor' _ _ _ _ _) = DynamicsCompressor''
+
+au'' (SawtoothOsc' _) = SawtoothOsc''
+
+au'' (TriangleOsc' _) = TriangleOsc''
+
+au'' (PeriodicOsc' _ _) = PeriodicOsc''
+
+au'' (DynamicPeriodicOsc' _ _ _) = DynamicPeriodicOsc''
+
+au'' (WaveShaper' _ _) = WaveShaper''
+
+au'' (DynamicWaveShaper' _ _) = DynamicWaveShaper''
+
+au'' Dup' = Dup''
 
 au'' (SinOsc' _) = SinOsc''
 
@@ -589,8 +784,56 @@ au'' NoSound' = NoSound''
 
 au'' (SplitRes' _) = SplitRes''
 
+au'' DupRes' = DupRes''
+
 tagToAU :: AudioUnit'' -> AudioUnit'
 tagToAU Microphone'' = Microphone'
+
+tagToAU Play'' = Play' ""
+
+tagToAU PlayBuf'' = PlayBuf' "" (-1.0)
+
+tagToAU LoopBuf'' = LoopBuf' "" (-1.0) (-1.0) (-1.0)
+
+tagToAU PlayDynamicBuf'' = PlayDynamicBuf' (AudioBuffer 0 [ [] ]) (-1.0)
+
+tagToAU LoopDynamicBuf'' = LoopDynamicBuf' (AudioBuffer 0 [ [] ]) (-1.0) (-1.0) (-1.0)
+
+tagToAU Lowpass'' = Lowpass' (-1.0) (-1.0) (-1.0)
+
+tagToAU Highpass'' = Highpass' (-1.0) (-1.0) (-1.0)
+
+tagToAU Bandpass'' = Bandpass' (-1.0) (-1.0) (-1.0)
+
+tagToAU Lowshelf'' = Lowshelf' (-1.0) (-1.0) (-1.0)
+
+tagToAU Highshelf'' = Highshelf' (-1.0) (-1.0) (-1.0)
+
+tagToAU Peaking'' = Peaking' (-1.0) (-1.0) (-1.0)
+
+tagToAU Notch'' = Notch' (-1.0) (-1.0) (-1.0)
+
+tagToAU Allpass'' = Allpass' (-1.0) (-1.0) (-1.0)
+
+tagToAU Convolver'' = Convolver' ""
+
+tagToAU DynamicConvolver'' = DynamicConvolver' (AudioBuffer 0 [ [] ])
+
+tagToAU DynamicsCompressor'' = DynamicsCompressor' (-1.0) (-1.0) (-1.0) (-1.0) (-1.0)
+
+tagToAU SawtoothOsc'' = SawtoothOsc' 50000.0
+
+tagToAU TriangleOsc'' = TriangleOsc' 50000.0
+
+tagToAU PeriodicOsc'' = PeriodicOsc' 50000.0 ""
+
+tagToAU DynamicPeriodicOsc'' = DynamicPeriodicOsc' 50000.0 [] []
+
+tagToAU WaveShaper'' = WaveShaper' "" None
+
+tagToAU DynamicWaveShaper'' = DynamicWaveShaper' [] None
+
+tagToAU Dup'' = Dup'
 
 tagToAU SinOsc'' = SinOsc' 50000.0
 
@@ -620,36 +863,7 @@ tagToAU NoSound'' = NoSound'
 
 tagToAU SplitRes'' = (SplitRes' (-1))
 
-trivialConstraint :: AudioUnit'' -> Boolean
-trivialConstraint Microphone'' = true
-
-trivialConstraint SinOsc'' = false
-
-trivialConstraint SquareOsc'' = false
-
-trivialConstraint Splitter'' = true
-
-trivialConstraint StereoPanner'' = false
-
-trivialConstraint Mul'' = true
-
-trivialConstraint Add'' = true
-
-trivialConstraint Swap'' = true
-
-trivialConstraint Merger'' = true
-
-trivialConstraint Constant'' = false
-
-trivialConstraint Delay'' = false
-
-trivialConstraint Gain'' = false
-
-trivialConstraint Speaker'' = true
-
-trivialConstraint NoSound'' = true
-
-trivialConstraint SplitRes'' = true
+tagToAU DupRes'' = DupRes'
 
 type UnfoldedFlatAudio
   = Tuple Int PtrInfo
@@ -791,8 +1005,127 @@ audioToPtr = go (-1) M.empty
               , p
               }
 
+  closurethrough ::
+    forall ch.
+    Pos ch =>
+    PtrInfo' ->
+    AudioUnit ch ->
+    AudioUnit ch ->
+    AudioUnit ch ->
+    AlgStep
+  closurethrough ptr v a ic =
+    let
+      -- run alg on the inner chain
+      -- to get the inner result
+      ----------------------------------------------------------
+      ------------------------------------------------
+      ------------------------------
+      -----------
+      -----
+      -- go needs to have the result of this appended
+      ir = go (ptr.ptr - 1) ptr.next ic
+    in
+      let
+        maxPrev = foldl max 0 ir.p.prev
+      in
+        let
+          -- continuing down, we offset the pointer
+          -- by the number of nodes in the graph
+          -- and point to this one
+          -----------------------------------------------------------------
+          ---------------------------------------------------------
+          ----------------------------------------------
+          ------------------------------------
+          -------------------------
+          -------------
+          fr =
+            go
+              (ptr.ptr + ir.len)
+              ((map (\i -> maxPrev + 1 - i) ir.p.prev) <> (M.singleton (ptr.ptr + ir.len) 0))
+              a
+        in
+          let
+            au = au' v
+          in
+            let
+              -- problem: if fr is SplitRes
+              -- then prev is nothing
+              -- which leads to subPrev being underfull
+              -- as it just points to itself
+              -- for now, don't deal with this
+              subPrev = M.singleton (ptr.ptr + ir.len) 0 <> map (_ + 1) fr.p.prev
+            in
+              let
+                p =
+                  merge
+                    { ptr: ptr.ptr + ir.len
+                    , prev: subPrev
+                    ----- need to pivot this to work backwards
+                    , next: map (\i -> maxPrev - i + 1) ir.p.prev
+                    , au: au.au
+                    , name: au.name
+                    }
+                    ptr
+              in
+                { len: fr.len + ir.len + 1
+                -- correct flat structure
+                , flat:
+                    map
+                      (\rec -> rec { prev = M.union (map (_ + maxPrev + 1) subPrev) rec.prev })
+                      ir.flat
+                      <> fr.flat
+                      <> (M.singleton (ptr.ptr + ir.len) p)
+                , p
+                }
+
   go' :: forall ch. Pos ch => PtrInfo' -> AudioUnit ch -> AlgStep
   go' ptr v@(Microphone name) = terminus ptr v
+
+  go' ptr v@(Play _ _) = terminus ptr v
+
+  go' ptr v@(PlayBuf _ _ _) = terminus ptr v
+
+  go' ptr v@(LoopBuf _ _ _ _ _) = terminus ptr v
+
+  go' ptr v@(PlayDynamicBuf _ _ _) = terminus ptr v
+
+  go' ptr v@(LoopDynamicBuf _ _ _ _ _) = terminus ptr v
+
+  go' ptr v@(Lowpass _ _ _ _ a) = passthrough ptr v a
+
+  go' ptr v@(Highpass _ _ _ _ a) = passthrough ptr v a
+
+  go' ptr v@(Bandpass _ _ _ _ a) = passthrough ptr v a
+
+  go' ptr v@(Lowshelf _ _ _ _ a) = passthrough ptr v a
+
+  go' ptr v@(Highshelf _ _ _ _ a) = passthrough ptr v a
+
+  go' ptr v@(Peaking _ _ _ _ a) = passthrough ptr v a
+
+  go' ptr v@(Notch _ _ _ _ a) = passthrough ptr v a
+
+  go' ptr v@(Allpass _ _ _ _ a) = passthrough ptr v a
+
+  go' ptr v@(Convolver _ _ a) = passthrough ptr v a
+
+  go' ptr v@(DynamicConvolver _ _ a) = passthrough ptr v a
+
+  go' ptr v@(DynamicsCompressor _ _ _ _ _ _ a) = passthrough ptr v a
+
+  go' ptr v@(SawtoothOsc _ _) = terminus ptr v
+
+  go' ptr v@(TriangleOsc _ _) = terminus ptr v
+
+  go' ptr v@(PeriodicOsc _ _ _) = terminus ptr v
+
+  go' ptr v@(DynamicPeriodicOsc _ _ _ _) = terminus ptr v
+
+  go' ptr v@(WaveShaper _ _ _ a) = passthrough ptr v a
+
+  go' ptr v@(DynamicWaveShaper _ _ _ a) = passthrough ptr v a
+
+  go' ptr v@(Dup name a f) = closurethrough ptr v a $ f DupRes
 
   go' ptr v@(SinOsc name n) = terminus ptr v
 
@@ -803,6 +1136,8 @@ audioToPtr = go (-1) M.empty
   go' ptr v@(NoSound name) = terminus ptr v
 
   go' ptr v@(SplitRes n) = terminus ptr v
+
+  go' ptr v@(DupRes) = terminus ptr v
 
   go' ptr v@(StereoPanner name n a) = passthrough ptr v a
 
@@ -818,85 +1153,166 @@ audioToPtr = go (-1) M.empty
 
   go' ptr v@(Speaker name l) = listthrough ptr v l
 
-  go' ptr v@(Splitter name a f) =
-    let
-      -- determine the inner chain
-      ic = f (fill SplitRes)
-    in
-      let
-        -- run alg on the inner chain
-        -- to get the inner result
-        ----------------------------------------------------------
-        ------------------------------------------------
-        ------------------------------
-        -----------
-        -----
-        -- go needs to have the result of this appended
-        ir = go (ptr.ptr - 1) ptr.next ic
-      in
-        let
-          maxPrev = foldl max 0 ir.p.prev
-        in
-          let
-            -- continuing down, we offset the pointer
-            -- by the number of nodes in the graph
-            -- and point to this one
-            -----------------------------------------------------------------
-            ---------------------------------------------------------
-            ----------------------------------------------
-            ------------------------------------
-            -------------------------
-            -------------
-            fr =
-              go
-                (ptr.ptr + ir.len)
-                ((map (\i -> maxPrev + 1 - i) ir.p.prev) <> (M.singleton (ptr.ptr + ir.len) 0))
-                a
-          in
-            let
-              au = au' v
-            in
-              let
-                -- problem: if fr is SplitRes
-                -- then prev is nothing
-                -- which leads to subPrev being underfull
-                -- as it just points to itself
-                -- for now, don't deal with this
-                subPrev = M.singleton (ptr.ptr + ir.len) 0 <> map (_ + 1) fr.p.prev
-              in
-                let
-                  p =
-                    merge
-                      { ptr: ptr.ptr + ir.len
-                      , prev: subPrev
-                      ----- need to pivot this to work backwards
-                      , next: map (\i -> maxPrev - i + 1) ir.p.prev
-                      , au: au.au
-                      , name: au.name
-                      }
-                      ptr
-                in
-                  { len: fr.len + ir.len + 1
-                  -- correct flat structure
-                  , flat:
-                      map
-                        (\rec -> rec { prev = M.union (map (_ + maxPrev + 1) subPrev) rec.prev })
-                        ir.flat
-                        <> fr.flat
-                        <> (M.singleton (ptr.ptr + ir.len) p)
-                  , p
-                  }
+  go' ptr v@(Splitter name a f) = closurethrough ptr v a $ f (fill SplitRes)
 
---go' ptr SplitRes =
---  { len: 1 -- not actually a node
---  , p: merge ptr { prev: M.empty :: Map Int Int, au: SplitRes', name: Nothing }
---  , flat: M.empty
---  }
 microphone :: AudioUnit D1
 microphone = Microphone Nothing
 
+class Has (a :: # Type) (s :: Symbol)
+
+instance hasInstance :: Cons s Foreign tail a => Has a s
+
+play ::
+  forall (a :: # Type) (s :: Symbol) ch.
+  Has a s =>
+  Pos ch =>
+  IsSymbol s =>
+  AudioUnit ch
+play = Play Nothing (reflectSymbol (SProxy :: SProxy s))
+
+playBuf ::
+  forall (a :: # Type) (s :: Symbol) ch.
+  Has a s =>
+  Pos ch =>
+  IsSymbol s =>
+  Number ->
+  AudioUnit ch
+playBuf = PlayBuf Nothing (reflectSymbol (SProxy :: SProxy s))
+
+loopBuf ::
+  forall (a :: # Type) (s :: Symbol) ch.
+  Has a s =>
+  Pos ch =>
+  IsSymbol s =>
+  Number ->
+  Number ->
+  Number ->
+  AudioUnit ch
+loopBuf = LoopBuf Nothing (reflectSymbol (SProxy :: SProxy s))
+
+playDynamicBuf ::
+  forall ch bch blen.
+  Pos ch =>
+  Pos bch =>
+  Pos blen =>
+  Int ->
+  Vec bch (Vec blen Number) ->
+  Number ->
+  AudioUnit ch
+playDynamicBuf i v = PlayDynamicBuf Nothing (AudioBuffer i (map V.toArray $ V.toArray v))
+
+loopDynamicBuf ::
+  forall ch bch blen.
+  Pos ch =>
+  Pos bch =>
+  Pos blen =>
+  Int ->
+  Vec bch (Vec blen Number) ->
+  Number ->
+  Number ->
+  Number ->
+  AudioUnit ch
+loopDynamicBuf i v = LoopDynamicBuf Nothing (AudioBuffer i (map V.toArray $ V.toArray v))
+
+lowpass :: forall ch. Pos ch => Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
+lowpass = Lowpass Nothing
+
+highpass :: forall ch. Pos ch => Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
+highpass = Highpass Nothing
+
+bandpass :: forall ch. Pos ch => Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
+bandpass = Bandpass Nothing
+
+lowshelf :: forall ch. Pos ch => Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
+lowshelf = Lowshelf Nothing
+
+highshelf :: forall ch. Pos ch => Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
+highshelf = Highshelf Nothing
+
+peaking :: forall ch. Pos ch => Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
+peaking = Peaking Nothing
+
+notch :: forall ch. Pos ch => Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
+notch = Notch Nothing
+
+allpass :: forall ch. Pos ch => Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
+allpass = Allpass Nothing
+
+convolver ::
+  forall (a :: # Type) (s :: Symbol) ch.
+  Has a s =>
+  Pos ch =>
+  IsSymbol s =>
+  AudioUnit ch ->
+  AudioUnit ch
+convolver = Convolver Nothing (reflectSymbol (SProxy :: SProxy s))
+
+dynamicConvolver ::
+  forall ch bch blen.
+  Pos ch =>
+  Pos bch =>
+  Pos blen =>
+  Int ->
+  Vec bch (Vec blen Number) ->
+  AudioUnit ch ->
+  AudioUnit ch
+dynamicConvolver i v = DynamicConvolver Nothing (AudioBuffer i (map V.toArray $ V.toArray v))
+
+dynamicsCompressor ::
+  forall ch.
+  Pos ch =>
+  Number -> Number -> Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
+dynamicsCompressor = DynamicsCompressor Nothing
+
+dup :: forall ch. Pos ch => AudioUnit ch -> (AudioUnit ch -> AudioUnit ch) -> AudioUnit ch
+dup DupRes f = f DupRes
+
+dup x f = Dup Nothing x f
+
+waveShaper ::
+  forall (a :: # Type) (s :: Symbol) ch.
+  Has a s =>
+  IsSymbol s =>
+  Pos ch =>
+  Oversample ->
+  AudioUnit ch ->
+  AudioUnit ch
+waveShaper = WaveShaper Nothing (reflectSymbol (SProxy :: SProxy s))
+
+dynamicWaveShaper ::
+  forall ch.
+  Pos ch =>
+  Array Number ->
+  Oversample ->
+  AudioUnit ch ->
+  AudioUnit ch
+dynamicWaveShaper = DynamicWaveShaper Nothing
+
+periodicOsc ::
+  forall (a :: # Type) (s :: Symbol).
+  Has a s =>
+  IsSymbol s =>
+  Number ->
+  AudioUnit D1
+periodicOsc n = PeriodicOsc Nothing n (reflectSymbol (SProxy :: SProxy s))
+
+dynamicPeriodicOsc ::
+  forall len.
+  Pos len =>
+  Number ->
+  Vec len Number ->
+  Vec len Number ->
+  AudioUnit D1
+dynamicPeriodicOsc n a b = DynamicPeriodicOsc Nothing n (V.toArray a) (V.toArray b)
+
 sinOsc :: Number -> AudioUnit D1
 sinOsc = SinOsc Nothing
+
+sawtoothOsc :: Number -> AudioUnit D1
+sawtoothOsc = SawtoothOsc Nothing
+
+traingleOsc :: Number -> AudioUnit D1
+traingleOsc = TriangleOsc Nothing
 
 squareOsc :: Number -> AudioUnit D1
 squareOsc = SquareOsc Nothing
@@ -957,6 +1373,52 @@ type Reconcilable
 ucomp :: AudioUnit' -> AudioUnit' -> Boolean
 ucomp Microphone' Microphone' = true
 
+ucomp (Play' s0) (Play' s1) = s0 == s1
+
+ucomp (PlayBuf' s0 _) (PlayBuf' s1 _) = s0 == s1
+
+ucomp (LoopBuf' s0 _ _ _) (LoopBuf' s1 _ _ _) = s0 == s1
+
+ucomp (PlayDynamicBuf' s0 _) (PlayDynamicBuf' s1 _) = true
+
+ucomp (LoopDynamicBuf' s0 _ _ _) (LoopDynamicBuf' s1 _ _ _) = true
+
+ucomp (Lowpass' _ _ _) (Lowpass' _ _ _) = true
+
+ucomp (Highpass' _ _ _) (Highpass' _ _ _) = true
+
+ucomp (Bandpass' _ _ _) (Bandpass' _ _ _) = true
+
+ucomp (Lowshelf' _ _ _) (Lowshelf' _ _ _) = true
+
+ucomp (Highshelf' _ _ _) (Highshelf' _ _ _) = true
+
+ucomp (Peaking' _ _ _) (Peaking' _ _ _) = true
+
+ucomp (Notch' _ _ _) (Notch' _ _ _) = true
+
+ucomp (Allpass' _ _ _) (Allpass' _ _ _) = true
+
+ucomp (Convolver' s0) (Convolver' s1) = s0 == s1
+
+ucomp (DynamicConvolver' _) (DynamicConvolver' _) = true
+
+ucomp (DynamicsCompressor' _ _ _ _ _) (DynamicsCompressor' _ _ _ _ _) = true
+
+ucomp (SawtoothOsc' _) (SawtoothOsc' _) = true
+
+ucomp (TriangleOsc' _) (TriangleOsc' _) = true
+
+ucomp (PeriodicOsc' _ s0) (PeriodicOsc' _ s1) = s0 == s1
+
+ucomp (DynamicPeriodicOsc' _ _ _) (DynamicPeriodicOsc' _ _ _) = true
+
+ucomp (WaveShaper' s0 _) (WaveShaper' s1 _) = s0 == s1
+
+ucomp (DynamicWaveShaper' _ _) (DynamicWaveShaper' _ _) = true
+
+ucomp (Dup') (Dup') = true
+
 ucomp (SinOsc' _) (SinOsc' _) = true
 
 ucomp (SquareOsc' _) (SquareOsc' _) = true
@@ -985,11 +1447,15 @@ ucomp NoSound' NoSound' = true
 
 ucomp (SplitRes' _) (SplitRes' _) = true
 
+ucomp (DupRes') (DupRes') = true
+
 ucomp _ _ = false
 
 oscMULT = 1.0 / 22100.0 :: Number
 
 gainMULT = 1.0 :: Number
+
+qMULT = 1.0 :: Number
 
 constMULT = 1.0 :: Number
 
@@ -999,8 +1465,78 @@ panMULT = 0.5 :: Number
 
 srMULT = 100.0 :: Number -- should never happen
 
+filtCoef :: Number -> Number -> Number -> Number -> Number -> Number -> Number
+filtCoef a b c x y z = (Math.abs $ a - x) * oscMULT + (Math.abs $ b - y) * qMULT + (Math.abs $ c - z) * gainMULT
+
 toCoef :: AudioUnit' -> AudioUnit' -> Number
 toCoef Microphone' Microphone' = 0.0
+
+toCoef (Lowpass' a b c) (Lowpass' x y z) = filtCoef a b c x y z
+
+toCoef (Highpass' a b c) (Highpass' x y z) = filtCoef a b c x y z
+
+toCoef (Bandpass' a b c) (Bandpass' x y z) = filtCoef a b c x y z
+
+toCoef (Lowshelf' a b c) (Lowshelf' x y z) = filtCoef a b c x y z
+
+toCoef (Highshelf' a b c) (Highshelf' x y z) = filtCoef a b c x y z
+
+toCoef (Peaking' a b c) (Peaking' x y z) = filtCoef a b c x y z
+
+toCoef (Notch' a b c) (Notch' x y z) = filtCoef a b c x y z
+
+toCoef (Allpass' a b c) (Allpass' x y z) = filtCoef a b c x y z
+
+-- we use types in the function-level constructor to gate closeness
+-- we still assess an absurd penalty just as a precaution
+-- in case the sizes don't match
+toCoef (Convolver' a) (Convolver' b) =
+  if a /= b then
+    10000.0
+  else
+    0.0
+
+toCoef (DynamicConvolver' (AudioBuffer sr0 u0)) (DynamicConvolver' (AudioBuffer sr1 u1)) =
+  if sr0 /= sr1 || (A.length u0) /= (A.length u1) then
+    10000.0
+  else
+    -- to do, make this a weighted sum dependent on size...
+    -- only will really matter if using convolvers of different lengths
+    (foldl (+) 0.0 (join (A.zipWith (A.zipWith (\a b -> Math.abs $ a - b)) u0 u1)))
+
+toCoef (DynamicsCompressor' a b c d e) (DynamicsCompressor' v w x y z) =
+  foldl (+)
+    0.0
+    (zipWith (\i j -> Math.abs $ i - j) [ a, b, c, d, e ] [ v, w, x, y, z ])
+
+toCoef (SawtoothOsc' f0) (SawtoothOsc' f1) = (Math.abs $ f0 - f1) * oscMULT
+
+toCoef (TriangleOsc' f0) (TriangleOsc' f1) = (Math.abs $ f0 - f1) * oscMULT
+
+-- todo : make periodic osc wavetable weighted?
+toCoef (PeriodicOsc' f0 _) (PeriodicOsc' f1 _) = (Math.abs $ f0 - f1) * oscMULT
+
+toCoef (DynamicPeriodicOsc' f0 q x) (DynamicPeriodicOsc' f1 r y) =
+  (Math.abs $ f0 - f1) * oscMULT
+    + foldl (+) 0.0 (A.zipWith (\a b -> Math.abs $ a - b) q r)
+    + foldl (+) 0.0 (A.zipWith (\a b -> Math.abs $ a - b) x y)
+
+toCoef (WaveShaper' l0 e0) (WaveShaper' l1 e1) =
+  ( if e0 /= e1 then
+      5.0
+    else
+      0.0
+  )
+
+toCoef (DynamicWaveShaper' l0 e0) (DynamicWaveShaper' l1 e1) =
+  ( if e0 /= e1 then
+      5.0
+    else
+      0.0
+  )
+    + foldl (+) 0.0 (A.zipWith (\a b -> Math.abs $ a - b) l0 l1)
+
+toCoef (Dup') (Dup') = 0.0
 
 toCoef (SinOsc' f0) (SinOsc' f1) = (Math.abs $ f0 - f1) * oscMULT
 
@@ -1029,6 +1565,8 @@ toCoef Speaker' Speaker' = 0.0
 toCoef NoSound' NoSound' = 0.0
 
 toCoef (SplitRes' i0) (SplitRes' i1) = (Math.abs $ toNumber (i0 - i1)) * srMULT
+
+toCoef DupRes' DupRes' = 0.0
 
 toCoef _ _ = 0.0
 
@@ -1400,12 +1938,16 @@ foreign import _glpk ::
 -- | instructions
 -- | audio context
 -- | audio stream (ie microphone)
+-- | audio sources
 -- | audio units
 -- | audio units
 foreign import touchAudio ::
+  forall (a :: # Type).
+  Homogeneous a Foreign =>
   Array Instruction ->
   Foreign ->
   Foreign ->
+  Record a ->
   Array Foreign ->
   Effect (Array Foreign)
 
@@ -1452,8 +1994,21 @@ data Instruction
   = DisconnectFrom Int Int -- id id
   | ConnectTo Int Int (Maybe (Tuple Int Int)) -- id id channelConnections
   | Shuffle (Array (Tuple Int Int)) -- id id, shuffles the map
-  | NewUnit Int AudioUnit'' (Maybe Int) -- new audio unit, maybe with channel info
-  | SetFrequency Int Number -- frequency for an osc
+  | NewUnit Int AudioUnit'' (Maybe Int) (Maybe String) -- new audio unit, maybe with channel info, maybe with a source
+  | SetFrequency Int Number -- frequency
+  | SetThreshold Int Number -- threshold
+  | SetKnee Int Number -- knee
+  | SetRatio Int Number -- ratio
+  | SetAttack Int Number -- attack
+  | SetRelease Int Number -- release
+  | SetBuffer Int Int (Array (Array Number)) -- buffer
+  | SetQ Int Number -- q
+  | SetPlaybackRate Int Number -- playback rate
+  | SetPeriodicWave Int (Array Number) (Array Number) -- periodic wave
+  | SetCurve Int (Array Number) -- curve
+  | SetOversample Int String -- oversample
+  | SetLoopStart Int Number -- loop start
+  | SetLoopEnd Int Number -- loop end
   | SetPan Int Number -- pan for pan node
   | SetGain Int Number -- gain for gain node
   | SetDelay Int Number -- delay for delay node
@@ -1472,6 +2027,25 @@ channelConstructor (Merger' l) = Just $ DL.length l
 channelConstructor (Splitter' n) = Just n
 
 channelConstructor _ = Nothing
+
+sourceConstructor :: AudioUnit' -> Maybe String
+sourceConstructor (Play' s) = Just s
+
+sourceConstructor (PlayBuf' s _) = Just s
+
+sourceConstructor (LoopBuf' s _ _ _) = Just s
+
+sourceConstructor (PeriodicOsc' _ s) = Just s
+
+sourceConstructor (WaveShaper' s _) = Just s
+
+sourceConstructor _ = Nothing
+
+os2s :: Oversample -> String
+os2s o = case o of
+  None -> "none"
+  TwoX -> "2x"
+  FourX -> "4x"
 
 describeConnection :: Reconcilable -> Reconcilable -> Map Int Int -> List (Tuple Int Int)
 describeConnection start end passage =
@@ -1551,9 +2125,19 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
   -- new units that were not in the old array
   new =
     map
-      (uncurry $ uncurry NewUnit)
+      ((uncurry <<< uncurry <<< uncurry) NewUnit)
       ( DL.catMaybes
-          ( map (\i -> map (\ptr -> (Tuple (Tuple i $ au'' ptr.au) (channelConstructor ptr.au))) $ M.lookup i cur.flat)
+          ( map
+              ( \i ->
+                  map
+                    ( \ptr ->
+                        ( Tuple
+                            (Tuple (Tuple i $ au'' ptr.au) (channelConstructor ptr.au))
+                        )
+                          (sourceConstructor ptr.au)
+                    )
+                    $ M.lookup i cur.flat
+              )
               ( DL.catMaybes
                   ( map
                       ( \k ->
@@ -1585,33 +2169,119 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
     in
       (map (uncurry $ uncurry ConnectTo) $ map (\i -> Tuple i (harmonizeCurrChannels i)) conn)
 
-  -- not clear if gating against double setting is effective
-  -- it may be more trouble than it's worth
-  -- we can always get rid of the gate if we find out it is faster to pass everything
-  -- through than to gate
-  -- the gating was added to fix problems with choppy audio, but it didn't really work
-  set' i (SinOsc' n) (SinOsc' nx) = if n /= nx then Just $ SetFrequency i n else Nothing
+  setFilter i a b c x y z =
+    [ if a /= x then Just $ SetFrequency i a else Nothing
+    , if b /= y then Just $ SetQ i b else Nothing
+    , if c /= z then Just $ SetGain i c else Nothing
+    ]
 
-  set' i (SquareOsc' n) (SquareOsc' nx) = if n /= nx then Just $ SetFrequency i n else Nothing
+  set' i (PlayBuf' _ n) (PlayBuf' _ nx) = pure $ if n /= nx then Just $ SetPlaybackRate i n else Nothing
 
-  set' i (StereoPanner' n) (StereoPanner' nx) = if n /= nx then Just $ SetPan i n else Nothing
+  set' i (LoopBuf' _ n s e) (LoopBuf' _ nx sx ex) =
+    [ if n /= nx then Just $ SetPlaybackRate i n else Nothing
+    , if s /= sx then Just $ SetLoopStart i s else Nothing
+    , if e /= ex then Just $ SetLoopEnd i e else Nothing
+    ]
 
-  set' i (Constant' n) (Constant' nx) = if n /= nx then Just $ SetOffset i n else Nothing
+  set' i (PlayDynamicBuf' b@(AudioBuffer v a) n) (PlayDynamicBuf' bx nx) =
+    [ if b /= bx then Just $ SetBuffer i v a else Nothing
+    , if n /= nx then Just $ SetPlaybackRate i n else Nothing
+    ]
 
-  set' i (Delay' n) (Delay' nx) = if n /= nx then Just $ SetDelay i n else Nothing
+  set' i (LoopDynamicBuf' b@(AudioBuffer v a) n s e) (LoopDynamicBuf' bx nx sx ex) =
+    [ if b /= bx then Just $ SetBuffer i v a else Nothing
+    , if n /= nx then Just $ SetPlaybackRate i n else Nothing
+    , if s /= sx then Just $ SetLoopStart i s else Nothing
+    , if e /= ex then Just $ SetLoopEnd i e else Nothing
+    ]
 
-  set' i (Gain' n) (Gain' nx) = if n /= nx then Just $ SetGain i n else Nothing
+  set' i (Lowpass' a b c) (Lowpass' x y z) = setFilter i a b c x y z
 
-  set' i _ _ = Nothing
+  set' i (Highpass' a b c) (Highpass' x y z) = setFilter i a b c x y z
 
-  set =
-    DL.catMaybes
-      ( map
-          ( \v ->
-              set' v.ptr v.au
-                (fromMaybe v.au $ (map _.au $ M.lookup v.ptr reversedAsMap >>= flip M.lookup prev.flat))
+  set' i (Bandpass' a b c) (Bandpass' x y z) = setFilter i a b c x y z
+
+  set' i (Allpass' a b c) (Allpass' x y z) = setFilter i a b c x y z
+
+  set' i (Highshelf' a b c) (Highshelf' x y z) = setFilter i a b c x y z
+
+  set' i (Lowshelf' a b c) (Lowshelf' x y z) = setFilter i a b c x y z
+
+  set' i (Peaking' a b c) (Peaking' x y z) = setFilter i a b c x y z
+
+  set' i (Notch' a b c) (Notch' x y z) = setFilter i a b c x y z
+
+  set' i (DynamicConvolver' b@(AudioBuffer v a)) (DynamicConvolver' bx) =
+    pure
+      $ if b /= bx then Just $ SetBuffer i v a else Nothing
+
+  set' i (DynamicsCompressor' a b c d e) (DynamicsCompressor' v w x y z) =
+    [ if a /= v then Just $ SetThreshold i a else Nothing
+    , if b /= w then Just $ SetKnee i b else Nothing
+    , if c /= x then Just $ SetRatio i c else Nothing
+    , if d /= y then Just $ SetAttack i d else Nothing
+    , if e /= z then Just $ SetRelease i e else Nothing
+    ]
+
+  set' i (SinOsc' n) (SinOsc' nx) = pure $ if n /= nx then Just $ SetFrequency i n else Nothing
+
+  set' i (SquareOsc' n) (SquareOsc' nx) = pure $ if n /= nx then Just $ SetFrequency i n else Nothing
+
+  set' i (SawtoothOsc' n) (SawtoothOsc' nx) = pure $ if n /= nx then Just $ SetFrequency i n else Nothing
+
+  set' i (TriangleOsc' n) (TriangleOsc' nx) = pure $ if n /= nx then Just $ SetFrequency i n else Nothing
+
+  set' i (PeriodicOsc' n _) (PeriodicOsc' nx _) = pure $ if n /= nx then Just $ SetFrequency i n else Nothing
+
+  set' i (DynamicPeriodicOsc' n rl im) (DynamicPeriodicOsc' nx rlx imx) =
+    [ if n /= nx then Just $ SetFrequency i n else Nothing
+    , if rl /= rlx || im /= imx then Just $ SetPeriodicWave i rl im else Nothing
+    ]
+
+  set' i (WaveShaper' _ o) (WaveShaper' _ ox) =
+    [ if o /= ox then
+        Just
+          ( SetOversample i
+              $ os2s o
           )
-          $ M.values cur.flat
+      else
+        Nothing
+    ]
+
+  set' i (DynamicWaveShaper' a o) (DynamicWaveShaper' ax ox) =
+    [ if a /= ax then Just $ SetCurve i a else Nothing
+    , if o /= ox then
+        Just
+          ( SetOversample i
+              $ os2s o
+          )
+      else
+        Nothing
+    ]
+
+  set' i (StereoPanner' n) (StereoPanner' nx) = pure $ if n /= nx then Just $ SetPan i n else Nothing
+
+  set' i (Constant' n) (Constant' nx) = pure $ if n /= nx then Just $ SetOffset i n else Nothing
+
+  set' i (Delay' n) (Delay' nx) = pure $ if n /= nx then Just $ SetDelay i n else Nothing
+
+  set' i (Gain' n) (Gain' nx) = pure $ if n /= nx then Just $ SetGain i n else Nothing
+
+  set' i _ _ = pure Nothing
+
+  -- NOTE:
+  -- roundtrip to array and back a little silly
+  -- makes it easier to type [] in set', though...
+  set =
+    (DL.catMaybes <<< DL.fromFoldable)
+      ( join
+          ( map
+              ( \v ->
+                  set' v.ptr v.au
+                    (fromMaybe v.au $ (map _.au $ M.lookup v.ptr reversedAsMap >>= flip M.lookup prev.flat))
+              )
+              $ (A.fromFoldable $ M.values cur.flat)
+          )
       )
 
 -- reconciles the previous graph with the current one
@@ -1650,25 +2320,29 @@ audioReconciliation g u f x = do
   audioReconciliation' g u ipt f
 
 -- | The main executor loop in the browser
+-- | - The scene (what we're processing)
 -- | - How many milliseconds between pings
 -- | - The audio context
 -- | - The microphone stream (which may be null)
+-- | - A record of sources
 -- | - An array of web workers with glpk.js preloaded
 -- | - A function that takes:
 -- |   - The amount of clock time execution took in MS
 -- |   - The instructions of what to do with the audio array
 -- |   - Returns a closure that does the audio magic
 runInBrowser ::
-  forall ch.
+  forall ch (a :: # Type).
+  Homogeneous a Foreign =>
   Pos ch =>
   Behavior (AudioUnit ch) ->
   Int ->
   Foreign ->
   Foreign ->
+  Record a ->
   Array Foreign ->
-  (Number -> Array Instruction -> Foreign -> Foreign -> Array Foreign -> Effect (Array Foreign)) ->
+  (Number -> Array Instruction -> Foreign -> Foreign -> Record a -> Array Foreign -> Effect (Array Foreign)) ->
   Effect (Effect Unit)
-runInBrowser scene pingEvery ctx mic workers executor = do
+runInBrowser scene pingEvery ctx mic sources workers executor = do
   reconRef <-
     new
       { grouped: M.empty
@@ -1717,7 +2391,7 @@ runInBrowser scene pingEvery ctx mic workers executor = do
                     Nothing -> pure true
                     Just instructions -> do
                       uts <- read units
-                      uts' <- executor ((unwrap <<< unInstant) inst) instructions ctx mic uts
+                      uts' <- executor ((unwrap <<< unInstant) inst) instructions ctx mic sources uts
                       write uts' units
                       write (needNow + 1) needToProcess
                       _ <- modify (M.delete needNow) instructionStash

@@ -16,15 +16,17 @@
         // null for the microphone
         offCb = PS["FRP.Behavior.Audio.Example.HelloWorld"].run(16)(audioCtx)(
           null
-        )(workers)(function (startTime) {
+        )({})(workers)(function (startTime) {
           return function (instructions) {
             return function (ctx) {
               return function (stream) {
-                return function (units) {
-                  return function () {
-                    return PS[
-                      "FRP.Behavior.Audio.Example.HelloWorld"
-                    ].touchAudio(instructions)(ctx)(stream)(units)();
+                return function (sources) {
+                  return function (units) {
+                    return function () {
+                      return PS[
+                        "FRP.Behavior.Audio.Example.HelloWorld"
+                      ].touchAudio(instructions)(ctx)(stream)(units)();
+                    };
                   };
                 };
               };
