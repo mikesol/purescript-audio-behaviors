@@ -15,9 +15,9 @@
         var now = new Date().getTime();
         var ctr = 0;
         // null for the microphone
-        offCb = PS["FRP.Behavior.Audio.Example.HelloWorld"].run(10)(audioCtx)(
-          null
-        )({})(workers)(function (startTime) {
+        offCb = PS["FRP.Behavior.Audio.Example.HelloWorld"].run(15)(10)(
+          audioCtx
+        )(null)({})(workers)(function (timeToSet) {
           return function (instructions) {
             return function (ctx) {
               return function (stream) {
@@ -26,7 +26,9 @@
                     return function () {
                       return PS[
                         "FRP.Behavior.Audio.Example.HelloWorld"
-                      ].touchAudio(instructions)(ctx)(stream)(sources)(units)();
+                      ].touchAudio(timeToSet)(instructions)(ctx)(stream)(
+                        sources
+                      )(units)();
                     };
                   };
                 };

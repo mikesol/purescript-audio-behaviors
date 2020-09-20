@@ -4,6 +4,7 @@ module FRP.Behavior.Audio
   , audioReconciliation
   , audioReconciliation'
   , audioReconciliation''
+  , AudioParameter(..)
   , AudioBuffer
   , AudioUnit
   , reconciliationToInstructionSet
@@ -83,7 +84,6 @@ import Control.Promise (Promise, toAffE)
 import Data.Array (catMaybes, filter, foldl, groupBy, head, index, length, mapWithIndex, range, replicate, snoc, sortWith, takeEnd, zipWith, (!!))
 import Data.Array as A
 import Data.Array.NonEmpty (toArray)
-import Data.DateTime.Instant (unInstant)
 import Data.Either (Either(..), either)
 import Data.Generic.Rep (class Generic)
 import Data.Generic.Rep.Show (genericShow)
@@ -95,7 +95,6 @@ import Data.List as DL
 import Data.Map (Map)
 import Data.Map as M
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
-import Data.Newtype (unwrap)
 import Data.NonEmpty (NonEmpty, (:|))
 import Data.NonEmpty as NE
 import Data.Set (member)
@@ -114,7 +113,7 @@ import Effect.Class (liftEffect)
 import Effect.Class.Console (log)
 import Effect.Exception (throw)
 import Effect.Ref (Ref, modify, modify_, new, read, write)
-import FRP.Behavior (Behavior, behavior, sampleBy, sample_)
+import FRP.Behavior (Behavior, behavior, sample_)
 import FRP.Event (Event, makeEvent, subscribe)
 import FRP.Event.Time (interval)
 import Foreign (Foreign)
@@ -513,41 +512,50 @@ instance showOversampler :: Show Oversample where
 
 derive instance eqOversample :: Eq Oversample
 
+newtype AudioParameter a
+  = AudioParameter
+  { param :: a
+  , timeOffset :: Number
+  }
+
+instance audioParameterFunctor :: Functor AudioParameter where
+  map f (AudioParameter { param, timeOffset }) = AudioParameter { param: f param, timeOffset }
+
 data AudioUnit ch
   = Microphone MString
-  | Play MString String
-  | PlayBuf MString String Number
-  | LoopBuf MString String Number Number Number
-  | PlayDynamicBuf MString AudioBuffer Number
-  | LoopDynamicBuf MString AudioBuffer Number Number Number
-  | Lowpass MString Number Number Number (AudioUnit ch)
-  | Highpass MString Number Number Number (AudioUnit ch)
-  | Bandpass MString Number Number Number (AudioUnit ch)
-  | Lowshelf MString Number Number Number (AudioUnit ch)
-  | Highshelf MString Number Number Number (AudioUnit ch)
-  | Peaking MString Number Number Number (AudioUnit ch)
-  | Notch MString Number Number Number (AudioUnit ch)
-  | Allpass MString Number Number Number (AudioUnit ch)
+  | Play MString String Number
+  | PlayBuf MString String (AudioParameter Number)
+  | LoopBuf MString String (AudioParameter Number) Number Number
+  | PlayDynamicBuf MString AudioBuffer (AudioParameter Number)
+  | LoopDynamicBuf MString AudioBuffer (AudioParameter Number) Number Number
+  | Lowpass MString (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
+  | Highpass MString (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
+  | Bandpass MString (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
+  | Lowshelf MString (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
+  | Highshelf MString (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
+  | Peaking MString (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
+  | Notch MString (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
+  | Allpass MString (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
   | Convolver MString String (AudioUnit ch)
   | DynamicConvolver MString AudioBuffer (AudioUnit ch)
-  | DynamicsCompressor MString Number Number Number Number Number (AudioUnit ch)
-  | SawtoothOsc MString Number
-  | TriangleOsc MString Number
-  | PeriodicOsc MString Number String
-  | DynamicPeriodicOsc MString Number (Array Number) (Array Number)
+  | DynamicsCompressor MString (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
+  | SawtoothOsc MString (AudioParameter Number)
+  | TriangleOsc MString (AudioParameter Number)
+  | PeriodicOsc MString (AudioParameter Number) String
+  | DynamicPeriodicOsc MString (AudioParameter Number) (Array Number) (Array Number)
   | WaveShaper MString String Oversample (AudioUnit ch)
   | DynamicWaveShaper MString (Array Number) Oversample (AudioUnit ch)
   | Dup MString (AudioUnit ch) (AudioUnit ch -> AudioUnit ch)
-  | SinOsc MString Number
-  | SquareOsc MString Number
+  | SinOsc MString (AudioParameter Number)
+  | SquareOsc MString (AudioParameter Number)
   | Splitter MString (AudioUnit ch) (Vec ch (AudioUnit D1) -> AudioUnit ch)
-  | StereoPanner MString Number (AudioUnit ch)
+  | StereoPanner MString (AudioParameter Number) (AudioUnit ch)
   | Mul MString (NonEmpty List (AudioUnit ch))
   | Add MString (NonEmpty List (AudioUnit ch))
   | Merger MString (Vec ch (AudioUnit D1))
-  | Constant MString Number
-  | Delay MString Number (AudioUnit ch)
-  | Gain MString Number (NonEmpty List (AudioUnit ch))
+  | Constant MString (AudioParameter Number)
+  | Delay MString (AudioParameter Number) (AudioUnit ch)
+  | Gain MString (AudioParameter Number) (NonEmpty List (AudioUnit ch))
   | Speaker MString (NonEmpty List (AudioUnit ch))
   | NoSound MString
   | SplitRes Int
@@ -555,40 +563,40 @@ data AudioUnit ch
 
 data AudioUnit'
   = Microphone'
-  | Play' String
-  | PlayBuf' String Number
-  | LoopBuf' String Number Number Number
-  | PlayDynamicBuf' AudioBuffer Number
-  | LoopDynamicBuf' AudioBuffer Number Number Number
-  | Lowpass' Number Number Number
-  | Highpass' Number Number Number
-  | Bandpass' Number Number Number
-  | Lowshelf' Number Number Number
-  | Highshelf' Number Number Number
-  | Peaking' Number Number Number
-  | Notch' Number Number Number
-  | Allpass' Number Number Number
+  | Play' String Number
+  | PlayBuf' String (AudioParameter Number)
+  | LoopBuf' String (AudioParameter Number) Number Number
+  | PlayDynamicBuf' AudioBuffer (AudioParameter Number)
+  | LoopDynamicBuf' AudioBuffer (AudioParameter Number) Number Number
+  | Lowpass' (AudioParameter Number) (AudioParameter Number) (AudioParameter Number)
+  | Highpass' (AudioParameter Number) (AudioParameter Number) (AudioParameter Number)
+  | Bandpass' (AudioParameter Number) (AudioParameter Number) (AudioParameter Number)
+  | Lowshelf' (AudioParameter Number) (AudioParameter Number) (AudioParameter Number)
+  | Highshelf' (AudioParameter Number) (AudioParameter Number) (AudioParameter Number)
+  | Peaking' (AudioParameter Number) (AudioParameter Number) (AudioParameter Number)
+  | Notch' (AudioParameter Number) (AudioParameter Number) (AudioParameter Number)
+  | Allpass' (AudioParameter Number) (AudioParameter Number) (AudioParameter Number)
   | Convolver' String
   | DynamicConvolver' AudioBuffer
-  | DynamicsCompressor' Number Number Number Number Number
-  | SawtoothOsc' Number
-  | TriangleOsc' Number
-  | PeriodicOsc' Number String
-  | DynamicPeriodicOsc' Number (Array Number) (Array Number)
+  | DynamicsCompressor' (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioParameter Number)
+  | SawtoothOsc' (AudioParameter Number)
+  | TriangleOsc' (AudioParameter Number)
+  | PeriodicOsc' (AudioParameter Number) String
+  | DynamicPeriodicOsc' (AudioParameter Number) (Array Number) (Array Number)
   | WaveShaper' String Oversample
   | DynamicWaveShaper' (Array Number) Oversample
   | Dup'
-  | SinOsc' Number
-  | SquareOsc' Number
+  | SinOsc' (AudioParameter Number)
+  | SquareOsc' (AudioParameter Number)
   | Splitter' Int
-  | StereoPanner' Number
+  | StereoPanner' (AudioParameter Number)
   | Mul'
   | Add'
   | Swap'
   | Merger' (List Int)
-  | Constant' Number
-  | Delay' Number
-  | Gain' Number
+  | Constant' (AudioParameter Number)
+  | Delay' (AudioParameter Number)
+  | Gain' (AudioParameter Number)
   | Speaker'
   | NoSound'
   | SplitRes' Int
@@ -655,7 +663,7 @@ instance ordAudioUnit'' :: Ord AudioUnit'' where
 au' :: forall ch. Pos ch => AudioUnit ch -> { au :: AudioUnit', name :: MString }
 au' (Microphone name) = { au: Microphone', name }
 
-au' (Play name file) = { au: Play' file, name }
+au' (Play name file timingHack) = { au: Play' file timingHack, name }
 
 au' (PlayBuf name buf speed) = { au: PlayBuf' buf speed, name }
 
@@ -737,7 +745,7 @@ au' DupRes = { au: DupRes', name: Nothing }
 au'' :: AudioUnit' -> AudioUnit''
 au'' Microphone' = Microphone''
 
-au'' (Play' _) = Play''
+au'' (Play' _ _) = Play''
 
 au'' (PlayBuf' _ _) = PlayBuf''
 
@@ -816,45 +824,45 @@ au'' DupRes' = DupRes''
 tagToAU :: AudioUnit'' -> AudioUnit'
 tagToAU Microphone'' = Microphone'
 
-tagToAU Play'' = Play' ""
+tagToAU Play'' = Play' "" 0.0
 
-tagToAU PlayBuf'' = PlayBuf' "" (-1.0)
+tagToAU PlayBuf'' = PlayBuf' "" (ap_ (-1.0))
 
-tagToAU LoopBuf'' = LoopBuf' "" (-1.0) (-1.0) (-1.0)
+tagToAU LoopBuf'' = LoopBuf' "" (ap_ (-1.0)) (-1.0) (-1.0)
 
-tagToAU PlayDynamicBuf'' = PlayDynamicBuf' (AudioBuffer 0 [ [] ]) (-1.0)
+tagToAU PlayDynamicBuf'' = PlayDynamicBuf' (AudioBuffer 0 [ [] ]) (ap_ (-1.0))
 
-tagToAU LoopDynamicBuf'' = LoopDynamicBuf' (AudioBuffer 0 [ [] ]) (-1.0) (-1.0) (-1.0)
+tagToAU LoopDynamicBuf'' = LoopDynamicBuf' (AudioBuffer 0 [ [] ]) (ap_ (-1.0)) (-1.0) (-1.0)
 
-tagToAU Lowpass'' = Lowpass' (-1.0) (-1.0) (-1.0)
+tagToAU Lowpass'' = Lowpass' (ap_ (-1.0)) (ap_ (-1.0)) (ap_ (-1.0))
 
-tagToAU Highpass'' = Highpass' (-1.0) (-1.0) (-1.0)
+tagToAU Highpass'' = Highpass' (ap_ (-1.0)) (ap_ (-1.0)) (ap_ (-1.0))
 
-tagToAU Bandpass'' = Bandpass' (-1.0) (-1.0) (-1.0)
+tagToAU Bandpass'' = Bandpass' (ap_ (-1.0)) (ap_ (-1.0)) (ap_ (-1.0))
 
-tagToAU Lowshelf'' = Lowshelf' (-1.0) (-1.0) (-1.0)
+tagToAU Lowshelf'' = Lowshelf' (ap_ (-1.0)) (ap_ (-1.0)) (ap_ (-1.0))
 
-tagToAU Highshelf'' = Highshelf' (-1.0) (-1.0) (-1.0)
+tagToAU Highshelf'' = Highshelf' (ap_ (-1.0)) (ap_ (-1.0)) (ap_ (-1.0))
 
-tagToAU Peaking'' = Peaking' (-1.0) (-1.0) (-1.0)
+tagToAU Peaking'' = Peaking' (ap_ (-1.0)) (ap_ (-1.0)) (ap_ (-1.0))
 
-tagToAU Notch'' = Notch' (-1.0) (-1.0) (-1.0)
+tagToAU Notch'' = Notch' (ap_ (-1.0)) (ap_ (-1.0)) (ap_ (-1.0))
 
-tagToAU Allpass'' = Allpass' (-1.0) (-1.0) (-1.0)
+tagToAU Allpass'' = Allpass' (ap_ (-1.0)) (ap_ (-1.0)) (ap_ (-1.0))
 
 tagToAU Convolver'' = Convolver' ""
 
 tagToAU DynamicConvolver'' = DynamicConvolver' (AudioBuffer 0 [ [] ])
 
-tagToAU DynamicsCompressor'' = DynamicsCompressor' (-1.0) (-1.0) (-1.0) (-1.0) (-1.0)
+tagToAU DynamicsCompressor'' = DynamicsCompressor' (ap_ (-1.0)) (ap_ (-1.0)) (ap_ (-1.0)) (ap_ (-1.0)) (ap_ (-1.0))
 
-tagToAU SawtoothOsc'' = SawtoothOsc' 50000.0
+tagToAU SawtoothOsc'' = SawtoothOsc' (ap_ 50000.0)
 
-tagToAU TriangleOsc'' = TriangleOsc' 50000.0
+tagToAU TriangleOsc'' = TriangleOsc' (ap_ 50000.0)
 
-tagToAU PeriodicOsc'' = PeriodicOsc' 50000.0 ""
+tagToAU PeriodicOsc'' = PeriodicOsc' (ap_ 50000.0) ""
 
-tagToAU DynamicPeriodicOsc'' = DynamicPeriodicOsc' 50000.0 [] []
+tagToAU DynamicPeriodicOsc'' = DynamicPeriodicOsc' (ap_ 50000.0) [] []
 
 tagToAU WaveShaper'' = WaveShaper' "" None
 
@@ -862,13 +870,13 @@ tagToAU DynamicWaveShaper'' = DynamicWaveShaper' [] None
 
 tagToAU Dup'' = Dup'
 
-tagToAU SinOsc'' = SinOsc' 50000.0
+tagToAU SinOsc'' = SinOsc' (ap_ 50000.0)
 
-tagToAU SquareOsc'' = SquareOsc' 50000.0
+tagToAU SquareOsc'' = SquareOsc' (ap_ 50000.0)
 
 tagToAU Splitter'' = Splitter' (-1)
 
-tagToAU StereoPanner'' = (StereoPanner' 3.0)
+tagToAU StereoPanner'' = (StereoPanner' (ap_ 3.0))
 
 tagToAU Mul'' = Mul'
 
@@ -878,11 +886,11 @@ tagToAU Swap'' = Swap'
 
 tagToAU Merger'' = Merger' Nil
 
-tagToAU Constant'' = Constant' 1000.0
+tagToAU Constant'' = Constant' (ap_ 1000.0)
 
-tagToAU Delay'' = Delay' 1000.0
+tagToAU Delay'' = Delay' (ap_ 1000.0)
 
-tagToAU Gain'' = Gain' 1000.0
+tagToAU Gain'' = Gain' (ap_ 1000.0)
 
 tagToAU Speaker'' = Speaker'
 
@@ -1108,7 +1116,7 @@ audioToPtr = go (-1) M.empty
   go' :: forall ch. Pos ch => PtrInfo' -> AudioUnit ch -> AlgStep
   go' ptr v@(Microphone name) = terminus ptr v
 
-  go' ptr v@(Play _ _) = terminus ptr v
+  go' ptr v@(Play _ _ _) = terminus ptr v
 
   go' ptr v@(PlayBuf _ _ _) = terminus ptr v
 
@@ -1189,13 +1197,19 @@ class Has (a :: # Type) (s :: Symbol)
 
 instance hasInstance :: Cons s Foreign tail a => Has a s
 
+apP :: forall a. AudioParameter a -> a
+apP (AudioParameter { param }) = param
+
+apT :: forall a. AudioParameter a -> Number
+apT (AudioParameter { timeOffset }) = timeOffset
+
 play ::
   forall (a :: # Type) (s :: Symbol) ch.
   Has a s =>
   Pos ch =>
   IsSymbol s =>
   AudioUnit ch
-play = Play Nothing (reflectSymbol (SProxy :: SProxy s))
+play = Play Nothing (reflectSymbol (SProxy :: SProxy s)) 0.0
 
 playBuf ::
   forall (a :: # Type) (s :: Symbol) ch.
@@ -1204,7 +1218,7 @@ playBuf ::
   IsSymbol s =>
   Number ->
   AudioUnit ch
-playBuf = PlayBuf Nothing (reflectSymbol (SProxy :: SProxy s))
+playBuf n = PlayBuf Nothing (reflectSymbol (SProxy :: SProxy s)) (ap_ n)
 
 loopBuf ::
   forall (a :: # Type) (s :: Symbol) ch.
@@ -1215,7 +1229,7 @@ loopBuf ::
   Number ->
   Number ->
   AudioUnit ch
-loopBuf = LoopBuf Nothing (reflectSymbol (SProxy :: SProxy s))
+loopBuf a b c = LoopBuf Nothing (reflectSymbol (SProxy :: SProxy s)) (ap_ a) b c
 
 playDynamicBuf ::
   forall ch bch blen.
@@ -1226,7 +1240,7 @@ playDynamicBuf ::
   Vec bch (Vec blen Number) ->
   Number ->
   AudioUnit ch
-playDynamicBuf i v = PlayDynamicBuf Nothing (AudioBuffer i (map V.toArray $ V.toArray v))
+playDynamicBuf i v a = PlayDynamicBuf Nothing (AudioBuffer i (map V.toArray $ V.toArray v)) (ap_ a)
 
 loopDynamicBuf ::
   forall ch bch blen.
@@ -1239,31 +1253,31 @@ loopDynamicBuf ::
   Number ->
   Number ->
   AudioUnit ch
-loopDynamicBuf i v = LoopDynamicBuf Nothing (AudioBuffer i (map V.toArray $ V.toArray v))
+loopDynamicBuf i v a b c = LoopDynamicBuf Nothing (AudioBuffer i (map V.toArray $ V.toArray v)) (ap_ a) b c
 
 lowpass :: forall ch. Pos ch => Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
-lowpass = Lowpass Nothing
+lowpass a b c = Lowpass Nothing (ap_ a) (ap_ b) (ap_ c)
 
 highpass :: forall ch. Pos ch => Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
-highpass = Highpass Nothing
+highpass a b c = Highpass Nothing (ap_ a) (ap_ b) (ap_ c)
 
 bandpass :: forall ch. Pos ch => Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
-bandpass = Bandpass Nothing
+bandpass a b c = Bandpass Nothing (ap_ a) (ap_ b) (ap_ c)
 
 lowshelf :: forall ch. Pos ch => Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
-lowshelf = Lowshelf Nothing
+lowshelf a b c = Lowshelf Nothing (ap_ a) (ap_ b) (ap_ c)
 
 highshelf :: forall ch. Pos ch => Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
-highshelf = Highshelf Nothing
+highshelf a b c = Highshelf Nothing (ap_ a) (ap_ b) (ap_ c)
 
 peaking :: forall ch. Pos ch => Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
-peaking = Peaking Nothing
+peaking a b c = Peaking Nothing (ap_ a) (ap_ b) (ap_ c)
 
 notch :: forall ch. Pos ch => Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
-notch = Notch Nothing
+notch a b c = Notch Nothing (ap_ a) (ap_ b) (ap_ c)
 
 allpass :: forall ch. Pos ch => Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
-allpass = Allpass Nothing
+allpass a b c = Allpass Nothing (ap_ a) (ap_ b) (ap_ c)
 
 convolver ::
   forall (a :: # Type) (s :: Symbol) ch.
@@ -1289,12 +1303,43 @@ dynamicsCompressor ::
   forall ch.
   Pos ch =>
   Number -> Number -> Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
-dynamicsCompressor = DynamicsCompressor Nothing
+dynamicsCompressor a b c d e = DynamicsCompressor Nothing (ap_ a) (ap_ b) (ap_ c) (ap_ d) (ap_ e)
 
 dup :: forall ch. Pos ch => AudioUnit ch -> (AudioUnit ch -> AudioUnit ch) -> AudioUnit ch
 dup DupRes f = f DupRes
 
 dup x f = Dup Nothing x f
+
+ap_ :: forall a. a -> AudioParameter a
+ap_ a =
+  AudioParameter
+    { param: a
+    , timeOffset: 0.0
+    }
+
+instance showAPNum :: Show (AudioParameter Number) where
+  show (AudioParameter s) = show s
+
+instance showAPANum :: Show (AudioParameter (Array Number)) where
+  show (AudioParameter s) = show s
+
+instance showAPB :: Show (AudioParameter AudioBuffer) where
+  show (AudioParameter s) = show s
+
+instance showAPO :: Show (AudioParameter Oversample) where
+  show (AudioParameter s) = show s
+
+instance eqAPNum :: Eq (AudioParameter Number) where
+  eq (AudioParameter s) (AudioParameter r) = s == r
+
+instance eqAPANum :: Eq (AudioParameter (Array Number)) where
+  eq (AudioParameter s) (AudioParameter r) = s == r
+
+instance eqAPB :: Eq (AudioParameter AudioBuffer) where
+  eq (AudioParameter s) (AudioParameter r) = s == r
+
+instance eqAPO :: Eq (AudioParameter Oversample) where
+  eq (AudioParameter s) (AudioParameter r) = s == r
 
 waveShaper ::
   forall (a :: # Type) (s :: Symbol) ch.
@@ -1321,7 +1366,7 @@ periodicOsc ::
   IsSymbol s =>
   Number ->
   AudioUnit D1
-periodicOsc n = PeriodicOsc Nothing n (reflectSymbol (SProxy :: SProxy s))
+periodicOsc n = PeriodicOsc Nothing (ap_ n) (reflectSymbol (SProxy :: SProxy s))
 
 dynamicPeriodicOsc ::
   forall len.
@@ -1330,19 +1375,19 @@ dynamicPeriodicOsc ::
   Vec len Number ->
   Vec len Number ->
   AudioUnit D1
-dynamicPeriodicOsc n a b = DynamicPeriodicOsc Nothing n (V.toArray a) (V.toArray b)
+dynamicPeriodicOsc n a b = DynamicPeriodicOsc Nothing (ap_ n) (V.toArray a) (V.toArray b)
 
 sinOsc :: Number -> AudioUnit D1
-sinOsc = SinOsc Nothing
+sinOsc n = SinOsc Nothing (ap_ n)
 
 sawtoothOsc :: Number -> AudioUnit D1
-sawtoothOsc = SawtoothOsc Nothing
+sawtoothOsc n = SawtoothOsc Nothing (ap_ n)
 
 traingleOsc :: Number -> AudioUnit D1
-traingleOsc = TriangleOsc Nothing
+traingleOsc n = TriangleOsc Nothing (ap_ n)
 
 squareOsc :: Number -> AudioUnit D1
-squareOsc = SquareOsc Nothing
+squareOsc n = SquareOsc Nothing (ap_ n)
 
 splitter :: forall ch. Pos ch => AudioUnit ch -> (Vec ch (AudioUnit D1) -> AudioUnit ch) -> AudioUnit ch
 splitter (SplitRes i) f = f (fill $ const (SplitRes i))
@@ -1350,7 +1395,7 @@ splitter (SplitRes i) f = f (fill $ const (SplitRes i))
 splitter x f = Splitter Nothing x f
 
 panner :: Number -> AudioUnit D2 -> AudioUnit D2
-panner = StereoPanner Nothing
+panner n = StereoPanner Nothing (ap_ n)
 
 speaker :: forall ch. Pos ch => NonEmpty List (AudioUnit ch) -> AudioUnit ch
 speaker = Speaker Nothing
@@ -1372,20 +1417,20 @@ add :: forall ch. Pos ch => NonEmpty List (AudioUnit ch) -> AudioUnit ch
 add = Add Nothing
 
 constant :: Number -> AudioUnit D1
-constant = Constant Nothing
+constant n = Constant Nothing (ap_ n)
 
 delay :: forall ch. Pos ch => Number -> AudioUnit ch -> AudioUnit ch
-delay = Delay Nothing
+delay n = Delay Nothing (ap_ n)
 
 gain :: forall ch. Pos ch => Number -> NonEmpty List (AudioUnit ch) -> AudioUnit ch
-gain = Gain Nothing
+gain n = Gain Nothing (ap_ n)
 
 gain' :: forall ch. Pos ch => Number -> AudioUnit ch -> AudioUnit ch
-gain' n = Gain Nothing n <<< NE.singleton
+gain' n = Gain Nothing (ap_ n) <<< NE.singleton
 
 instance semiringAudioUnit :: Semiring (AudioUnit ch) where
-  zero = Constant Nothing 0.0
-  one = Constant Nothing 1.0
+  zero = Constant Nothing (ap_ 0.0)
+  one = Constant Nothing (ap_ 1.0)
   add a b = Add Nothing (a :| (b : Nil))
   mul a b = Mul Nothing (a :| (b : Nil))
 
@@ -1400,7 +1445,7 @@ type Reconcilable
 ucomp :: AudioUnit' -> AudioUnit' -> Boolean
 ucomp Microphone' Microphone' = true
 
-ucomp (Play' s0) (Play' s1) = s0 == s1
+ucomp (Play' s0 _) (Play' s1 _) = s0 == s1
 
 ucomp (PlayBuf' s0 _) (PlayBuf' s1 _) = s0 == s1
 
@@ -1492,8 +1537,11 @@ panMULT = 0.5 :: Number
 
 srMULT = 100.0 :: Number -- should never happen
 
-filtCoef :: Number -> Number -> Number -> Number -> Number -> Number -> Number
-filtCoef a b c x y z = (Math.abs $ a - x) * oscMULT + (Math.abs $ b - y) * qMULT + (Math.abs $ c - z) * gainMULT
+filtCoef :: AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> Number
+filtCoef (AudioParameter { param: a }) (AudioParameter { param: b }) (AudioParameter { param: c }) (AudioParameter { param: x }) (AudioParameter { param: y }) (AudioParameter { param: z }) = (Math.abs $ a - x) * oscMULT + (Math.abs $ b - y) * qMULT + (Math.abs $ c - z) * gainMULT
+
+twoCoef :: AudioParameter Number -> AudioParameter Number -> Number
+twoCoef (AudioParameter { param: f0 }) (AudioParameter { param: f1 }) = (Math.abs $ f0 - f1)
 
 toCoef :: AudioUnit' -> AudioUnit' -> Number
 toCoef Microphone' Microphone' = 0.0
@@ -1531,20 +1579,20 @@ toCoef (DynamicConvolver' (AudioBuffer sr0 u0)) (DynamicConvolver' (AudioBuffer 
     -- only will really matter if using convolvers of different lengths
     (foldl (+) 0.0 (join (A.zipWith (A.zipWith (\a b -> Math.abs $ a - b)) u0 u1)))
 
-toCoef (DynamicsCompressor' a b c d e) (DynamicsCompressor' v w x y z) =
+toCoef (DynamicsCompressor' (AudioParameter { param: a }) (AudioParameter { param: b }) (AudioParameter { param: c }) (AudioParameter { param: d }) (AudioParameter { param: e })) (DynamicsCompressor' (AudioParameter { param: v }) (AudioParameter { param: w }) (AudioParameter { param: x }) (AudioParameter { param: y }) (AudioParameter { param: z })) =
   foldl (+)
     0.0
     (zipWith (\i j -> Math.abs $ i - j) [ a, b, c, d, e ] [ v, w, x, y, z ])
 
-toCoef (SawtoothOsc' f0) (SawtoothOsc' f1) = (Math.abs $ f0 - f1) * oscMULT
+toCoef (SawtoothOsc' f0) (SawtoothOsc' f1) = oscMULT * twoCoef f0 f1
 
-toCoef (TriangleOsc' f0) (TriangleOsc' f1) = (Math.abs $ f0 - f1) * oscMULT
+toCoef (TriangleOsc' f0) (TriangleOsc' f1) = oscMULT * twoCoef f0 f1
 
 -- todo : make periodic osc wavetable weighted?
-toCoef (PeriodicOsc' f0 _) (PeriodicOsc' f1 _) = (Math.abs $ f0 - f1) * oscMULT
+toCoef (PeriodicOsc' f0 _) (PeriodicOsc' f1 _) = oscMULT * twoCoef f0 f1
 
 toCoef (DynamicPeriodicOsc' f0 q x) (DynamicPeriodicOsc' f1 r y) =
-  (Math.abs $ f0 - f1) * oscMULT
+  (oscMULT * twoCoef f0 f1)
     + foldl (+) 0.0 (A.zipWith (\a b -> Math.abs $ a - b) q r)
     + foldl (+) 0.0 (A.zipWith (\a b -> Math.abs $ a - b) x y)
 
@@ -1565,13 +1613,13 @@ toCoef (DynamicWaveShaper' l0 e0) (DynamicWaveShaper' l1 e1) =
 
 toCoef (Dup') (Dup') = 0.0
 
-toCoef (SinOsc' f0) (SinOsc' f1) = (Math.abs $ f0 - f1) * oscMULT
+toCoef (SinOsc' f0) (SinOsc' f1) = oscMULT * twoCoef f0 f1
 
-toCoef (SquareOsc' f0) (SquareOsc' f1) = (Math.abs $ f0 - f1) * oscMULT
+toCoef (SquareOsc' f0) (SquareOsc' f1) = oscMULT * twoCoef f0 f1
 
 toCoef (Splitter' _) (Splitter' _) = 0.0
 
-toCoef (StereoPanner' p0) (StereoPanner' p1) = (Math.abs $ p0 - p1) * panMULT
+toCoef (StereoPanner' p0) (StereoPanner' p1) = panMULT * twoCoef p0 p1
 
 toCoef Mul' Mul' = 0.0
 
@@ -1581,11 +1629,11 @@ toCoef Swap' Swap' = 0.0
 
 toCoef (Merger' _) (Merger' _) = 0.0
 
-toCoef (Constant' c0) (Constant' c1) = (Math.abs $ c0 - c1) * constMULT
+toCoef (Constant' c0) (Constant' c1) = constMULT * twoCoef c0 c1
 
-toCoef (Delay' d0) (Delay' d1) = (Math.abs $ d0 - d1) * delayMULT
+toCoef (Delay' d0) (Delay' d1) = delayMULT * twoCoef d0 d1
 
-toCoef (Gain' g0) (Gain' g1) = (Math.abs $ g0 - g1) * gainMULT
+toCoef (Gain' g0) (Gain' g1) = gainMULT * twoCoef g0 g1
 
 toCoef Speaker' Speaker' = 0.0
 
@@ -1962,6 +2010,7 @@ foreign import _glpk ::
   (Object Int -> Either String (Object Int)) ->
   Either String (Object Int)
 
+-- | the base time to set at
 -- | instructions
 -- | audio context
 -- | audio stream (ie microphone)
@@ -1971,6 +2020,7 @@ foreign import _glpk ::
 foreign import touchAudio ::
   forall (a :: # Type).
   Homogeneous a Foreign =>
+  Number ->
   Array Instruction ->
   Foreign ->
   Foreign ->
@@ -2022,25 +2072,25 @@ data Instruction
   | DisconnectFrom Int Int -- id id
   | ConnectTo Int Int (Maybe (Tuple Int Int)) -- id id channelConnections
   | Shuffle (Array (Tuple Int Int)) -- id id, shuffles the map
-  | NewUnit Int AudioUnit'' (Maybe Int) (Maybe String) -- new audio unit, maybe with channel info, maybe with a source
-  | SetFrequency Int Number -- frequency
-  | SetThreshold Int Number -- threshold
-  | SetKnee Int Number -- knee
-  | SetRatio Int Number -- ratio
-  | SetAttack Int Number -- attack
-  | SetRelease Int Number -- release
+  | NewUnit Int AudioUnit'' (Maybe Int) (Maybe String) (Maybe Number) -- new audio unit, maybe with channel info, maybe with a source, maybe with a start time
+  | SetFrequency Int Number Number -- frequency
+  | SetThreshold Int Number Number -- threshold
+  | SetKnee Int Number Number -- knee
+  | SetRatio Int Number Number -- ratio
+  | SetAttack Int Number Number -- attack
+  | SetRelease Int Number Number -- release
   | SetBuffer Int Int (Array (Array Number)) -- buffer
-  | SetQ Int Number -- q
-  | SetPlaybackRate Int Number -- playback rate
+  | SetQ Int Number Number -- q
+  | SetPlaybackRate Int Number Number -- playback rate
   | SetPeriodicWave Int (Array Number) (Array Number) -- periodic wave
   | SetCurve Int (Array Number) -- curve
   | SetOversample Int String -- oversample
   | SetLoopStart Int Number -- loop start
   | SetLoopEnd Int Number -- loop end
-  | SetPan Int Number -- pan for pan node
-  | SetGain Int Number -- gain for gain node
-  | SetDelay Int Number -- delay for delay node
-  | SetOffset Int Number -- offset for const node
+  | SetPan Int Number Number -- pan for pan node
+  | SetGain Int Number Number -- gain for gain node
+  | SetDelay Int Number Number -- delay for delay node
+  | SetOffset Int Number Number -- offset for const node
 
 derive instance genericInstruction :: Generic Instruction _
 
@@ -2057,7 +2107,7 @@ channelConstructor (Splitter' n) = Just n
 channelConstructor _ = Nothing
 
 sourceConstructor :: AudioUnit' -> Maybe String
-sourceConstructor (Play' s) = Just s
+sourceConstructor (Play' s _) = Just s
 
 sourceConstructor (PlayBuf' s _) = Just s
 
@@ -2069,11 +2119,41 @@ sourceConstructor (WaveShaper' s _) = Just s
 
 sourceConstructor _ = Nothing
 
+startConstructor :: AudioUnit' -> Maybe Number
+startConstructor (Play' n timingHack) = Just timingHack
+
+startConstructor (PlayBuf' _ n) = Just (apT n)
+
+startConstructor (LoopBuf' _ n _ _) = Just (apT n)
+
+startConstructor (PlayDynamicBuf' _ n) = Just (apT n)
+
+startConstructor (LoopDynamicBuf' _ n _ _) = Just (apT n)
+
+startConstructor (SawtoothOsc' n) = Just (apT n)
+
+startConstructor (TriangleOsc' n) = Just (apT n)
+
+startConstructor (PeriodicOsc' n _) = Just (apT n)
+
+startConstructor (DynamicPeriodicOsc' n _ _) = Just (apT n)
+
+startConstructor (SinOsc' n) = Just (apT n)
+
+startConstructor (SquareOsc' n) = Just (apT n)
+
+startConstructor (Constant' n) = Just (apT n)
+
+startConstructor _ = Nothing
+
 os2s :: Oversample -> String
 os2s o = case o of
   None -> "none"
   TwoX -> "2x"
   FourX -> "4x"
+
+napeq :: forall a. Eq a => AudioParameter a -> AudioParameter a -> Boolean
+napeq (AudioParameter { param: a }) (AudioParameter { param: b }) = a /= b
 
 describeConnection :: Reconcilable -> Reconcilable -> Map Int Int -> List (Tuple Int Int)
 describeConnection start end passage =
@@ -2113,7 +2193,7 @@ describeConnection start end passage =
 isGen :: AudioUnit' -> Boolean
 isGen (Microphone') = true
 
-isGen (Play' _) = true
+isGen (Play' _ _) = true
 
 isGen (PlayBuf' _ _) = true
 
@@ -2191,16 +2271,19 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
   -- new units that were not in the old array
   new =
     map
-      ((uncurry <<< uncurry <<< uncurry) NewUnit)
+      ((uncurry <<< uncurry <<< uncurry <<< uncurry) NewUnit)
       ( DL.catMaybes
           ( map
               ( \i ->
                   map
                     ( \ptr ->
                         ( Tuple
-                            (Tuple (Tuple i $ au'' ptr.au) (channelConstructor ptr.au))
+                            ( Tuple
+                                (Tuple (Tuple i $ au'' ptr.au) (channelConstructor ptr.au))
+                                (sourceConstructor ptr.au)
+                            )
+                            (startConstructor ptr.au)
                         )
-                          (sourceConstructor ptr.au)
                     )
                     $ M.lookup i cur.flat
               )
@@ -2236,27 +2319,27 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
       (map (uncurry $ uncurry ConnectTo) $ map (\i -> Tuple i (harmonizeCurrChannels i)) conn)
 
   setFilter i a b c x y z =
-    [ if a /= x then Just $ SetFrequency i a else Nothing
-    , if b /= y then Just $ SetQ i b else Nothing
-    , if c /= z then Just $ SetGain i c else Nothing
+    [ if napeq a x then Just $ SetFrequency i (apP a) (apT a) else Nothing
+    , if napeq b y then Just $ SetQ i (apP b) (apT b) else Nothing
+    , if napeq c z then Just $ SetGain i (apP c) (apT c) else Nothing
     ]
 
-  set' i (PlayBuf' _ n) (PlayBuf' _ nx) = pure $ if n /= nx then Just $ SetPlaybackRate i n else Nothing
+  set' i (PlayBuf' _ n) (PlayBuf' _ nx) = pure $ if napeq n nx then Just $ SetPlaybackRate i (apP n) (apT n) else Nothing
 
   set' i (LoopBuf' _ n s e) (LoopBuf' _ nx sx ex) =
-    [ if n /= nx then Just $ SetPlaybackRate i n else Nothing
+    [ if napeq n nx then Just $ SetPlaybackRate i (apP n) (apT n) else Nothing
     , if s /= sx then Just $ SetLoopStart i s else Nothing
     , if e /= ex then Just $ SetLoopEnd i e else Nothing
     ]
 
   set' i (PlayDynamicBuf' b@(AudioBuffer v a) n) (PlayDynamicBuf' bx nx) =
     [ if b /= bx then Just $ SetBuffer i v a else Nothing
-    , if n /= nx then Just $ SetPlaybackRate i n else Nothing
+    , if napeq n nx then Just $ SetPlaybackRate i (apP n) (apT n) else Nothing
     ]
 
   set' i (LoopDynamicBuf' b@(AudioBuffer v a) n s e) (LoopDynamicBuf' bx nx sx ex) =
     [ if b /= bx then Just $ SetBuffer i v a else Nothing
-    , if n /= nx then Just $ SetPlaybackRate i n else Nothing
+    , if napeq n nx then Just $ SetPlaybackRate i (apP n) (apT n) else Nothing
     , if s /= sx then Just $ SetLoopStart i s else Nothing
     , if e /= ex then Just $ SetLoopEnd i e else Nothing
     ]
@@ -2282,25 +2365,25 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
       $ if b /= bx then Just $ SetBuffer i v a else Nothing
 
   set' i (DynamicsCompressor' a b c d e) (DynamicsCompressor' v w x y z) =
-    [ if a /= v then Just $ SetThreshold i a else Nothing
-    , if b /= w then Just $ SetKnee i b else Nothing
-    , if c /= x then Just $ SetRatio i c else Nothing
-    , if d /= y then Just $ SetAttack i d else Nothing
-    , if e /= z then Just $ SetRelease i e else Nothing
+    [ if napeq a v then Just $ SetThreshold i (apP a) (apT a) else Nothing
+    , if napeq b w then Just $ SetKnee i (apP b) (apT b) else Nothing
+    , if napeq c x then Just $ SetRatio i (apP c) (apT c) else Nothing
+    , if napeq d y then Just $ SetAttack i (apP d) (apT d) else Nothing
+    , if napeq e z then Just $ SetRelease i (apP e) (apT e) else Nothing
     ]
 
-  set' i (SinOsc' n) (SinOsc' nx) = pure $ if n /= nx then Just $ SetFrequency i n else Nothing
+  set' i (SinOsc' n) (SinOsc' nx) = pure $ if napeq n nx then Just $ SetFrequency i (apP n) (apT n) else Nothing
 
-  set' i (SquareOsc' n) (SquareOsc' nx) = pure $ if n /= nx then Just $ SetFrequency i n else Nothing
+  set' i (SquareOsc' n) (SquareOsc' nx) = pure $ if napeq n nx then Just $ SetFrequency i (apP n) (apT n) else Nothing
 
-  set' i (SawtoothOsc' n) (SawtoothOsc' nx) = pure $ if n /= nx then Just $ SetFrequency i n else Nothing
+  set' i (SawtoothOsc' n) (SawtoothOsc' nx) = pure $ if napeq n nx then Just $ SetFrequency i (apP n) (apT n) else Nothing
 
-  set' i (TriangleOsc' n) (TriangleOsc' nx) = pure $ if n /= nx then Just $ SetFrequency i n else Nothing
+  set' i (TriangleOsc' n) (TriangleOsc' nx) = pure $ if napeq n nx then Just $ SetFrequency i (apP n) (apT n) else Nothing
 
-  set' i (PeriodicOsc' n _) (PeriodicOsc' nx _) = pure $ if n /= nx then Just $ SetFrequency i n else Nothing
+  set' i (PeriodicOsc' n _) (PeriodicOsc' nx _) = pure $ if napeq n nx then Just $ SetFrequency i (apP n) (apT n) else Nothing
 
   set' i (DynamicPeriodicOsc' n rl im) (DynamicPeriodicOsc' nx rlx imx) =
-    [ if n /= nx then Just $ SetFrequency i n else Nothing
+    [ if napeq n nx then Just $ SetFrequency i (apP n) (apT n) else Nothing
     , if rl /= rlx || im /= imx then Just $ SetPeriodicWave i rl im else Nothing
     ]
 
@@ -2325,13 +2408,13 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
         Nothing
     ]
 
-  set' i (StereoPanner' n) (StereoPanner' nx) = pure $ if n /= nx then Just $ SetPan i n else Nothing
+  set' i (StereoPanner' n) (StereoPanner' nx) = pure $ if napeq n nx then Just $ SetPan i (apP n) (apT n) else Nothing
 
-  set' i (Constant' n) (Constant' nx) = pure $ if n /= nx then Just $ SetOffset i n else Nothing
+  set' i (Constant' n) (Constant' nx) = pure $ if napeq n nx then Just $ SetOffset i (apP n) (apT n) else Nothing
 
-  set' i (Delay' n) (Delay' nx) = pure $ if n /= nx then Just $ SetDelay i n else Nothing
+  set' i (Delay' n) (Delay' nx) = pure $ if napeq n nx then Just $ SetDelay i (apP n) (apT n) else Nothing
 
-  set' i (Gain' n) (Gain' nx) = pure $ if n /= nx then Just $ SetGain i n else Nothing
+  set' i (Gain' n) (Gain' nx) = pure $ if napeq n nx then Just $ SetGain i (apP n) (apT n) else Nothing
 
   set' i _ _ = pure Nothing
 
@@ -2385,9 +2468,12 @@ audioReconciliation g u f x = do
     ipt = { flat: i.flat, grouped: audioGrouper (fromFoldable i.flat) }
   audioReconciliation' g u ipt f
 
+foreign import getAudioClockTime :: Foreign -> Effect Number
+
 -- | The main executor loop in the browser
 -- | - The scene (what we're processing)
--- | - How many milliseconds between pings
+-- | - How many milliseconds between pings in theory
+-- | - How fast the pinger is actually going, should be faster to accomodate for lag
 -- | - The audio context
 -- | - The microphone stream (which may be null)
 -- | - A record of sources
@@ -2400,7 +2486,8 @@ runInBrowser ::
   forall ch (a :: # Type).
   Homogeneous a Foreign =>
   Pos ch =>
-  Behavior (AudioUnit ch) ->
+  (Behavior Number -> Behavior (AudioUnit ch)) ->
+  Int ->
   Int ->
   Foreign ->
   Foreign ->
@@ -2408,7 +2495,7 @@ runInBrowser ::
   Array Foreign ->
   (Number -> Array Instruction -> Foreign -> Foreign -> Record a -> Array Foreign -> Effect (Array Foreign)) ->
   Effect (Effect Unit)
-runInBrowser scene pingEvery ctx mic sources workers executor = do
+runInBrowser scene pingEvery actualSpeed ctx mic sources workers executor = do
   let
     __contract = toNumber $ (A.length workers) * pingEvery
   reconRef <-
@@ -2421,75 +2508,153 @@ runInBrowser scene pingEvery ctx mic sources workers executor = do
   __totalProgram <- new 0.0
   __totalPostProgram <- new 0.0
   needToProcess <- new 0
+  clock <- new 0
+  temporalOffsetInMilliseconds <- new 0
   units <- new ([] :: Array Foreign)
   instructionStash <- new (M.empty :: M.Map Int (Array Instruction))
   unsub <- new (pure unit :: Effect Unit)
+  audioClockStart <- getAudioClockTime ctx
   bam <-
-    subscribe (sampleBy Tuple scene (interval pingEvery))
-      ( \(Tuple aud inst) -> do
-          let
-            i = audioToPtr aud
-          let
-            cur = { flat: i.flat, grouped: audioGrouper (DL.fromFoldable i.flat) }
-          __startTime <- map getTime now
-          prev <- read reconRef
-          write cur reconRef
+    subscribe
+      ( sample_
+          ( scene
+              ( currentTime do
+                  ct <- read clock
+                  toff <- read temporalOffsetInMilliseconds
+                  write (ct + pingEvery) clock
+                  pure ((toNumber (ct + toff) / 1000.0))
+              )
+          )
+          (interval actualSpeed)
+      )
+      ( \aud -> do
           curIt <- read ciRef
-          write (curIt + 1) ciRef
-          worker <- maybe (throw "Worker out of range") pure (workers !! (mod curIt (A.length workers)))
+          acc_ <- getAudioClockTime ctx
+          tnow_ <- read temporalOffsetInMilliseconds
           let
-            prog = makeProgram prev cur
-          __progTime <- map getTime now
-          void $ modify (_ + (__progTime - __startTime)) __totalTillProgram
-          launchAff_ do
-            res <-
-              toAffE (glpkWorkerImpl worker prog.prog)
-                <|> (liftEffect (read unsub >>= identity >>= const (throw "Glpk failed to execute")))
-            liftEffect do
-              __glpkTime <- map getTime now
-              void $ modify (_ + (__glpkTime - __progTime)) __totalProgram
-              let
-                instr =
-                  reconciliationToInstructionSet
-                    { prev: prog.prev, cur: prog.cur, reconciliation: objectToMapping res
-                    }
-              n2p <- read needToProcess
-              void $ modify (append (M.singleton curIt (A.fromFoldable instr.instructionSet))) instructionStash
-              if n2p /= curIt then do
-                -- useful for debugging
-                --log $ "Warning: async processing out of order. Correcting..." <> show n2p <> " " <> show curIt
+            startingPosWRT =
+              ( (toNumber ((curIt * pingEvery) + tnow_) / 1000.0)
+                  - (acc_ - audioClockStart)
+              )
+          if (startingPosWRT > 0.1) then
+            write (tnow_ - pingEvery) temporalOffsetInMilliseconds
+          else do
+            let
+              i = audioToPtr aud
+            let
+              cur = { flat: i.flat, grouped: audioGrouper (DL.fromFoldable i.flat) }
+            __startTime <- map getTime now
+            prev <- read reconRef
+            write cur reconRef
+            write (curIt + 1) ciRef
+            worker <- maybe (throw "Worker out of range") pure (workers !! (mod curIt (A.length workers)))
+            let
+              prog = makeProgram prev cur
+            __progTime <- map getTime now
+            void $ modify (_ + (__progTime - __startTime)) __totalTillProgram
+            launchAff_ do
+              res <-
+                toAffE (glpkWorkerImpl worker prog.prog)
+                  <|> (liftEffect (read unsub >>= identity >>= const (throw "Glpk failed to execute")))
+              liftEffect do
+                __glpkTime <- map getTime now
+                void $ modify (_ + (__glpkTime - __progTime)) __totalProgram
+                let
+                  instr =
+                    reconciliationToInstructionSet
+                      { prev: prog.prev, cur: prog.cur, reconciliation: objectToMapping res
+                      }
+                -- fastforward if we are in danger of missing the deadline
+                audioClockCur <- getAudioClockTime ctx
+                t0_ <- read temporalOffsetInMilliseconds
+                let
+                  posWRTTime =
+                    ( (toNumber (curIt * pingEvery + t0_) / 1000.0)
+                        - (audioClockCur - audioClockStart)
+                    )
+                -- todo: 0.01 is a magic number. find a more logical value
+                if posWRTTime < 0.01 then
+                  write
+                    ( t0_
+                        + ( ((floor $ (0.01 - posWRTTime) * 1000.0) / pingEvery)
+                              * pingEvery
+                          )
+                    )
+                    temporalOffsetInMilliseconds
+                else
+                  pure unit
+                tempOff <- read temporalOffsetInMilliseconds
+                n2p <- read needToProcess
+                void $ modify (append (M.singleton curIt (A.fromFoldable instr.instructionSet))) instructionStash
+                if n2p /= curIt then do
+                  -- useful for debugging
+                  --log
+                  --  $ "Warning: async processing out of order. Correcting... "
+                  --  <> show n2p
+                  --  <> " curIt "
+                  --  <> show curIt
+                  pure unit
+                else
+                  untilE do
+                    needNow <- read needToProcess
+                    stash <- read instructionStash
+                    case M.lookup needNow stash of
+                      Nothing -> pure true
+                      Just instructions -> do
+                        uts <- read units
+                        uts' <-
+                          executor
+                            (audioClockStart + (toNumber ((pingEvery * needNow) + tempOff) / 1000.0))
+                            instructions
+                            ctx
+                            mic
+                            sources
+                            uts
+                        write uts' units
+                        write (needNow + 1) needToProcess
+                        _ <- modify (M.delete needNow) instructionStash
+                        pure false
+                __endTime <- map getTime now
+                if (__endTime - __startTime) >= __contract then
+                  log
+                    ( "Audio control processing is too slow. It took this long: "
+                        <> show (__endTime - __startTime)
+                        <> " but it needs to take this long: "
+                        <> show __contract
+                    )
+                else
+                  pure unit
+                _postTime <- map getTime now
+                void $ modify (_ + (_postTime - __glpkTime)) __totalPostProgram
+                if curIt `mod` 100 == 0 then
+                  ( do
+                      ___a <- read __totalTillProgram
+                      ___b <- read __totalProgram
+                      ___c <- read __totalPostProgram
+                      log
+                        $ ( "Stats -- before glpk: "
+                              <> show (___a / (toNumber curIt))
+                              <> " "
+                              <> show (___b / (toNumber curIt))
+                              <> " "
+                              <> show (___c / (toNumber curIt))
+                              <> " . And total for the current round: "
+                              <> show (__endTime - __startTime)
+                              <> " audio clock start: "
+                              <> show audioClockStart
+                              <> " internal time: "
+                              <> show (toNumber (pingEvery * curIt) / 1000.0)
+                              <> " temporal offset "
+                              <> show tempOff
+                              <> " pos wrt time "
+                              <> show posWRTTime
+                              <> " time sending to audio unit: "
+                              <> show (audioClockStart + (toNumber (pingEvery * curIt) / 1000.0))
+                          )
+                  )
+                else
+                  pure unit
                 pure unit
-              else
-                untilE do
-                  needNow <- read needToProcess
-                  stash <- read instructionStash
-                  case M.lookup needNow stash of
-                    Nothing -> pure true
-                    Just instructions -> do
-                      uts <- read units
-                      uts' <- executor ((unwrap <<< unInstant) inst) instructions ctx mic sources uts
-                      write uts' units
-                      write (needNow + 1) needToProcess
-                      _ <- modify (M.delete needNow) instructionStash
-                      pure false
-              __endTime <- map getTime now
-              if (__endTime - __startTime) >= __contract then
-                log ("Audio control processing is too slow. It took this long: " <> show (__endTime - __startTime) <> " but it needs to take this long: " <> show __contract)
-              else
-                pure unit
-              _postTime <- map getTime now
-              void $ modify (_ + (_postTime - __glpkTime)) __totalPostProgram
-              if curIt `mod` 100 == 0 then
-                ( do
-                    ___a <- read __totalTillProgram
-                    ___b <- read __totalProgram
-                    ___c <- read __totalPostProgram
-                    -- endtime minus start time is not a stat, for now it is just of this round
-                    log $ ("Stats -- before glpk: " <> show (___a / (toNumber curIt)) <> " " <> show (___b / (toNumber curIt)) <> " " <> show (___c / (toNumber curIt)) <> " total " <> show (__endTime - __startTime))
-                )
-              else
-                pure unit
-              pure unit
       )
   write bam unsub
   pure bam

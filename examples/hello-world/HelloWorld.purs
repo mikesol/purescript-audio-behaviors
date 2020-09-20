@@ -2,19 +2,17 @@ module FRP.Behavior.Audio.Example.HelloWorld where
 
 import Prelude
 import Data.List ((:), List(..))
-import Data.Newtype (unwrap)
 import Data.NonEmpty ((:|))
 import Data.Typelevel.Num (D1)
 import Effect (Effect)
 import FRP.Behavior (Behavior)
 import FRP.Behavior.Audio (AudioUnit, Instruction, gain', runInBrowser, sinOsc, speaker)
 import FRP.Behavior.Audio as Aud
-import FRP.Behavior.Time (seconds)
 import Foreign (Foreign)
 import Math (pi, sin)
 
-scene :: Behavior (AudioUnit D1)
-scene = f <$> (unwrap <$> seconds)
+scene :: Behavior Number -> Behavior (AudioUnit D1)
+scene time = f <$> time
   where
   f s =
     let
@@ -33,6 +31,7 @@ type Sources
 
 run ::
   Int ->
+  Int ->
   Foreign ->
   Foreign ->
   Sources ->
@@ -41,7 +40,7 @@ run ::
   Effect (Effect Unit)
 run = runInBrowser scene
 
-touchAudio :: Array Instruction → Foreign → Foreign → Sources → Array Foreign → Effect (Array Foreign)
+touchAudio :: Number -> Array Instruction → Foreign → Foreign → Sources → Array Foreign → Effect (Array Foreign)
 touchAudio = Aud.touchAudio
 
 makeWorkers :: Int -> Effect (Array Foreign)
