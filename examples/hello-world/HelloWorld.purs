@@ -12,7 +12,6 @@ import FRP.Behavior.Audio as Aud
 import FRP.Behavior.Time (seconds)
 import Foreign (Foreign)
 import Math (pi, sin)
-import Type.Row.Homogeneous (class Homogeneous)
 
 scene :: Behavior (AudioUnit D1)
 scene = f <$> (unwrap <$> seconds)

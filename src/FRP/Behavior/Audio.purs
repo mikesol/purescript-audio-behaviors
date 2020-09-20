@@ -89,6 +89,7 @@ import Data.Generic.Rep (class Generic)
 import Data.Generic.Rep.Show (genericShow)
 import Data.Int (floor, toNumber)
 import Data.Int.Parse (parseInt, toRadix)
+import Data.JSDate (getTime, now)
 import Data.List (List(..), fromFoldable, partition, (:))
 import Data.List as DL
 import Data.Map (Map)
@@ -110,6 +111,7 @@ import Data.Vec as V
 import Effect (Effect, untilE, whileE)
 import Effect.Aff (launchAff_)
 import Effect.Class (liftEffect)
+import Effect.Class.Console (log)
 import Effect.Exception (throw)
 import Effect.Ref (Ref, modify, modify_, new, read, write)
 import FRP.Behavior (Behavior, behavior, sampleBy, sample_)
@@ -2407,12 +2409,17 @@ runInBrowser ::
   (Number -> Array Instruction -> Foreign -> Foreign -> Record a -> Array Foreign -> Effect (Array Foreign)) ->
   Effect (Effect Unit)
 runInBrowser scene pingEvery ctx mic sources workers executor = do
+  let
+    __contract = toNumber $ (A.length workers) * pingEvery
   reconRef <-
     new
       { grouped: M.empty
       , flat: M.empty
       }
   ciRef <- new 0
+  __totalTillProgram <- new 0.0
+  __totalProgram <- new 0.0
+  __totalPostProgram <- new 0.0
   needToProcess <- new 0
   units <- new ([] :: Array Foreign)
   instructionStash <- new (M.empty :: M.Map Int (Array Instruction))
@@ -2424,6 +2431,7 @@ runInBrowser scene pingEvery ctx mic sources workers executor = do
             i = audioToPtr aud
           let
             cur = { flat: i.flat, grouped: audioGrouper (DL.fromFoldable i.flat) }
+          __startTime <- map getTime now
           prev <- read reconRef
           write cur reconRef
           curIt <- read ciRef
@@ -2431,11 +2439,15 @@ runInBrowser scene pingEvery ctx mic sources workers executor = do
           worker <- maybe (throw "Worker out of range") pure (workers !! (mod curIt (A.length workers)))
           let
             prog = makeProgram prev cur
+          __progTime <- map getTime now
+          void $ modify (_ + (__progTime - __startTime)) __totalTillProgram
           launchAff_ do
             res <-
               toAffE (glpkWorkerImpl worker prog.prog)
                 <|> (liftEffect (read unsub >>= identity >>= const (throw "Glpk failed to execute")))
             liftEffect do
+              __glpkTime <- map getTime now
+              void $ modify (_ + (__glpkTime - __progTime)) __totalProgram
               let
                 instr =
                   reconciliationToInstructionSet
@@ -2460,6 +2472,24 @@ runInBrowser scene pingEvery ctx mic sources workers executor = do
                       write (needNow + 1) needToProcess
                       _ <- modify (M.delete needNow) instructionStash
                       pure false
+              __endTime <- map getTime now
+              if (__endTime - __startTime) >= __contract then
+                log ("Audio control processing is too slow. It took this long: " <> show (__endTime - __startTime) <> " but it needs to take this long: " <> show __contract)
+              else
+                pure unit
+              _postTime <- map getTime now
+              void $ modify (_ + (_postTime - __glpkTime)) __totalPostProgram
+              if curIt `mod` 100 == 0 then
+                ( do
+                    ___a <- read __totalTillProgram
+                    ___b <- read __totalProgram
+                    ___c <- read __totalPostProgram
+                    -- endtime minus start time is not a stat, for now it is just of this round
+                    log $ ("Stats -- before glpk: " <> show (___a / (toNumber curIt)) <> " " <> show (___b / (toNumber curIt)) <> " " <> show (___c / (toNumber curIt)) <> " total " <> show (__endTime - __startTime))
+                )
+              else
+                pure unit
+              pure unit
       )
   write bam unsub
   pure bam
