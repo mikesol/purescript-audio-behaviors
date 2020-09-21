@@ -34,7 +34,6 @@ module FRP.Behavior.Audio
   , AudioUnit''(..)
   , IdxContext
   , audioToPtr
-  , class Has
   , AudioUnit'(..)
   , microphone
   , play
@@ -179,7 +178,6 @@ import Data.NonEmpty (NonEmpty, (:|))
 import Data.NonEmpty as NE
 import Data.Set (member)
 import Data.String (Pattern(..), split, take)
-import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
 import Data.Traversable (sequence)
 import Data.Tuple (Tuple(..), fst, snd, swap, uncurry)
 import Data.Typelevel.Num (class Pos, D1, D2, toInt')
@@ -201,7 +199,6 @@ import Foreign.Object (Object, filterWithKey)
 import Foreign.Object as O
 import Heterogeneous.Mapping (class HMap, class Mapping, hmap)
 import Math as Math
-import Prim.Row (class Cons)
 import Record (merge)
 import Type.Proxy (Proxy(..))
 import Type.Row.Homogeneous (class Homogeneous)
@@ -1276,10 +1273,6 @@ microphone = Microphone Nothing
 microphone_ :: String -> AudioUnit D1
 microphone_ = Microphone <<< Just
 
-class Has (a :: # Type) (s :: Symbol)
-
-instance hasInstance :: Cons s Foreign tail a => Has a s
-
 apP :: forall a. AudioParameter a -> a
 apP (AudioParameter { param }) = param
 
@@ -1287,105 +1280,112 @@ apT :: forall a. AudioParameter a -> Number
 apT (AudioParameter { timeOffset }) = timeOffset
 
 play ::
-  forall (a :: # Type) (s :: Symbol) ch.
-  Has a s =>
+  forall ch.
   Pos ch =>
-  IsSymbol s =>
+  String ->
   AudioUnit ch
-play = Play Nothing (reflectSymbol (SProxy :: SProxy s)) 0.0
+play handle = Play Nothing handle 0.0
 
 play_ ::
-  forall (a :: # Type) (s :: Symbol) ch.
-  Has a s =>
+  forall ch.
   Pos ch =>
-  IsSymbol s =>
+  String ->
   String ->
   AudioUnit ch
-play_ s = Play (Just s) (reflectSymbol (SProxy :: SProxy s)) 0.0
+play_ s handle = Play (Just s) handle 0.0
+
+playT ::
+  forall ch.
+  Pos ch =>
+  String ->
+  Number ->
+  AudioUnit ch
+playT handle n = Play Nothing handle n
+
+playT_ ::
+  forall ch.
+  Pos ch =>
+  String ->
+  String ->
+  Number ->
+  AudioUnit ch
+playT_ s handle n = Play (Just s) handle n
 
 playBuf ::
-  forall (a :: # Type) (s :: Symbol) ch.
-  Has a s =>
+  forall ch.
   Pos ch =>
-  IsSymbol s =>
+  String ->
   Number ->
   AudioUnit ch
-playBuf n = PlayBuf Nothing (reflectSymbol (SProxy :: SProxy s)) (ap_ n)
+playBuf handle n = PlayBuf Nothing handle (ap_ n)
 
 playBuf_ ::
-  forall (a :: # Type) (s :: Symbol) ch.
-  Has a s =>
+  forall ch.
   Pos ch =>
-  IsSymbol s =>
+  String ->
   String ->
   Number ->
   AudioUnit ch
-playBuf_ s n = PlayBuf (Just s) (reflectSymbol (SProxy :: SProxy s)) (ap_ n)
+playBuf_ s handle n = PlayBuf (Just s) handle (ap_ n)
 
 playBufT ::
-  forall (a :: # Type) (s :: Symbol) ch.
-  Has a s =>
+  forall ch.
   Pos ch =>
-  IsSymbol s =>
+  String ->
   AudioParameter Number ->
   AudioUnit ch
-playBufT n = PlayBuf Nothing (reflectSymbol (SProxy :: SProxy s)) n
+playBufT handle n = PlayBuf Nothing handle n
 
 playBufT_ ::
-  forall (a :: # Type) (s :: Symbol) ch.
-  Has a s =>
+  forall ch.
   Pos ch =>
-  IsSymbol s =>
+  String ->
   String ->
   AudioParameter Number ->
   AudioUnit ch
-playBufT_ s n = PlayBuf (Just s) (reflectSymbol (SProxy :: SProxy s)) n
+playBufT_ s handle n = PlayBuf (Just s) handle n
 
 loopBuf ::
-  forall (a :: # Type) (s :: Symbol) ch.
-  Has a s =>
+  forall ch.
   Pos ch =>
-  IsSymbol s =>
+  String ->
   Number ->
   Number ->
   Number ->
   AudioUnit ch
-loopBuf a b c = LoopBuf Nothing (reflectSymbol (SProxy :: SProxy s)) (ap_ a) b c
+loopBuf handle a b c = LoopBuf Nothing handle (ap_ a) b c
 
 loopBuf_ ::
-  forall (a :: # Type) (s :: Symbol) ch.
-  Has a s =>
+  forall ch.
   Pos ch =>
-  IsSymbol s =>
+  String ->
   String ->
   Number ->
   Number ->
   Number ->
   AudioUnit ch
-loopBuf_ s a b c = LoopBuf (Just s) (reflectSymbol (SProxy :: SProxy s)) (ap_ a) b c
+loopBuf_ s handle a b c = LoopBuf (Just s) handle (ap_ a) b c
 
 loopBufT ::
-  forall (a :: # Type) (s :: Symbol) ch.
-  Has a s =>
+  forall ch.
   Pos ch =>
-  IsSymbol s =>
-  AudioParameter Number ->
-  Number ->
-  Number ->
-  AudioUnit ch
-loopBufT a b c = LoopBuf Nothing (reflectSymbol (SProxy :: SProxy s)) a b c
-
-loopBufT_ ::
-  forall (a :: # Type) (s :: Symbol) ch.
-  Has a s =>
-  Pos ch =>
-  IsSymbol s =>
   String ->
   AudioParameter Number ->
   Number ->
   Number ->
   AudioUnit ch
-loopBufT_ s a b c = LoopBuf (Just s) (reflectSymbol (SProxy :: SProxy s)) a b c
+loopBufT handle a b c = LoopBuf Nothing handle a b c
+
+loopBufT_ ::
+  forall ch.
+  Pos ch =>
+  String ->
+  String ->
+  AudioParameter Number ->
+  Number ->
+  Number ->
+  AudioUnit ch
+loopBufT_ s handle a b c = LoopBuf (Just s) handle a b c
 
 playDynamicBuf ::
   forall ch bch blen.
@@ -1584,23 +1584,21 @@ allpassT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParame
 allpassT_ s a b c = Allpass (Just s) a b c
 
 convolver ::
-  forall (a :: # Type) (s :: Symbol) ch.
-  Has a s =>
+  forall ch.
   Pos ch =>
-  IsSymbol s =>
-  AudioUnit ch ->
-  AudioUnit ch
-convolver = Convolver Nothing (reflectSymbol (SProxy :: SProxy s))
-
-convolver_ ::
-  forall (a :: # Type) (s :: Symbol) ch.
-  Has a s =>
-  Pos ch =>
-  IsSymbol s =>
   String ->
   AudioUnit ch ->
   AudioUnit ch
-convolver_ s = Convolver (Just s) (reflectSymbol (SProxy :: SProxy s))
+convolver handle = Convolver Nothing handle
+
+convolver_ ::
+  forall ch.
+  Pos ch =>
+  String ->
+  String ->
+  AudioUnit ch ->
+  AudioUnit ch
+convolver_ s handle = Convolver (Just s) handle
 
 dynamicConvolver ::
   forall ch bch blen.
@@ -1692,25 +1690,23 @@ instance eqAPO :: Eq (AudioParameter Oversample) where
   eq (AudioParameter s) (AudioParameter r) = s == r
 
 waveShaper ::
-  forall (a :: # Type) (s :: Symbol) ch.
-  Has a s =>
-  IsSymbol s =>
-  Pos ch =>
-  Oversample ->
-  AudioUnit ch ->
-  AudioUnit ch
-waveShaper = WaveShaper Nothing (reflectSymbol (SProxy :: SProxy s))
-
-waveShaper_ ::
-  forall (a :: # Type) (s :: Symbol) ch.
-  Has a s =>
-  IsSymbol s =>
+  forall ch.
   Pos ch =>
   String ->
   Oversample ->
   AudioUnit ch ->
   AudioUnit ch
-waveShaper_ s = WaveShaper (Just s) (reflectSymbol (SProxy :: SProxy s))
+waveShaper handle = WaveShaper Nothing handle
+
+waveShaper_ ::
+  forall ch.
+  Pos ch =>
+  String ->
+  String ->
+  Oversample ->
+  AudioUnit ch ->
+  AudioUnit ch
+waveShaper_ s handle = WaveShaper (Just s) handle
 
 dynamicWaveShaper ::
   forall ch.
@@ -1732,38 +1728,38 @@ dynamicWaveShaper_ ::
 dynamicWaveShaper_ s = DynamicWaveShaper (Just s)
 
 periodicOsc ::
-  forall (a :: # Type) (s :: Symbol).
-  Has a s =>
-  IsSymbol s =>
+  forall ch.
+  Pos ch =>
+  String ->
   Number ->
   AudioUnit D1
-periodicOsc n = PeriodicOsc Nothing (ap_ n) (reflectSymbol (SProxy :: SProxy s))
+periodicOsc handle n = PeriodicOsc Nothing (ap_ n) handle
 
 periodicOsc_ ::
-  forall (a :: # Type) (s :: Symbol).
-  Has a s =>
-  IsSymbol s =>
+  forall ch.
+  Pos ch =>
+  String ->
   String ->
   Number ->
   AudioUnit D1
-periodicOsc_ s n = PeriodicOsc (Just s) (ap_ n) (reflectSymbol (SProxy :: SProxy s))
+periodicOsc_ s handle n = PeriodicOsc (Just s) (ap_ n) handle
 
 periodicOscT ::
-  forall (a :: # Type) (s :: Symbol).
-  Has a s =>
-  IsSymbol s =>
-  AudioParameter Number ->
-  AudioUnit D1
-periodicOscT n = PeriodicOsc Nothing n (reflectSymbol (SProxy :: SProxy s))
-
-periodicOscT_ ::
-  forall (a :: # Type) (s :: Symbol).
-  Has a s =>
-  IsSymbol s =>
+  forall ch.
+  Pos ch =>
   String ->
   AudioParameter Number ->
   AudioUnit D1
-periodicOscT_ s n = PeriodicOsc (Just s) n (reflectSymbol (SProxy :: SProxy s))
+periodicOscT handle n = PeriodicOsc Nothing n handle
+
+periodicOscT_ ::
+  forall ch.
+  Pos ch =>
+  String ->
+  String ->
+  AudioParameter Number ->
+  AudioUnit D1
+periodicOscT_ s handle n = PeriodicOsc (Just s) n handle
 
 dynamicPeriodicOsc ::
   forall len.

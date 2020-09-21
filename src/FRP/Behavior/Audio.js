@@ -220,7 +220,7 @@ exports.touchAudio = function (/**dictHomogeneous */) {
                         : c.value1.constructor.name == "Microphone$prime$prime"
                         ? context.createMediaStreamSource(stream)
                         : c.value1.constructor.name == "Play$prime$prime"
-                        ? context.createMediaStreamSource(
+                        ? context.createMediaElementSource(
                             sources[c.value3.value0]
                           )
                         : c.value1.constructor.name == "PlayBuf$prime$prime"
@@ -333,7 +333,8 @@ exports.touchAudio = function (/**dictHomogeneous */) {
                     } else if (
                       c.value1.constructor.name == "Play$prime$prime"
                     ) {
-                      generators[c.value0].start(timeToSet + c.value4.value0);
+                      // todo - add delay somehow...
+                      sources[c.value3.value0].play();
                     } else if (
                       c.value1.constructor.name == "Constant$prime$prime"
                     ) {

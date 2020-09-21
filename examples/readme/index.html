@@ -8,6 +8,7 @@
     var offCb = null;
     var audioCtx = null;
     function turnOnAudio() {
+      const myAudio = document.querySelector("audio");
       navigator.mediaDevices.getUserMedia({ audio: true }).then(function (mic) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         audioCtx.audioWorklet.addModule("ps-aud-mul.js").then(function () {
@@ -16,7 +17,9 @@
           // null for the microphone
           offCb = PS["FRP.Behavior.Audio.Example.Readme"].run(15)(10)(audioCtx)(
             mic
-          )({})(workers)(function (timeToSet) {
+          )({
+            forest: myAudio,
+          })(workers)(function (timeToSet) {
             return function (instructions) {
               return function (ctx) {
                 return function (stream) {
@@ -48,5 +51,12 @@
   <body>
     <button onclick="turnOnAudio();">turn on</button>
     <button onclick="turnOffAudio();">turn off</button>
+    <audio controls>
+      <source
+        src="https://www.zapsplat.com/wp-content/uploads/2015/sound-effects-55112/zapsplat_nature_rainforest_ambience_wind_trees_birds_mainly_cockatoos_close_by_early_spring_qld_australia_55319.mp3"
+        type="audio/mp3"
+      />
+      <p>Browser too old to support HTML5 audio? How depressing!</p>
+    </audio>
   </body>
 </html>
