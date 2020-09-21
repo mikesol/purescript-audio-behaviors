@@ -14,7 +14,7 @@ import Data.Typelevel.Num (d3)
 import Data.Vec as V
 import Effect.Aff (Error)
 import Effect.Class (class MonadEffect, liftEffect)
-import FRP.Behavior.Audio (AudioProcessor, AudioUnit'(..), AudioParameter(..), AudioUnit''(..), SampleFrame, Status(..), audioGrouper, audioIO, audioIOInterleaved, audioToPtr, gain, gain', makeProgram, merger, sinOsc, speaker, speaker', splitter)
+import FRP.Behavior.Audio (AudioProcessor, AudioUnit'(..), AudioParameter(..), AudioUnit''(..), SampleFrame, Status(..), audioGrouper, audioIO, audioIOInterleaved, audioToPtr, gain, gain', makeProgram, merger, sinOsc, speaker, speaker', split1, split3)
 import Test.Spec (SpecT, describe, it)
 import Test.Spec.Assertions (shouldEqual)
 
@@ -190,7 +190,7 @@ basicTestSuite =
         let
           sp =
             audioToPtr
-              $ splitter
+              $ split1
                   (sinOsc 440.0)
                   ( \v0 ->
                       speaker
@@ -230,13 +230,13 @@ basicTestSuite =
         let
           sp =
             audioToPtr
-              $ splitter
+              $ split1
                   (sinOsc 440.0)
                   ( \v0 ->
-                      splitter
+                      split1
                         (V.head v0)
                         ( \v1 ->
-                            splitter
+                            split1
                               (V.head v1)
                               ( \v2 ->
                                   speaker
@@ -278,7 +278,7 @@ basicTestSuite =
         let
           tree =
             audioToPtr
-              $ splitter
+              $ split3
                   ( merger
                       $ V.replicate d3
                           ( ( gain 1.0

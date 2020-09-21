@@ -52,7 +52,11 @@ module FRP.Behavior.Audio
   , convolver
   , dynamicConvolver
   , dynamicsCompressor
-  , dup
+  , dup1
+  , dup2
+  , dup3
+  , dup4
+  , dup5
   , waveShaper
   , dynamicWaveShaper
   , periodicOsc
@@ -61,7 +65,11 @@ module FRP.Behavior.Audio
   , sawtoothOsc
   , traingleOsc
   , squareOsc
-  , splitter
+  , split1
+  , split2
+  , split3
+  , split4
+  , split5
   , panner
   , mul
   , add
@@ -87,7 +95,11 @@ module FRP.Behavior.Audio
   , convolver_
   , dynamicConvolver_
   , dynamicsCompressor_
-  , dup_
+  , dup1_
+  , dup2_
+  , dup3_
+  , dup4_
+  , dup5_
   , waveShaper_
   , dynamicWaveShaper_
   , periodicOsc_
@@ -96,7 +108,11 @@ module FRP.Behavior.Audio
   , sawtoothOsc_
   , traingleOsc_
   , squareOsc_
-  , splitter_
+  , split1_
+  , split2_
+  , split3_
+  , split4_
+  , split5_
   , panner_
   , mul_
   , add_
@@ -180,7 +196,7 @@ import Data.Set (member)
 import Data.String (Pattern(..), split, take)
 import Data.Traversable (sequence)
 import Data.Tuple (Tuple(..), fst, snd, swap, uncurry)
-import Data.Typelevel.Num (class Pos, D1, D2, toInt')
+import Data.Typelevel.Num (class Pos, D1, D2, D3, D4, D5, toInt')
 import Data.Unfoldable (class Unfoldable)
 import Data.Unfoldable1 as DU
 import Data.Vec (Vec, fill)
@@ -622,10 +638,18 @@ data AudioUnit ch
   | DynamicPeriodicOsc MString (AudioParameter Number) (Array Number) (Array Number)
   | WaveShaper MString String Oversample (AudioUnit ch)
   | DynamicWaveShaper MString (Array Number) Oversample (AudioUnit ch)
-  | Dup MString (AudioUnit ch) (AudioUnit ch -> AudioUnit ch)
+  | Dup1 MString (AudioUnit D1) (AudioUnit D1 -> AudioUnit ch)
+  | Dup2 MString (AudioUnit D2) (AudioUnit D2 -> AudioUnit ch)
+  | Dup3 MString (AudioUnit D3) (AudioUnit D3 -> AudioUnit ch)
+  | Dup4 MString (AudioUnit D4) (AudioUnit D4 -> AudioUnit ch)
+  | Dup5 MString (AudioUnit D5) (AudioUnit D5 -> AudioUnit ch)
   | SinOsc MString (AudioParameter Number)
   | SquareOsc MString (AudioParameter Number)
-  | Splitter MString (AudioUnit ch) (Vec ch (AudioUnit D1) -> AudioUnit ch)
+  | Split1 MString (AudioUnit D1) (Vec D1 (AudioUnit D1) -> AudioUnit ch)
+  | Split2 MString (AudioUnit D2) (Vec D2 (AudioUnit D1) -> AudioUnit ch)
+  | Split3 MString (AudioUnit D3) (Vec D3 (AudioUnit D1) -> AudioUnit ch)
+  | Split4 MString (AudioUnit D4) (Vec D4 (AudioUnit D1) -> AudioUnit ch)
+  | Split5 MString (AudioUnit D5) (Vec D5 (AudioUnit D1) -> AudioUnit ch)
   | StereoPanner MString (AudioParameter Number) (AudioUnit ch)
   | Mul MString (NonEmpty List (AudioUnit ch))
   | Add MString (NonEmpty List (AudioUnit ch))
@@ -787,13 +811,29 @@ au' (WaveShaper name curve os _) = { au: (WaveShaper' curve os), name }
 
 au' (DynamicWaveShaper name curve os _) = { au: (DynamicWaveShaper' curve os), name }
 
-au' (Dup name _ _) = { au: Dup', name } -- hack, we set the actual value later
+au' (Dup1 name _ _) = { au: Dup', name } -- hack, we set the actual value later
+
+au' (Dup2 name _ _) = { au: Dup', name } -- hack, we set the actual value later
+
+au' (Dup3 name _ _) = { au: Dup', name } -- hack, we set the actual value later
+
+au' (Dup4 name _ _) = { au: Dup', name } -- hack, we set the actual value later
+
+au' (Dup5 name _ _) = { au: Dup', name } -- hack, we set the actual value later
 
 au' (SinOsc name n) = { au: (SinOsc' n), name }
 
 au' (SquareOsc name n) = { au: (SquareOsc' n), name }
 
-au' (Splitter name _ _) = { au: (Splitter' (toInt' (Proxy :: Proxy ch))), name }
+au' (Split1 name _ _) = { au: (Splitter' 1), name }
+
+au' (Split2 name _ _) = { au: (Splitter' 2), name }
+
+au' (Split3 name _ _) = { au: (Splitter' 3), name }
+
+au' (Split4 name _ _) = { au: (Splitter' 4), name }
+
+au' (Split5 name _ _) = { au: (Splitter' 5), name }
 
 au' (StereoPanner name n _) = { au: (StereoPanner' n), name }
 
@@ -1118,11 +1158,12 @@ audioToPtr = go (-1) M.empty
               }
 
   closurethrough ::
-    forall ch.
+    forall ch ix.
     Pos ch =>
+    Pos ix =>
     PtrInfo' ->
     AudioUnit ch ->
-    AudioUnit ch ->
+    AudioUnit ix ->
     AudioUnit ch ->
     AlgStep
   closurethrough ptr v a ic =
@@ -1237,7 +1278,15 @@ audioToPtr = go (-1) M.empty
 
   go' ptr v@(DynamicWaveShaper _ _ _ a) = passthrough ptr v a
 
-  go' ptr v@(Dup name a f) = closurethrough ptr v a $ f DupRes
+  go' ptr v@(Dup1 name a f) = closurethrough ptr v a $ f DupRes
+
+  go' ptr v@(Dup2 name a f) = closurethrough ptr v a $ f DupRes
+
+  go' ptr v@(Dup3 name a f) = closurethrough ptr v a $ f DupRes
+
+  go' ptr v@(Dup4 name a f) = closurethrough ptr v a $ f DupRes
+
+  go' ptr v@(Dup5 name a f) = closurethrough ptr v a $ f DupRes
 
   go' ptr v@(SinOsc name n) = terminus ptr v
 
@@ -1265,7 +1314,15 @@ audioToPtr = go (-1) M.empty
 
   go' ptr v@(Speaker name l) = listthrough ptr v l
 
-  go' ptr v@(Splitter name a f) = closurethrough ptr v a $ f (fill SplitRes)
+  go' ptr v@(Split1 name a f) = closurethrough ptr v a $ f (fill SplitRes)
+
+  go' ptr v@(Split2 name a f) = closurethrough ptr v a $ f (fill SplitRes)
+
+  go' ptr v@(Split3 name a f) = closurethrough ptr v a $ f (fill SplitRes)
+
+  go' ptr v@(Split4 name a f) = closurethrough ptr v a $ f (fill SplitRes)
+
+  go' ptr v@(Split5 name a f) = closurethrough ptr v a $ f (fill SplitRes)
 
 microphone :: AudioUnit D1
 microphone = Microphone Nothing
@@ -1648,15 +1705,55 @@ dynamicsCompressorT_ ::
   AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
 dynamicsCompressorT_ s a b c d e = DynamicsCompressor (Just s) a b c d e
 
-dup :: forall ch. Pos ch => AudioUnit ch -> (AudioUnit ch -> AudioUnit ch) -> AudioUnit ch
-dup DupRes f = f DupRes
+dup1 :: forall ch. Pos ch => AudioUnit D1 -> (AudioUnit D1 -> AudioUnit ch) -> AudioUnit ch
+dup1 DupRes f = f DupRes
 
-dup x f = Dup Nothing x f
+dup1 x f = Dup1 Nothing x f
 
-dup_ :: forall ch. Pos ch => String -> AudioUnit ch -> (AudioUnit ch -> AudioUnit ch) -> AudioUnit ch
-dup_ s DupRes f = f DupRes
+dup1_ :: forall ch. Pos ch => String -> AudioUnit D1 -> (AudioUnit D1 -> AudioUnit ch) -> AudioUnit ch
+dup1_ s DupRes f = f DupRes
 
-dup_ s x f = Dup (Just s) x f
+dup1_ s x f = Dup1 (Just s) x f
+
+dup2 :: forall ch. Pos ch => AudioUnit D2 -> (AudioUnit D2 -> AudioUnit ch) -> AudioUnit ch
+dup2 DupRes f = f DupRes
+
+dup2 x f = Dup2 Nothing x f
+
+dup2_ :: forall ch. Pos ch => String -> AudioUnit D2 -> (AudioUnit D2 -> AudioUnit ch) -> AudioUnit ch
+dup2_ s DupRes f = f DupRes
+
+dup2_ s x f = Dup2 (Just s) x f
+
+dup3 :: forall ch. Pos ch => AudioUnit D3 -> (AudioUnit D3 -> AudioUnit ch) -> AudioUnit ch
+dup3 DupRes f = f DupRes
+
+dup3 x f = Dup3 Nothing x f
+
+dup3_ :: forall ch. Pos ch => String -> AudioUnit D3 -> (AudioUnit D3 -> AudioUnit ch) -> AudioUnit ch
+dup3_ s DupRes f = f DupRes
+
+dup3_ s x f = Dup3 (Just s) x f
+
+dup4 :: forall ch. Pos ch => AudioUnit D4 -> (AudioUnit D4 -> AudioUnit ch) -> AudioUnit ch
+dup4 DupRes f = f DupRes
+
+dup4 x f = Dup4 Nothing x f
+
+dup4_ :: forall ch. Pos ch => String -> AudioUnit D4 -> (AudioUnit D4 -> AudioUnit ch) -> AudioUnit ch
+dup4_ s DupRes f = f DupRes
+
+dup4_ s x f = Dup4 (Just s) x f
+
+dup5 :: forall ch. Pos ch => AudioUnit D5 -> (AudioUnit D5 -> AudioUnit ch) -> AudioUnit ch
+dup5 DupRes f = f DupRes
+
+dup5 x f = Dup5 Nothing x f
+
+dup5_ :: forall ch. Pos ch => String -> AudioUnit D5 -> (AudioUnit D5 -> AudioUnit ch) -> AudioUnit ch
+dup5_ s DupRes f = f DupRes
+
+dup5_ s x f = Dup5 (Just s) x f
 
 ap_ :: forall a. a -> AudioParameter a
 ap_ a =
@@ -1847,15 +1944,55 @@ squareOscT n = SquareOsc Nothing n
 squareOscT_ :: String -> AudioParameter Number -> AudioUnit D1
 squareOscT_ s n = SquareOsc (Just s) n
 
-splitter :: forall ch. Pos ch => AudioUnit ch -> (Vec ch (AudioUnit D1) -> AudioUnit ch) -> AudioUnit ch
-splitter (SplitRes i) f = f (fill $ const (SplitRes i))
+split1 :: forall ch. Pos ch => AudioUnit D1 -> (Vec D1 (AudioUnit D1) -> AudioUnit ch) -> AudioUnit ch
+split1 (SplitRes i) f = f (fill $ const (SplitRes i))
 
-splitter x f = Splitter Nothing x f
+split1 x f = Split1 Nothing x f
 
-splitter_ :: forall ch. Pos ch => String -> AudioUnit ch -> (Vec ch (AudioUnit D1) -> AudioUnit ch) -> AudioUnit ch
-splitter_ s (SplitRes i) f = f (fill $ const (SplitRes i))
+split1_ :: forall ch. Pos ch => String -> AudioUnit D1 -> (Vec D1 (AudioUnit D1) -> AudioUnit ch) -> AudioUnit ch
+split1_ s (SplitRes i) f = f (fill $ const (SplitRes i))
 
-splitter_ s x f = Splitter (Just s) x f
+split1_ s x f = Split1 (Just s) x f
+
+split2 :: forall ch. Pos ch => AudioUnit D2 -> (Vec D2 (AudioUnit D1) -> AudioUnit ch) -> AudioUnit ch
+split2 (SplitRes i) f = f (fill $ const (SplitRes i))
+
+split2 x f = Split2 Nothing x f
+
+split2_ :: forall ch. Pos ch => String -> AudioUnit D2 -> (Vec D2 (AudioUnit D1) -> AudioUnit ch) -> AudioUnit ch
+split2_ s (SplitRes i) f = f (fill $ const (SplitRes i))
+
+split2_ s x f = Split2 (Just s) x f
+
+split3 :: forall ch. Pos ch => AudioUnit D3 -> (Vec D3 (AudioUnit D1) -> AudioUnit ch) -> AudioUnit ch
+split3 (SplitRes i) f = f (fill $ const (SplitRes i))
+
+split3 x f = Split3 Nothing x f
+
+split3_ :: forall ch. Pos ch => String -> AudioUnit D3 -> (Vec D3 (AudioUnit D1) -> AudioUnit ch) -> AudioUnit ch
+split3_ s (SplitRes i) f = f (fill $ const (SplitRes i))
+
+split3_ s x f = Split3 (Just s) x f
+
+split4 :: forall ch. Pos ch => AudioUnit D4 -> (Vec D4 (AudioUnit D1) -> AudioUnit ch) -> AudioUnit ch
+split4 (SplitRes i) f = f (fill $ const (SplitRes i))
+
+split4 x f = Split4 Nothing x f
+
+split4_ :: forall ch. Pos ch => String -> AudioUnit D4 -> (Vec D4 (AudioUnit D1) -> AudioUnit ch) -> AudioUnit ch
+split4_ s (SplitRes i) f = f (fill $ const (SplitRes i))
+
+split4_ s x f = Split4 (Just s) x f
+
+split5 :: forall ch. Pos ch => AudioUnit D5 -> (Vec D5 (AudioUnit D1) -> AudioUnit ch) -> AudioUnit ch
+split5 (SplitRes i) f = f (fill $ const (SplitRes i))
+
+split5 x f = Split5 Nothing x f
+
+split5_ :: forall ch. Pos ch => String -> AudioUnit D5 -> (Vec D5 (AudioUnit D1) -> AudioUnit ch) -> AudioUnit ch
+split5_ s (SplitRes i) f = f (fill $ const (SplitRes i))
+
+split5_ s x f = Split5 (Just s) x f
 
 panner :: Number -> AudioUnit D2 -> AudioUnit D2
 panner n = StereoPanner Nothing (ap_ n)
