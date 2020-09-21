@@ -60,20 +60,22 @@ Here are some tips for advanced usage of `purescript-audio-behaviors`.
 
 ### Named units
 
-As you build larger and larger audio structures, you may notice some stuttering in your application. Basically, the more units that exist, the more work the library has to do to keep track of them, and it can result in throttling a rendering frame.
+As you build larger and larger audio structures, you may notice some stuttering in your application. The more units that exist, the more work the library has to do to keep track of them, and it can result in throttling a rendering frame.
 
 One way to mitigate this significantly (like 10x significantly) is to give your audio units names. The more named audio units, the faster the computation will go.
 
 Giving names is a bit tedious, so the recommendation is to build audio without names first and then, once you're satisfied with your scene, to give everything names. Here is how you attribute names to audio units:
 
 ```haskell
-
+sinOsc_ "My name" 440.0
 ```
+
+Notice the trailing underscore after the function. That's all you need. If you add a trailing underscore, you'll get a function that can accept a name.
 
 If you are building an audio function that is supposed to be reused (ie your own filter, etc), named audio is a great idea, as it will speed up computation everywhere the function is used.
 
 ```haskell
-
+myAwesomeFilter t = highpass_ ("myAwesomeFilter_" <> t) 1000.0 0.3 0.5
 ```
 
 ### Tweaking parameters
