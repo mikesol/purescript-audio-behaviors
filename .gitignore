@@ -14,3 +14,6 @@
 examples/hello-world/index.js
 examples/hello-world/glpk-worker.js
 examples/hello-world/glpk-worker.wasm
+examples/metronome/index.js
+examples/metronome/glpk-worker.js
+examples/metronome/glpk-worker.wasm
