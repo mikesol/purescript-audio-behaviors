@@ -81,6 +81,8 @@ scene _ = let d = dup $ sinOsc 440.0 in pure (speaker $ (merger (d +> d +> empty
 
 Here are some tips for advanced usage of `purescript-audio-behaviors`.
 
+### Debugging our scene
+
 ### Named units
 
 As you build larger and larger audio structures, you may notice some stuttering in your application. The more units that exist, the more work the library has to do to keep track of them, and it can result in throttling a rendering frame.
