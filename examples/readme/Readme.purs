@@ -6,8 +6,9 @@ import Data.List ((:), List(..))
 import Data.NonEmpty ((:|))
 import Data.Typelevel.Num (D1, D2)
 import Effect (Effect)
+import Data.Vec ((+>), empty)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AudioUnit, Instruction, gain', microphone, play, runInBrowser, sinOsc, speaker, speaker')
+import FRP.Behavior.Audio (AudioUnit, Instruction, merger, panner, gain', microphone, play, runInBrowser, sinOsc, speaker, dup1, speaker')
 import FRP.Behavior.Audio as Aud
 import Foreign (Foreign)
 import Math (pi, sin)
@@ -37,6 +38,20 @@ scene2 _ =
               : Nil
           )
     )
+
+scene3 :: Behavior Number -> Behavior (AudioUnit D2)
+scene3 _ =
+  pure
+    $ dup1
+        ( (gain' 0.2 $ sinOsc 110.0)
+            + (gain' 0.1 $ sinOsc 220.0)
+            + microphone
+        ) \mono ->
+        speaker
+          $ ( (panner (-0.5) (merger (mono +> mono +> empty)))
+                :| (gain' 0.5 $ (play "forest"))
+                : Nil
+            )
 
 type Sources
   = { forest :: Foreign

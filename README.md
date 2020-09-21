@@ -70,7 +70,7 @@ Note that, because this function does not depend on time, we can ignore the inpu
 
 ### Adding sound via the microphone
 
-Let's add our voice to the mix! We'll put it above a nice low drone
+Let's add our voice to the mix! We'll put it above a nice low drone.
 
 ```haskell
 scene :: Behavior Number -> Behavior (AudioUnit D1)
@@ -89,11 +89,20 @@ Make sure to wear headphones to avoid feedback!
 
 ### Going from mono to stereo
 
-Another thing to note is the `D1` in the signature. `purescript-audio-behaviors` uses types to describe channels. Here, D1 signifies that the output is mono. If you try to change it to anything else (ie D2 for stereo) it will break. That is because a sine wave oscillator is always mono. To make it stereo, you'd use the `dup` audio unit to duplicate the sound and the `merger` audio unit to merge the two channels into a single sound.
-
 ```haskell
-scene :: Behavior Number -> Behavior (AudioUnit D2)
-scene _ = let d = dup $ sinOsc 440.0 in pure (speaker $ (merger (d +> d +> empty)))
+scene3 :: Behavior Number -> Behavior (AudioUnit D2)
+scene3 _ =
+  pure
+    $ dup1
+        ( (gain' 0.2 $ sinOsc 110.0)
+            + (gain' 0.1 $ sinOsc 220.0)
+            + microphone
+        ) \mono ->
+        speaker
+          $ ( (panner (-0.5) (merger (mono +> mono +> empty)))
+                :| (gain' 0.5 $ (play "forest"))
+                : Nil
+            )
 ```
 
 ## Advanced usage
