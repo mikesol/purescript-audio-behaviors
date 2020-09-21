@@ -7,13 +7,24 @@ import Data.NonEmpty ((:|))
 import Data.Typelevel.Num (D1)
 import Effect (Effect)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AudioUnit, Instruction, gain', runInBrowser, sinOsc, speaker, speaker')
+import FRP.Behavior.Audio (AudioUnit, Instruction, gain', microphone, runInBrowser, sinOsc, speaker, speaker')
 import FRP.Behavior.Audio as Aud
 import Foreign (Foreign)
 import Math (pi, sin)
 
 scene0 :: Behavior Number -> Behavior (AudioUnit D1)
-scene0 _ = pure (speaker' $ sinOsc 440.0)
+scene0 _ = pure (speaker' $ (gain' 0.5 $ sinOsc 440.0))
+
+scene1 :: Behavior Number -> Behavior (AudioUnit D1)
+scene1 _ =
+  pure
+    ( speaker
+        $ ( (gain' 0.2 $ sinOsc 110.0)
+              :| (gain' 0.1 $ sinOsc 220.0)
+              : microphone
+              : Nil
+          )
+    )
 
 type Sources
   = {}

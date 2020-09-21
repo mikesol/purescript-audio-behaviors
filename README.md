@@ -59,14 +59,33 @@ In this section, we'll build a scene from the ground up. In doing so, we'll acco
 
 ### Getting a static sound to play
 
-Let's start with a sine wave at A440.
+Let's start with a sine wave at A440 playing at a volume of `0.5` (where `1.0` is the loudest volume).
 
 ```haskell
 scene :: Behavior Number -> Behavior (AudioUnit D1)
-scene _ = pure (speaker' $ sinOsc 440.0)
+scene _ = pure (speaker' $ (gain' 0.5 $ sinOsc 440.0))
 ```
 
 Note that, because this function does not depend on time, we can ignore the input.
+
+### Adding sound via the microphone
+
+Let's add our voice to the mix! We'll put it above a nice low drone
+
+```haskell
+scene :: Behavior Number -> Behavior (AudioUnit D1)
+scene _ =
+  pure
+    ( speaker
+        $ ( (gain' 0.2 $ sinOsc 110.0)
+              :| (gain' 0.1 $ sinOsc 220.0)
+              : microphone
+              : Nil
+          )
+    )
+```
+
+Make sure to wear headphones to avoid feedback!
 
 ### Going from mono to stereo
 
