@@ -71,6 +71,40 @@ module FRP.Behavior.Audio
   , delay
   , gain
   , speaker
+  , microphone_
+  , play_
+  , playBuf_
+  , loopBuf_
+  , playDynamicBuf_
+  , loopDynamicBuf_
+  , lowpass_
+  , highpass_
+  , bandpass_
+  , lowshelf_
+  , highshelf_
+  , peaking_
+  , notch_
+  , allpass_
+  , convolver_
+  , dynamicConvolver_
+  , dynamicsCompressor_
+  , dup_
+  , waveShaper_
+  , dynamicWaveShaper_
+  , periodicOsc_
+  , dynamicPeriodicOsc_
+  , sinOsc_
+  , sawtoothOsc_
+  , traingleOsc_
+  , squareOsc_
+  , splitter_
+  , panner_
+  , mul_
+  , add_
+  , merger_
+  , constant_
+  , delay_
+  , gain_
   , playBufT
   , loopBufT
   , playDynamicBufT
@@ -94,6 +128,29 @@ module FRP.Behavior.Audio
   , constantT
   , delayT
   , gainT
+  , playBufT_
+  , loopBufT_
+  , playDynamicBufT_
+  , loopDynamicBufT_
+  , lowpassT_
+  , highpassT_
+  , bandpassT_
+  , lowshelfT_
+  , highshelfT_
+  , peakingT_
+  , notchT_
+  , allpassT_
+  , dynamicsCompressorT_
+  , periodicOscT_
+  , dynamicPeriodicOscT_
+  , sinOscT_
+  , sawtoothOscT_
+  , traingleOscT_
+  , squareOscT_
+  , pannerT_
+  , constantT_
+  , delayT_
+  , gainT_
   , speaker'
   , gain'
   , audioGrouper
@@ -1216,6 +1273,9 @@ audioToPtr = go (-1) M.empty
 microphone :: AudioUnit D1
 microphone = Microphone Nothing
 
+microphone_ :: String -> AudioUnit D1
+microphone_ = Microphone <<< Just
+
 class Has (a :: # Type) (s :: Symbol)
 
 instance hasInstance :: Cons s Foreign tail a => Has a s
@@ -1234,6 +1294,15 @@ play ::
   AudioUnit ch
 play = Play Nothing (reflectSymbol (SProxy :: SProxy s)) 0.0
 
+play_ ::
+  forall (a :: # Type) (s :: Symbol) ch.
+  Has a s =>
+  Pos ch =>
+  IsSymbol s =>
+  String ->
+  AudioUnit ch
+play_ s = Play (Just s) (reflectSymbol (SProxy :: SProxy s)) 0.0
+
 playBuf ::
   forall (a :: # Type) (s :: Symbol) ch.
   Has a s =>
@@ -1243,6 +1312,16 @@ playBuf ::
   AudioUnit ch
 playBuf n = PlayBuf Nothing (reflectSymbol (SProxy :: SProxy s)) (ap_ n)
 
+playBuf_ ::
+  forall (a :: # Type) (s :: Symbol) ch.
+  Has a s =>
+  Pos ch =>
+  IsSymbol s =>
+  String ->
+  Number ->
+  AudioUnit ch
+playBuf_ s n = PlayBuf (Just s) (reflectSymbol (SProxy :: SProxy s)) (ap_ n)
+
 playBufT ::
   forall (a :: # Type) (s :: Symbol) ch.
   Has a s =>
@@ -1251,6 +1330,16 @@ playBufT ::
   AudioParameter Number ->
   AudioUnit ch
 playBufT n = PlayBuf Nothing (reflectSymbol (SProxy :: SProxy s)) n
+
+playBufT_ ::
+  forall (a :: # Type) (s :: Symbol) ch.
+  Has a s =>
+  Pos ch =>
+  IsSymbol s =>
+  String ->
+  AudioParameter Number ->
+  AudioUnit ch
+playBufT_ s n = PlayBuf (Just s) (reflectSymbol (SProxy :: SProxy s)) n
 
 loopBuf ::
   forall (a :: # Type) (s :: Symbol) ch.
@@ -1263,6 +1352,18 @@ loopBuf ::
   AudioUnit ch
 loopBuf a b c = LoopBuf Nothing (reflectSymbol (SProxy :: SProxy s)) (ap_ a) b c
 
+loopBuf_ ::
+  forall (a :: # Type) (s :: Symbol) ch.
+  Has a s =>
+  Pos ch =>
+  IsSymbol s =>
+  String ->
+  Number ->
+  Number ->
+  Number ->
+  AudioUnit ch
+loopBuf_ s a b c = LoopBuf (Just s) (reflectSymbol (SProxy :: SProxy s)) (ap_ a) b c
+
 loopBufT ::
   forall (a :: # Type) (s :: Symbol) ch.
   Has a s =>
@@ -1273,6 +1374,18 @@ loopBufT ::
   Number ->
   AudioUnit ch
 loopBufT a b c = LoopBuf Nothing (reflectSymbol (SProxy :: SProxy s)) a b c
+
+loopBufT_ ::
+  forall (a :: # Type) (s :: Symbol) ch.
+  Has a s =>
+  Pos ch =>
+  IsSymbol s =>
+  String ->
+  AudioParameter Number ->
+  Number ->
+  Number ->
+  AudioUnit ch
+loopBufT_ s a b c = LoopBuf (Just s) (reflectSymbol (SProxy :: SProxy s)) a b c
 
 playDynamicBuf ::
   forall ch bch blen.
@@ -1285,6 +1398,18 @@ playDynamicBuf ::
   AudioUnit ch
 playDynamicBuf i v a = PlayDynamicBuf Nothing (AudioBuffer i (map V.toArray $ V.toArray v)) (ap_ a)
 
+playDynamicBuf_ ::
+  forall ch bch blen.
+  Pos ch =>
+  Pos bch =>
+  Pos blen =>
+  String ->
+  Int ->
+  Vec bch (Vec blen Number) ->
+  Number ->
+  AudioUnit ch
+playDynamicBuf_ s i v a = PlayDynamicBuf (Just s) (AudioBuffer i (map V.toArray $ V.toArray v)) (ap_ a)
+
 playDynamicBufT ::
   forall ch bch blen.
   Pos ch =>
@@ -1295,6 +1420,18 @@ playDynamicBufT ::
   AudioParameter Number ->
   AudioUnit ch
 playDynamicBufT i v a = PlayDynamicBuf Nothing (AudioBuffer i (map V.toArray $ V.toArray v)) a
+
+playDynamicBufT_ ::
+  forall ch bch blen.
+  Pos ch =>
+  Pos bch =>
+  Pos blen =>
+  String ->
+  Int ->
+  Vec bch (Vec blen Number) ->
+  AudioParameter Number ->
+  AudioUnit ch
+playDynamicBufT_ s i v a = PlayDynamicBuf (Just s) (AudioBuffer i (map V.toArray $ V.toArray v)) a
 
 loopDynamicBuf ::
   forall ch bch blen.
@@ -1309,6 +1446,20 @@ loopDynamicBuf ::
   AudioUnit ch
 loopDynamicBuf i v a b c = LoopDynamicBuf Nothing (AudioBuffer i (map V.toArray $ V.toArray v)) (ap_ a) b c
 
+loopDynamicBuf_ ::
+  forall ch bch blen.
+  Pos ch =>
+  Pos bch =>
+  Pos blen =>
+  String ->
+  Int ->
+  Vec bch (Vec blen Number) ->
+  Number ->
+  Number ->
+  Number ->
+  AudioUnit ch
+loopDynamicBuf_ s i v a b c = LoopDynamicBuf (Just s) (AudioBuffer i (map V.toArray $ V.toArray v)) (ap_ a) b c
+
 loopDynamicBufT ::
   forall ch bch blen.
   Pos ch =>
@@ -1322,53 +1473,115 @@ loopDynamicBufT ::
   AudioUnit ch
 loopDynamicBufT i v a b c = LoopDynamicBuf Nothing (AudioBuffer i (map V.toArray $ V.toArray v)) a b c
 
+loopDynamicBufT_ ::
+  forall ch bch blen.
+  Pos ch =>
+  Pos bch =>
+  Pos blen =>
+  String ->
+  Int ->
+  Vec bch (Vec blen Number) ->
+  AudioParameter Number ->
+  Number ->
+  Number ->
+  AudioUnit ch
+loopDynamicBufT_ s i v a b c = LoopDynamicBuf (Just s) (AudioBuffer i (map V.toArray $ V.toArray v)) a b c
+
 lowpass :: forall ch. Pos ch => Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
 lowpass a b c = Lowpass Nothing (ap_ a) (ap_ b) (ap_ c)
+
+lowpass_ :: forall ch. Pos ch => String -> Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
+lowpass_ s a b c = Lowpass (Just s) (ap_ a) (ap_ b) (ap_ c)
 
 lowpassT :: forall ch. Pos ch => AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
 lowpassT a b c = Lowpass Nothing a b c
 
+lowpassT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+lowpassT_ s a b c = Lowpass (Just s) a b c
+
 highpass :: forall ch. Pos ch => Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
 highpass a b c = Highpass Nothing (ap_ a) (ap_ b) (ap_ c)
+
+highpass_ :: forall ch. Pos ch => String -> Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
+highpass_ s a b c = Highpass (Just s) (ap_ a) (ap_ b) (ap_ c)
 
 highpassT :: forall ch. Pos ch => AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
 highpassT a b c = Highpass Nothing a b c
 
+highpassT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+highpassT_ s a b c = Highpass (Just s) a b c
+
 bandpass :: forall ch. Pos ch => Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
 bandpass a b c = Bandpass Nothing (ap_ a) (ap_ b) (ap_ c)
+
+bandpass_ :: forall ch. Pos ch => String -> Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
+bandpass_ s a b c = Bandpass (Just s) (ap_ a) (ap_ b) (ap_ c)
 
 bandpassT :: forall ch. Pos ch => AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
 bandpassT a b c = Bandpass Nothing a b c
 
+bandpassT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+bandpassT_ s a b c = Bandpass (Just s) a b c
+
 lowshelf :: forall ch. Pos ch => Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
 lowshelf a b c = Lowshelf Nothing (ap_ a) (ap_ b) (ap_ c)
+
+lowshelf_ :: forall ch. Pos ch => String -> Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
+lowshelf_ s a b c = Lowshelf (Just s) (ap_ a) (ap_ b) (ap_ c)
 
 lowshelfT :: forall ch. Pos ch => AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
 lowshelfT a b c = Lowshelf Nothing a b c
 
+lowshelfT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+lowshelfT_ s a b c = Lowshelf (Just s) a b c
+
 highshelf :: forall ch. Pos ch => Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
 highshelf a b c = Highshelf Nothing (ap_ a) (ap_ b) (ap_ c)
+
+highshelf_ :: forall ch. Pos ch => String -> Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
+highshelf_ s a b c = Highshelf (Just s) (ap_ a) (ap_ b) (ap_ c)
 
 highshelfT :: forall ch. Pos ch => AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
 highshelfT a b c = Highshelf Nothing a b c
 
+highshelfT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+highshelfT_ s a b c = Highshelf (Just s) a b c
+
 peaking :: forall ch. Pos ch => Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
 peaking a b c = Peaking Nothing (ap_ a) (ap_ b) (ap_ c)
+
+peaking_ :: forall ch. Pos ch => String -> Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
+peaking_ s a b c = Peaking (Just s) (ap_ a) (ap_ b) (ap_ c)
 
 peakingT :: forall ch. Pos ch => AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
 peakingT a b c = Peaking Nothing a b c
 
+peakingT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+peakingT_ s a b c = Peaking (Just s) a b c
+
 notch :: forall ch. Pos ch => Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
 notch a b c = Notch Nothing (ap_ a) (ap_ b) (ap_ c)
+
+notch_ :: forall ch. Pos ch => String -> Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
+notch_ s a b c = Notch (Just s) (ap_ a) (ap_ b) (ap_ c)
 
 notchT :: forall ch. Pos ch => AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
 notchT a b c = Notch Nothing a b c
 
+notchT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+notchT_ s a b c = Notch (Just s) a b c
+
 allpass :: forall ch. Pos ch => Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
 allpass a b c = Allpass Nothing (ap_ a) (ap_ b) (ap_ c)
 
+allpass_ :: forall ch. Pos ch => String -> Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
+allpass_ s a b c = Allpass (Just s) (ap_ a) (ap_ b) (ap_ c)
+
 allpassT :: forall ch. Pos ch => AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
 allpassT a b c = Allpass Nothing a b c
+
+allpassT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+allpassT_ s a b c = Allpass (Just s) a b c
 
 convolver ::
   forall (a :: # Type) (s :: Symbol) ch.
@@ -1378,6 +1591,16 @@ convolver ::
   AudioUnit ch ->
   AudioUnit ch
 convolver = Convolver Nothing (reflectSymbol (SProxy :: SProxy s))
+
+convolver_ ::
+  forall (a :: # Type) (s :: Symbol) ch.
+  Has a s =>
+  Pos ch =>
+  IsSymbol s =>
+  String ->
+  AudioUnit ch ->
+  AudioUnit ch
+convolver_ s = Convolver (Just s) (reflectSymbol (SProxy :: SProxy s))
 
 dynamicConvolver ::
   forall ch bch blen.
@@ -1390,11 +1613,29 @@ dynamicConvolver ::
   AudioUnit ch
 dynamicConvolver i v = DynamicConvolver Nothing (AudioBuffer i (map V.toArray $ V.toArray v))
 
+dynamicConvolver_ ::
+  forall ch bch blen.
+  Pos ch =>
+  Pos bch =>
+  Pos blen =>
+  String ->
+  Int ->
+  Vec bch (Vec blen Number) ->
+  AudioUnit ch ->
+  AudioUnit ch
+dynamicConvolver_ s i v = DynamicConvolver (Just s) (AudioBuffer i (map V.toArray $ V.toArray v))
+
 dynamicsCompressor ::
   forall ch.
   Pos ch =>
   Number -> Number -> Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
 dynamicsCompressor a b c d e = DynamicsCompressor Nothing (ap_ a) (ap_ b) (ap_ c) (ap_ d) (ap_ e)
+
+dynamicsCompressor_ ::
+  forall ch.
+  Pos ch =>
+  String -> Number -> Number -> Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
+dynamicsCompressor_ s a b c d e = DynamicsCompressor (Just s) (ap_ a) (ap_ b) (ap_ c) (ap_ d) (ap_ e)
 
 dynamicsCompressorT ::
   forall ch.
@@ -1402,10 +1643,22 @@ dynamicsCompressorT ::
   AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
 dynamicsCompressorT a b c d e = DynamicsCompressor Nothing a b c d e
 
+dynamicsCompressorT_ ::
+  forall ch.
+  Pos ch =>
+  String ->
+  AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+dynamicsCompressorT_ s a b c d e = DynamicsCompressor (Just s) a b c d e
+
 dup :: forall ch. Pos ch => AudioUnit ch -> (AudioUnit ch -> AudioUnit ch) -> AudioUnit ch
 dup DupRes f = f DupRes
 
 dup x f = Dup Nothing x f
+
+dup_ :: forall ch. Pos ch => String -> AudioUnit ch -> (AudioUnit ch -> AudioUnit ch) -> AudioUnit ch
+dup_ s DupRes f = f DupRes
+
+dup_ s x f = Dup (Just s) x f
 
 ap_ :: forall a. a -> AudioParameter a
 ap_ a =
@@ -1448,6 +1701,17 @@ waveShaper ::
   AudioUnit ch
 waveShaper = WaveShaper Nothing (reflectSymbol (SProxy :: SProxy s))
 
+waveShaper_ ::
+  forall (a :: # Type) (s :: Symbol) ch.
+  Has a s =>
+  IsSymbol s =>
+  Pos ch =>
+  String ->
+  Oversample ->
+  AudioUnit ch ->
+  AudioUnit ch
+waveShaper_ s = WaveShaper (Just s) (reflectSymbol (SProxy :: SProxy s))
+
 dynamicWaveShaper ::
   forall ch.
   Pos ch =>
@@ -1457,6 +1721,16 @@ dynamicWaveShaper ::
   AudioUnit ch
 dynamicWaveShaper = DynamicWaveShaper Nothing
 
+dynamicWaveShaper_ ::
+  forall ch.
+  Pos ch =>
+  String ->
+  Array Number ->
+  Oversample ->
+  AudioUnit ch ->
+  AudioUnit ch
+dynamicWaveShaper_ s = DynamicWaveShaper (Just s)
+
 periodicOsc ::
   forall (a :: # Type) (s :: Symbol).
   Has a s =>
@@ -1465,6 +1739,15 @@ periodicOsc ::
   AudioUnit D1
 periodicOsc n = PeriodicOsc Nothing (ap_ n) (reflectSymbol (SProxy :: SProxy s))
 
+periodicOsc_ ::
+  forall (a :: # Type) (s :: Symbol).
+  Has a s =>
+  IsSymbol s =>
+  String ->
+  Number ->
+  AudioUnit D1
+periodicOsc_ s n = PeriodicOsc (Just s) (ap_ n) (reflectSymbol (SProxy :: SProxy s))
+
 periodicOscT ::
   forall (a :: # Type) (s :: Symbol).
   Has a s =>
@@ -1472,6 +1755,15 @@ periodicOscT ::
   AudioParameter Number ->
   AudioUnit D1
 periodicOscT n = PeriodicOsc Nothing n (reflectSymbol (SProxy :: SProxy s))
+
+periodicOscT_ ::
+  forall (a :: # Type) (s :: Symbol).
+  Has a s =>
+  IsSymbol s =>
+  String ->
+  AudioParameter Number ->
+  AudioUnit D1
+periodicOscT_ s n = PeriodicOsc (Just s) n (reflectSymbol (SProxy :: SProxy s))
 
 dynamicPeriodicOsc ::
   forall len.
@@ -1482,6 +1774,16 @@ dynamicPeriodicOsc ::
   AudioUnit D1
 dynamicPeriodicOsc n a b = DynamicPeriodicOsc Nothing (ap_ n) (V.toArray a) (V.toArray b)
 
+dynamicPeriodicOsc_ ::
+  forall len.
+  Pos len =>
+  String ->
+  Number ->
+  Vec len Number ->
+  Vec len Number ->
+  AudioUnit D1
+dynamicPeriodicOsc_ s n a b = DynamicPeriodicOsc (Just s) (ap_ n) (V.toArray a) (V.toArray b)
+
 dynamicPeriodicOscT ::
   forall len.
   Pos len =>
@@ -1491,40 +1793,85 @@ dynamicPeriodicOscT ::
   AudioUnit D1
 dynamicPeriodicOscT n a b = DynamicPeriodicOsc Nothing n (V.toArray a) (V.toArray b)
 
+dynamicPeriodicOscT_ ::
+  forall len.
+  Pos len =>
+  String ->
+  AudioParameter Number ->
+  Vec len Number ->
+  Vec len Number ->
+  AudioUnit D1
+dynamicPeriodicOscT_ s n a b = DynamicPeriodicOsc (Just s) n (V.toArray a) (V.toArray b)
+
 sinOsc :: Number -> AudioUnit D1
 sinOsc n = SinOsc Nothing (ap_ n)
+
+sinOsc_ :: String -> Number -> AudioUnit D1
+sinOsc_ s n = SinOsc (Just s) (ap_ n)
 
 sinOscT :: AudioParameter Number -> AudioUnit D1
 sinOscT n = SinOsc Nothing n
 
+sinOscT_ :: String -> AudioParameter Number -> AudioUnit D1
+sinOscT_ s n = SinOsc (Just s) n
+
 sawtoothOsc :: Number -> AudioUnit D1
 sawtoothOsc n = SawtoothOsc Nothing (ap_ n)
+
+sawtoothOsc_ :: String -> Number -> AudioUnit D1
+sawtoothOsc_ s n = SawtoothOsc (Just s) (ap_ n)
 
 sawtoothOscT :: AudioParameter Number -> AudioUnit D1
 sawtoothOscT n = SawtoothOsc Nothing n
 
+sawtoothOscT_ :: String -> AudioParameter Number -> AudioUnit D1
+sawtoothOscT_ s n = SawtoothOsc (Just s) n
+
 traingleOsc :: Number -> AudioUnit D1
 traingleOsc n = TriangleOsc Nothing (ap_ n)
+
+traingleOsc_ :: String -> Number -> AudioUnit D1
+traingleOsc_ s n = TriangleOsc (Just s) (ap_ n)
 
 traingleOscT :: AudioParameter Number -> AudioUnit D1
 traingleOscT n = TriangleOsc Nothing n
 
+traingleOscT_ :: String -> AudioParameter Number -> AudioUnit D1
+traingleOscT_ s n = TriangleOsc (Just s) n
+
 squareOsc :: Number -> AudioUnit D1
 squareOsc n = SquareOsc Nothing (ap_ n)
 
+squareOsc_ :: String -> Number -> AudioUnit D1
+squareOsc_ s n = SquareOsc (Just s) (ap_ n)
+
 squareOscT :: AudioParameter Number -> AudioUnit D1
 squareOscT n = SquareOsc Nothing n
+
+squareOscT_ :: String -> AudioParameter Number -> AudioUnit D1
+squareOscT_ s n = SquareOsc (Just s) n
 
 splitter :: forall ch. Pos ch => AudioUnit ch -> (Vec ch (AudioUnit D1) -> AudioUnit ch) -> AudioUnit ch
 splitter (SplitRes i) f = f (fill $ const (SplitRes i))
 
 splitter x f = Splitter Nothing x f
 
+splitter_ :: forall ch. Pos ch => String -> AudioUnit ch -> (Vec ch (AudioUnit D1) -> AudioUnit ch) -> AudioUnit ch
+splitter_ s (SplitRes i) f = f (fill $ const (SplitRes i))
+
+splitter_ s x f = Splitter (Just s) x f
+
 panner :: Number -> AudioUnit D2 -> AudioUnit D2
 panner n = StereoPanner Nothing (ap_ n)
 
+panner_ :: String -> Number -> AudioUnit D2 -> AudioUnit D2
+panner_ s n = StereoPanner (Just s) (ap_ n)
+
 pannerT :: AudioParameter Number -> AudioUnit D2 -> AudioUnit D2
 pannerT n = StereoPanner Nothing n
+
+pannerT_ :: String -> AudioParameter Number -> AudioUnit D2 -> AudioUnit D2
+pannerT_ s n = StereoPanner (Just s) n
 
 speaker :: forall ch. Pos ch => NonEmpty List (AudioUnit ch) -> AudioUnit ch
 speaker = Speaker Nothing
@@ -1539,29 +1886,61 @@ merger ::
   AudioUnit ch
 merger = Merger Nothing
 
+merger_ ::
+  forall ch.
+  Pos ch =>
+  String ->
+  Vec ch (AudioUnit D1) ->
+  AudioUnit ch
+merger_ s = Merger (Just s)
+
 mul :: forall ch. Pos ch => NonEmpty List (AudioUnit ch) -> AudioUnit ch
 mul = Mul Nothing
+
+mul_ :: forall ch. Pos ch => String -> NonEmpty List (AudioUnit ch) -> AudioUnit ch
+mul_ s = Mul (Just s)
 
 add :: forall ch. Pos ch => NonEmpty List (AudioUnit ch) -> AudioUnit ch
 add = Add Nothing
 
+add_ :: forall ch. Pos ch => String -> NonEmpty List (AudioUnit ch) -> AudioUnit ch
+add_ s = Add (Just s)
+
 constant :: Number -> AudioUnit D1
 constant n = Constant Nothing (ap_ n)
+
+constant_ :: String -> Number -> AudioUnit D1
+constant_ s n = Constant (Just s) (ap_ n)
 
 constantT :: AudioParameter Number -> AudioUnit D1
 constantT n = Constant Nothing n
 
+constantT_ :: String -> AudioParameter Number -> AudioUnit D1
+constantT_ s n = Constant (Just s) n
+
 delay :: forall ch. Pos ch => Number -> AudioUnit ch -> AudioUnit ch
 delay n = Delay Nothing (ap_ n)
+
+delay_ :: forall ch. Pos ch => String -> Number -> AudioUnit ch -> AudioUnit ch
+delay_ s n = Delay (Just s) (ap_ n)
 
 delayT :: forall ch. Pos ch => AudioParameter Number -> AudioUnit ch -> AudioUnit ch
 delayT n = Delay Nothing n
 
+delayT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+delayT_ s n = Delay (Just s) n
+
 gain :: forall ch. Pos ch => Number -> NonEmpty List (AudioUnit ch) -> AudioUnit ch
 gain n = Gain Nothing (ap_ n)
 
+gain_ :: forall ch. Pos ch => String -> Number -> NonEmpty List (AudioUnit ch) -> AudioUnit ch
+gain_ s n = Gain (Just s) (ap_ n)
+
 gainT :: forall ch. Pos ch => AudioParameter Number -> NonEmpty List (AudioUnit ch) -> AudioUnit ch
 gainT n = Gain Nothing n
+
+gainT_ :: forall ch. Pos ch => String -> AudioParameter Number -> NonEmpty List (AudioUnit ch) -> AudioUnit ch
+gainT_ s n = Gain (Just s) n
 
 gain' :: forall ch. Pos ch => Number -> AudioUnit ch -> AudioUnit ch
 gain' n = Gain Nothing (ap_ n) <<< NE.singleton
