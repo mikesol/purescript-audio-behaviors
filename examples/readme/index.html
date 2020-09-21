@@ -8,30 +8,34 @@
     var offCb = null;
     var audioCtx = null;
     function turnOnAudio() {
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      audioCtx.audioWorklet.addModule("ps-aud-mul.js").then(function () {
-        var now = new Date().getTime();
-        var ctr = 0;
-        // null for the microphone
-        offCb = PS["FRP.Behavior.Audio.Example.Readme"].run(15)(10)(audioCtx)(
-          null
-        )({})(workers)(function (timeToSet) {
-          return function (instructions) {
-            return function (ctx) {
-              return function (stream) {
-                return function (sources) {
-                  return function (units) {
-                    return function () {
-                      return PS["FRP.Behavior.Audio.Example.Readme"].touchAudio(
-                        timeToSet
-                      )(instructions)(ctx)(stream)(sources)(units)();
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(function (mic) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        audioCtx.audioWorklet.addModule("ps-aud-mul.js").then(function () {
+          var now = new Date().getTime();
+          var ctr = 0;
+          // null for the microphone
+          offCb = PS["FRP.Behavior.Audio.Example.Readme"].run(15)(10)(audioCtx)(
+            mic
+          )({})(workers)(function (timeToSet) {
+            return function (instructions) {
+              return function (ctx) {
+                return function (stream) {
+                  return function (sources) {
+                    return function (units) {
+                      return function () {
+                        return PS[
+                          "FRP.Behavior.Audio.Example.Readme"
+                        ].touchAudio(timeToSet)(instructions)(ctx)(stream)(
+                          sources
+                        )(units)();
+                      };
                     };
                   };
                 };
               };
             };
-          };
-        })();
+          })();
+        });
       });
     }
     function turnOffAudio() {
