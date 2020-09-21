@@ -76,6 +76,48 @@ If you are building an audio function that is supposed to be reused (ie your own
 
 ```
 
+### Tweaking parameters
+
+Under the hood, `purescript-audio-behaviors` tries _really hard_ to guarantee that, no matter how laggy or janky the browser is, audio is rendered at a consistent rate so that there is no stutter. There are several parameters that influence this, and they all have tradeoffs.
+
+All of the parameters are passed to the function `runInBrowser`, which has the following signature:
+
+```haskell
+runInBrowser ::
+  forall ch (a :: # Type).
+  Homogeneous a Foreign =>
+  Pos ch =>
+  (Behavior Number -> Behavior (AudioUnit ch)) -> -- the scene
+  Int -> -- audio clock rate
+  Int -> -- driver rate
+  Foreign -> -- audio context
+  Foreign -> -- microphone if one exists
+  Record a -> -- buffers, sound files, and wavetables
+  Array Foreign -> -- web workers with glpk
+  (
+    Number ->
+    Array Instruction ->
+    Foreign ->
+    Foreign ->
+    Record a ->
+    Array Foreign ->
+    Effect (Array Foreign)
+  ) -> -- renderer
+  Effect (Effect Unit)
+```
+
+A lot of this is boilerplate, and you can see examples of how to hook this up in the [examples](./examples) directory. The three bits to understand here are:
+
+- audio clock rate
+- driver rate
+- web workers with glpk
+
+The _audio clock rate_ represents how many milliseconds are between control-rate pings to the scene. For example, if you set this to `20`, the scene will get polled every `0.02` seconds. In general, for most applications, somewhere between `10` and `20` is the sweet spot. Too low and you'll skip frames (jank), too high and you'll start hearing the quantization.
+
+The _driver rate_ represents how many milliseconds are between pings to the entire reactive system. You can think of this as the motor behind the FRP. This should _always be_ less than the audio clock rate. The closer to the audio clock rate, the more likely there will be dropped frames because the system doesn't poll fast enough to make the audio deadline. The closer to `0`, the less responsive your UI will be. In general, `5ms` less than the _audio clock rate_ is a safe bet. So if your audio clock rate is `15`, this should be `10`.
+
+Lastly, _web workers with glpk_ is an array of web workers with an emscripten port of GLPK preloaded. Here, more is always better in theory, but the danger is that anything over 8ish runs the risk of providing no marginal benefit, as you will max out the number of concurrent threads on which you can run glpk. I tend to use 8 for everything.
+
 ## Bundling on your site
 
 To see how to bundle this library on your site, please visit the [examples](./examples) directory.
