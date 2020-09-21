@@ -87,11 +87,36 @@ scene _ =
 
 Make sure to wear headphones to avoid feedback!
 
-### Going from mono to stereo
+### Adding playback from an audio tag
+
+Let's add some soothing jungle sounds to the mix. We use the function `play` to add an audio element. This function assumes that you provide an audio element with the appropriate tag to the toplevel `runInBrowser` function. In this case, the tag is `"forest"`.
 
 ```haskell
-scene3 :: Behavior Number -> Behavior (AudioUnit D2)
-scene3 _ =
+-- assuming we have passed in an object
+-- with { forest: new Audio("my-recording.mp3") }
+-- to `runInBrowser`
+scene :: Behavior Number -> Behavior (AudioUnit D1)
+scene _ =
+  pure
+    ( speaker
+        $ ( (gain' 0.2 $ sinOsc 110.0)
+              :| (gain' 0.1 $ sinOsc 220.0)
+              : (gain' 0.5 $ (play "forest"))
+              : microphone
+              : Nil
+          )
+    )
+```
+
+### Going from mono to stereo
+
+To go from mono to stereo, there is a class of functions called `dupX`, `splitX` and `merger`. In the example below, we use `dup1` to duplicate a mono sound and then `merge` it into two stereo tracks.
+
+If you want to make two separate audio units, then you can use a normal let block. If, on the other hand, you want to use the same underlying unit, use `dupX`. When in doubt, use `dupX`, as you'll rarely need to duplicate an identical audio source.
+
+```haskell
+scene :: Behavior Number -> Behavior (AudioUnit D2)
+scene _ =
   pure
     $ dup1
         ( (gain' 0.2 $ sinOsc 110.0)
@@ -104,6 +129,32 @@ scene3 _ =
                 : Nil
             )
 ```
+
+### Getting the sound to change as a function of time
+
+Up until this point, our audio hasn't reacted to many behaviors. Let's fix that! One behavior to react to is the passage of time. Let's add a slow undulation to the lowest pitch in the drone that is based on the passage of time
+
+```haskell
+scene4 :: Behavior Number -> Behavior (AudioUnit D2)
+scene4 time = f <$> time
+  where
+  f s =
+    let
+      rad = pi * s
+    in
+      dup1
+        ( (gain' 0.2 $ sinOsc (110.0 + (3.0 * sin (0.5 * rad))))
+            + (gain' 0.1 $ sinOsc 220.0)
+            + microphone
+        ) \mono ->
+        speaker
+          $ ( (panner (-0.5) (merger (mono +> mono +> empty)))
+                :| (gain' 0.5 $ (play "forest"))
+                : Nil
+            )
+```
+
+Here,
 
 ## Advanced usage
 

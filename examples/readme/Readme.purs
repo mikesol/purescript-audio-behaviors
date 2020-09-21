@@ -53,6 +53,24 @@ scene3 _ =
                 : Nil
             )
 
+scene4 :: Behavior Number -> Behavior (AudioUnit D2)
+scene4 time = f <$> time
+  where
+  f s =
+    let
+      rad = pi * s
+    in
+      dup1
+        ( (gain' 0.2 $ sinOsc (110.0 + (3.0 * sin (0.5 * rad))))
+            + (gain' 0.1 $ sinOsc 220.0)
+            + microphone
+        ) \mono ->
+        speaker
+          $ ( (panner (-0.5) (merger (mono +> mono +> empty)))
+                :| (gain' 0.5 $ (play "forest"))
+                : Nil
+            )
+
 type Sources
   = { forest :: Foreign
     }
