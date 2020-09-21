@@ -50,9 +50,32 @@ The main unit of work in `purescript-audio-behaviors` is the **scene**. A scene,
 In this section, we'll build a scene from the ground up. In doing so, we'll accomplish four things:
 
 1. Getting a static sound to play.
-2. Getting the sound to change as a function of time.
-3. Getting the sound to change as a function of a keyboard input event.
-4. Making sure that certain sounds occur at a precise time.
+1. Adding sound via the microphone.
+1. Adding playback from an `audio` tag.
+1. Going from mono to stereo.
+1. Getting the sound to change as a function of time.
+1. Getting the sound to change as a function of a mouse input event.
+1. Making sure that certain sounds occur at a precise time.
+
+### Getting a static sound to play
+
+Let's start with a sine wave at A440.
+
+```haskell
+scene :: Behavior Number -> Behavior (AudioUnit D1)
+scene _ = pure (speaker $ sinOsc 440.0)
+```
+
+Note that, because this function does not depend on time, we can ignore the input.
+
+### Going from mono to stereo
+
+Another thing to note is the `D1` in the signature. `purescript-audio-behaviors` uses types to describe channels. Here, D1 signifies that the output is mono. If you try to change it to anything else (ie D2 for stereo) it will break. That is because a sine wave oscillator is always mono. To make it stereo, you'd use the `dup` audio unit to duplicate the sound and the `merger` audio unit to merge the two channels into a single sound.
+
+```haskell
+scene :: Behavior Number -> Behavior (AudioUnit D2)
+scene _ = let d = dup $ sinOsc 440.0 in pure (speaker $ (merger (d +> d +> empty)))
+```
 
 ## Advanced usage
 
