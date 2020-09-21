@@ -63,7 +63,7 @@ Let's start with a sine wave at A440.
 
 ```haskell
 scene :: Behavior Number -> Behavior (AudioUnit D1)
-scene _ = pure (speaker $ sinOsc 440.0)
+scene _ = pure (speaker' $ sinOsc 440.0)
 ```
 
 Note that, because this function does not depend on time, we can ignore the input.

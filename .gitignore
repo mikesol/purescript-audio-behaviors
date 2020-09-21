@@ -19,3 +19,7 @@ examples/metronome/index.js
 examples/metronome/glpk-worker.js
 examples/metronome/glpk-worker.wasm
 examples/metronome/ps-aud-mul.js
+examples/readme/index.js
+examples/readme/glpk-worker.js
+examples/readme/glpk-worker.wasm
+examples/readme/ps-aud-mul.js
