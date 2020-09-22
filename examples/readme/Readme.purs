@@ -71,7 +71,7 @@ scene4 time = f <$> time
       rad = pi * s
     in
       dup1
-        ( (gain' 0.2 $ sinOsc (110.0 + (3.0 * sin (0.5 * rad))))
+        ( (gain' 0.2 $ sinOsc (110.0 + (10.0 * sin (0.2 * rad))))
             + (gain' 0.1 $ sinOsc 220.0)
             + microphone
         ) \mono ->
@@ -89,7 +89,7 @@ scene5 mouse time = f <$> time <*> swell
       rad = pi * s
     in
       dup1
-        ( (gain' 0.2 $ sinOsc (110.0 + (3.0 * sin (0.5 * rad))))
+        ( (gain' 0.2 $ sinOsc (110.0 + (10.0 * sin (0.2 * rad))))
             + (gain' 0.1 $ sinOsc (220.0 + sw))
             + microphone
         ) \mono ->
@@ -224,7 +224,9 @@ run ::
   Array Foreign ->
   (Number -> Array Instruction -> Foreign -> Foreign -> Sources -> Array Foreign -> Effect (Array Foreign)) ->
   Effect (Effect Unit)
-run = runInBrowser scene3
+run a b c d e f g = do
+  mouse <- getMouse
+  runInBrowser (scene5 mouse) a b c d e f g
 
 touchAudio :: Number -> Array Instruction → Foreign → Foreign → Sources → Array Foreign → Effect (Array Foreign)
 touchAudio = Aud.touchAudio
