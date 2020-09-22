@@ -139,7 +139,7 @@ pwf =
         )
         (range 0 100)
 
-kr = 1000.0 / 15.0 :: Number -- the control rate in seconds, or 66.66667 Hz
+kr = 15.0 / 1000.0 :: Number -- the control rate in seconds, or 66.66667 Hz
 
 scene6 :: Mouse -> Behavior Number -> Behavior (AudioUnit D2)
 scene6 mouse time = f <$> time <*> swell

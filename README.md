@@ -233,8 +233,8 @@ pwf =
         (range 0 100)
 
 -- the control rate in seconds, or 66.66667 Hz
--- in klang.dev, the control rate is 1000.0 / 15
-kr = 1000.0 / 15.0 :: Number
+-- this is the control rate in klang.dev
+kr = 15.0 / 1000.0 :: Number
 
 scene :: Mouse -> Behavior Number -> Behavior (AudioUnit D2)
 scene mouse time = f <$> time <*> swell
