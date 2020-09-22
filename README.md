@@ -233,8 +233,6 @@ pwf =
         (range 0 100)
 
 -- the control rate in seconds, or 66.66667 Hz
--- as we can set our own control rate (see Advanced usage below)
--- we know what this is
 -- in klang.dev, the control rate is 1000.0 / 15
 kr = 1000.0 / 15.0 :: Number
 
