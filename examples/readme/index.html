@@ -7,10 +7,9 @@
 
     var offCb = null;
     var audioCtx = null;
+    const myAudio = new Audio("forest.mp3");
+
     function turnOnAudio() {
-      const myAudio = new Audio(
-        "https://www.zapsplat.com/wp-content/uploads/2015/sound-effects-55112/zapsplat_nature_rainforest_ambience_wind_trees_birds_mainly_cockatoos_close_by_early_spring_qld_australia_55319.mp3"
-      );
       navigator.mediaDevices.getUserMedia({ audio: true }).then(function (mic) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         audioCtx.audioWorklet.addModule("ps-aud-mul.js").then(function () {
