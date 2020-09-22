@@ -20,7 +20,7 @@ spago build
 
 ## Main idea
 
-This library uses the [behaviors pattern](https://wiki.haskell.org/Functional_Reactive_Programming) pioneered by Conal Elliott and Paul Hudak. You describe the way audio should behave at a given time, and a sampling function makes sure tha the audio is rendered correctly.
+This library uses the [behaviors pattern](https://wiki.haskell.org/Functional_Reactive_Programming) pioneered by Conal Elliott and Paul Hudak. You describe the way audio should behave at a given time, and the function is sampled at regular intervals to build the audio graph.
 
 For example, consider the following behavior, taken from [`HelloWorld.purs`](./examples/hello-world/HelloWorld.purs):
 
@@ -47,7 +47,7 @@ Here, there are four sine wave oscillators whose frequencies modulate subtly bas
 
 The main unit of work in `purescript-audio-behaviors` is the **scene**. A scene, like the one above, is a function of time, where the input time comes from the audio clock at regular intervals.
 
-In this section, we'll build a scene from the ground up. In doing so, we'll accomplish four things:
+In this section, we'll build a scene from the ground up. In doing so, we'll accomplish several things:
 
 1. Getting a static sound to play.
 1. Adding sound via the microphone.
