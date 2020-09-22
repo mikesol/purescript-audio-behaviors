@@ -176,7 +176,7 @@ scene6 mouse time = f <$> time <*> swell
     in
       dup1
         ( (gain' 0.2 $ sinOsc (110.0 + (3.0 * sin (0.5 * rad))))
-            + (gainT' (gn s) $ sinOsc (220.0 + sw))
+            + (gainT' (gn s) $ sinOsc 440.0)
             + (gain' 0.1 $ sinOsc (220.0 + sw))
             + microphone
         ) \mono ->
@@ -226,7 +226,7 @@ run ::
   Effect (Effect Unit)
 run a b c d e f g = do
   mouse <- getMouse
-  runInBrowser (scene5 mouse) a b c d e f g
+  runInBrowser (scene6 mouse) a b c d e f g
 
 touchAudio :: Number -> Array Instruction → Foreign → Foreign → Sources → Array Foreign → Effect (Array Foreign)
 touchAudio = Aud.touchAudio

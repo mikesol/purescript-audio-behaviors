@@ -159,8 +159,8 @@ scene time = f <$> time
 The next snippet of code is taken right out of the original `purescript-behaviors` library by [Phil Freeman](https://github.com/paf31). Let's create a "swelling" effect on our upper sine wave when we click the mouse. When you click, it will sound like a groan or growl. Yikes!
 
 ```haskell
-scene5 :: Mouse -> Behavior Number -> Behavior (AudioUnit D2)
-scene5 mouse time = f <$> time <*> swell
+scene :: Mouse -> Behavior Number -> Behavior (AudioUnit D2)
+scene mouse time = f <$> time <*> swell
   where
   f s sw =
     let
@@ -271,7 +271,7 @@ scene mouse time = f <$> time <*> swell
     in
       dup1
         ( (gain' 0.2 $ sinOsc (110.0 + (10.0 * sin (0.2 * rad))))
-            + (gainT' (gn s) $ sinOsc (220.0 + sw))
+            + (gainT' (gn s) $ sinOsc 440.0)
             + (gain' 0.1 $ sinOsc (220.0 + sw))
             + microphone
         ) \mono ->
