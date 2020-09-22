@@ -292,6 +292,8 @@ exports.touchAudio = function (/**dictHomogeneous */) {
                         ? context.createGain()
                         : c.value1.constructor.name == "SplitRes$prime$prime"
                         ? context.createGain()
+                        : c.value1.constructor.name == "DupRes$prime$prime"
+                        ? context.createGain()
                         : c.value1.constructor.name == "Splitter$prime$prime"
                         ? context.createChannelSplitter(c.value2.value0)
                         : c.value1.constructor.name == "Merger$prime$prime"
