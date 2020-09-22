@@ -168,6 +168,7 @@ module FRP.Behavior.Audio
   , gainT_
   , speaker'
   , gain'
+  , gainT'
   , audioGrouper
   , makeProgram
   ) where

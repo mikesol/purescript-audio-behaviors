@@ -30,7 +30,23 @@ scene time = f <$> time
   where
   split s = span ((s >= _) <<< fst) pwf
 
-  gn s = let ht = split s in let left = fromMaybe (Tuple 0.0 0.0) $ last ht.init in let right = fromMaybe (Tuple 101.0 0.0) $ head ht.rest in let m = (snd right - snd left) / (fst right - fst left) in let b = (snd right - (m * fst right)) in m * s + b
+  gn s =
+    let
+      ht = split s
+    in
+      let
+        left = fromMaybe (Tuple 0.0 0.0) $ last ht.init
+      in
+        let
+          right = fromMaybe (Tuple 101.0 0.0) $ head ht.rest
+        in
+          let
+            m = (snd right - snd left) / (fst right - fst left)
+          in
+            let
+              b = (snd right - (m * fst right))
+            in
+              m * s + b
 
   f s = speaker' (gain' (gn s) $ sinOsc 440.0)
 

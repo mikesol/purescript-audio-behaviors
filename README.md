@@ -135,8 +135,8 @@ scene _ =
 Up until this point, our audio hasn't reacted to many behaviors. Let's fix that! One behavior to react to is the passage of time. Let's add a slow undulation to the lowest pitch in the drone that is based on the passage of time
 
 ```haskell
-scene4 :: Behavior Number -> Behavior (AudioUnit D2)
-scene4 time = f <$> time
+scene :: Behavior Number -> Behavior (AudioUnit D2)
+scene time = f <$> time
   where
   f s =
     let
@@ -154,7 +154,156 @@ scene4 time = f <$> time
             )
 ```
 
-Here,
+### Getting the sound to change as a function of a mouse input event
+
+The next snippet of code is taken right out of the original `purescript-behaviors` library by [Phil Freeman](https://github.com/paf31). Let's create a "swelling" effect on our upper sine wave when we click the mouse.
+
+```haskell
+scene5 :: Mouse -> Behavior Number -> Behavior (AudioUnit D2)
+scene5 mouse time = f <$> time <*> swell
+  where
+  f s sw =
+    let
+      rad = pi * s
+    in
+      dup1
+        ( (gain' 0.2 $ sinOsc (110.0 + (3.0 * sin (0.5 * rad))))
+            + (gain' 0.1 $ sinOsc (220.0 + sw))
+            + microphone
+        ) \mono ->
+        speaker
+          $ ( (panner (-0.5) (merger (mono +> mono +> empty)))
+                :| (gain' 0.5 $ (play "forest"))
+                : Nil
+            )
+
+  -- `swell` is an interactive function of time defined by a differential equation:
+  --
+  -- d^2s/dt^2
+  --   | mouse down = ⍺ - βs
+  --   | mouse up   = ɣ - δs - ε ds/dt
+  --
+  -- So the function exhibits either decay or growth depending on if
+  -- the mouse is pressed or not.
+  swell :: Behavior Number
+  swell =
+    fixB 2.0 \b ->
+      integral' 2.0 (unwrap <$> Time.seconds)
+        let
+          db =
+            fixB 10.0 \db_ ->
+              integral'
+                10.0
+                (unwrap <$> Time.seconds)
+                (f <$> buttons mouse <*> b <*> db_)
+        in
+          switcher db (down $> db)
+    where
+    f bs s ds
+      | isEmpty bs = -8.0 * (s - 1.0) - ds * 2.0
+      | otherwise = 2.0 * (4.0 - s)
+```
+
+The functions [`integral'`](https://pursuit.purescript.org/packages/purescript-behaviors/7.0.0/docs/FRP.Behavior#v:integral'), [`fixB`](https://pursuit.purescript.org/packages/purescript-behaviors/7.0.0/docs/FRP.Behavior#v:fixB), and [`switcher`](https://pursuit.purescript.org/packages/purescript-behaviors/7.0.0/docs/FRP.Behavior#v:switcher) all come from [`purescript-behaviors`](https://pursuit.purescript.org/packages/purescript-behaviors/7.0.0).
+
+### Making sure that certain sounds occur at a precise time
+
+Great audio is all about timing, but so far, we have been locked to scheduling events at multiples of the control rate. The _de facto_ control rate for this library is ~66Hz, which is way too slow to quantize complex rhythmic events.
+
+To fix the control rate problem, parameters that can change in time like _frequency_ or _gain_ have an optional second parameter that specifies the offset, in seconds, from the current quantized value in the control rate.
+
+For example, let's say the control rate is `66Hz` and you want a sound to trigger at _exactly_ `0.25` seconds. At this rate, the closest quantized value to `0.25` is `0.2424242424`, or `16/66`. That means that, when `time` is `0.24242424`, we will add an offset of `0.00757576` to the value to make sure that it happens "exactly" at `0.25` seconds. "Exactly" is in quoation marks because floating point arrithmentic will provoke a rounding error of around `0.000000000001`, but this is far smaller than the audio sample rate, so we will not hear it.
+
+To finish our tutorial, let's add a small metronome on the inside of our sound. We will have it beat every `0.9` seconds.
+
+```haskell
+-- a piecewise function that creates an attack/release/sustain envelope
+-- at a periodicity of every 0.9 seconds
+pwf :: Array (Tuple Number Number)
+pwf =
+  join
+    $ map
+        ( \i ->
+            map
+              ( \(Tuple f s) ->
+                  Tuple (f + 0.9 * toNumber i) s
+              )
+              [ Tuple 0.0 0.0, Tuple 0.1 0.9, Tuple 0.3 0.3 ]
+        )
+        (range 0 100)
+
+-- the control rate in seconds, or 66.66667 Hz
+-- as we can set our own control rate (see Advanced usage below)
+-- we know what this is
+-- in klang.dev, the control rate is 1000.0 / 15
+kr = 1000.0 / 15.0 :: Number
+
+scene :: Mouse -> Behavior Number -> Behavior (AudioUnit D2)
+scene mouse time = f <$> time <*> swell
+  where
+  split s = span ((s >= _) <<< fst) pwf
+
+  gn s =
+    let
+      ht = split s
+    in
+      let
+        left = fromMaybe (Tuple 0.0 0.0) $ last ht.init
+      in
+        let
+          right = fromMaybe (Tuple 101.0 0.0) $ head ht.rest
+        in
+          -- if in a control cycle with a peak or trough
+          -- then we lock to that
+          -- otherwise, we interpolate
+          if (fst right - s) < kr then
+            AudioParameter { param: (snd right), timeOffset: (fst right - s) }
+          else
+            let
+              m = (snd right - snd left) / (fst right - fst left)
+            in
+              let
+                b = (snd right - (m * fst right))
+              in
+                AudioParameter { param: (m * s + b), timeOffset: 0.0 }
+
+  f s sw =
+    let
+      rad = pi * s
+    in
+      dup1
+        ( (gain' 0.2 $ sinOsc (110.0 + (3.0 * sin (0.5 * rad))))
+            + (gainT' (gn s) $ sinOsc (220.0 + sw))
+            + (gain' 0.1 $ sinOsc (220.0 + sw))
+            + microphone
+        ) \mono ->
+        speaker
+          $ ( (panner (-0.5) (merger (mono +> mono +> empty)))
+                :| (gain' 0.5 $ (play "forest"))
+                : Nil
+            )
+  swell :: Behavior Number
+  swell =
+    fixB 2.0 \b ->
+      integral' 2.0 (unwrap <$> Time.seconds)
+        let
+          db =
+            fixB 10.0 \db_ ->
+              integral' 10.0 (unwrap <$> Time.seconds) (ft <$> buttons mouse <*> b <*> db_)
+        in
+          switcher db (down $> db)
+    where
+    ft bs s ds
+      | isEmpty bs = -8.0 * (s - 1.0) - ds * 2.0
+      | otherwise = 2.0 * (4.0 - s)
+
+```
+
+### Conclusion
+
+We've built from a simple sound all the way up to a complex, precisely-timed stereo structure that responds to mouse events. There are many more audio units in the library, such as filters, compressors and convolvers. Almost the whole [Web Audio API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API) is exposed.
+
+To see a list of exported audio units, you can check out [`Audio.purs`](./src/FRP/Behavior/Audio.purs). In a future version of this, we will refactor things so that all of the audio units are in one package.
 
 ## Advanced usage
 
