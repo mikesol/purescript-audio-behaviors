@@ -309,6 +309,10 @@ Here are some tips for advanced usage of `purescript-audio-behaviors`.
 
 ### Debugging our scene
 
+`purescript-audio-behaviors` translates scenes to a sort of "assembly" language that is passed to an audio rendering function. This language has primitives like `NewUnit` for a new audio unit, `ConnectTo`, to connect one unit to another one, etc. When debugging, the recommendation is to print these instructions to the console using `console.log`. Then, you will see exactly how the audio graph is updating in realtime.
+
+Another useful way to debug is unit tests. Most behaviors can be refactored as pure functions with the `Behavior` as a top-level applicative control structure, and you can sample them at various times to make sure the audio graph is consistent with your expectations.
+
 ### Named units
 
 As you build larger and larger audio structures, you may notice some stuttering in your application. The more units that exist, the more work the library has to do to keep track of them, and it can result in throttling a rendering frame.
