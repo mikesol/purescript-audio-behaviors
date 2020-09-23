@@ -14,6 +14,7 @@ module FRP.Behavior.Audio
   , glpkWorkerImpl
   , LinearProgram
   , runInBrowser
+  , runInBrowser_
   , Oversample
   , LPObjective
   , LPConstraint
