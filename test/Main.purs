@@ -1,9 +1,8 @@
 module Test.Main where
 
 import Prelude
-
 import Effect (Effect)
-import Effect.Aff ( launchAff_)
+import Effect.Aff (launchAff_)
 import Test.Basic (basicTestSuite)
 import Test.LinProg1 (linprogTestSuite)
 import Test.LinProg2 (linprogTestSuite2)
