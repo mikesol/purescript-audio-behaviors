@@ -26,4 +26,6 @@ scene time = f <$> time
 -- change to true if you use `microphone` above
 enableMicrophone = false
 
+-- add a mouse, keyboard or other device here if needed
 main = runInBrowser_ (pure scene)
+
