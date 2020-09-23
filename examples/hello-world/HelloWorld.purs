@@ -45,6 +45,3 @@ touchAudio = Aud.touchAudio
 
 makeWorkers :: Int -> Effect (Array Foreign)
 makeWorkers = Aud.makeWorkers
-
-main :: Effect Unit
-main = pure unit
