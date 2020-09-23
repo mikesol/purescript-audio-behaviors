@@ -3312,3 +3312,22 @@ runInBrowser scene pingEvery actualSpeed ctx mic sources workers executor = do
       )
   write bam unsub
   pure bam
+
+-- | The main executor loop in the browser
+-- | Accepts an effectful scene
+runInBrowser_ ::
+  forall ch (a :: # Type).
+  Homogeneous a Foreign =>
+  Pos ch =>
+  Effect (Behavior Number -> Behavior (AudioUnit ch)) ->
+  Int ->
+  Int ->
+  Foreign ->
+  Foreign ->
+  Record a ->
+  Array Foreign ->
+  (Number -> Array Instruction -> Foreign -> Foreign -> Record a -> Array Foreign -> Effect (Array Foreign)) ->
+  Effect (Effect Unit)
+runInBrowser_ scene' pingEvery actualSpeed ctx mic sources workers executor = do
+  scene <- scene'
+  runInBrowser scene pingEvery actualSpeed ctx mic sources workers executor
