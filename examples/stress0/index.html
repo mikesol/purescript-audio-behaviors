@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+  <script src="index.js"></script>
+  <script>
+    // 8 workers spaced at 20ms seems to work well
+    const workers = PS["FRP.Behavior.Audio.Example.Stress0"].makeWorkers(8)();
+
+    var offCb = null;
+    var audioCtx = null;
+    function turnOnAudio() {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      audioCtx.audioWorklet.addModule("ps-aud-mul.js").then(function () {
+        var now = new Date().getTime();
+        var ctr = 0;
+        // null for the microphone
+        console.log("starting");
+        offCb = PS["FRP.Behavior.Audio.Example.Stress0"].run(15)(10)(audioCtx)(
+          null
+        )({})(workers)(function (timeToSet) {
+          return function (instructions) {
+            return function (ctx) {
+              return function (stream) {
+                return function (sources) {
+                  return function (units) {
+                    return function () {
+                      console.log("i*****");
+                      for (var i = 0; i < instructions.length; i++) {
+                        if (instructions[i].constructor.name === "SetGain") {
+                          console.log(
+                            instructions[i].value0,
+                            instructions[i].value1,
+                            timeToSet,
+                            instructions[i].value2
+                          );
+                        }
+                      }
+                      return [];
+                      //return PS[
+                      //  "FRP.Behavior.Audio.Example.Stress0"
+                      //].touchAudio(timeToSet)(instructions)(ctx)(stream)(
+                      //  sources
+                      //)(units)();
+                    };
+                  };
+                };
+              };
+            };
+          };
+        })();
+      });
+    }
+    function turnOffAudio() {
+      offCb ? offCb() : null;
+      offCB = null;
+      audioCtx ? audioCtx.close() : null;
+      audioCtx = null;
+    }
+  </script>
+  <body>
+    <button onclick="turnOnAudio();">turn on</button>
+    <button onclick="turnOffAudio();">turn off</button>
+  </body>
+</html>

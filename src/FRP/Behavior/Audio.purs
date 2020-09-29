@@ -79,6 +79,7 @@ module FRP.Behavior.Audio
   , delay
   , gain
   , speaker
+  , speaker_
   , microphone_
   , play_
   , playBuf_
@@ -170,6 +171,8 @@ module FRP.Behavior.Audio
   , speaker'
   , gain'
   , gainT'
+  , gain_'
+  , gainT_'
   , audioGrouper
   , makeProgram
   ) where
@@ -2014,6 +2017,9 @@ speaker = Speaker Nothing
 speaker' :: forall ch. Pos ch => AudioUnit ch -> AudioUnit ch
 speaker' = Speaker Nothing <<< NE.singleton
 
+speaker_ :: forall ch. Pos ch => String -> NonEmpty List (AudioUnit ch) -> AudioUnit ch
+speaker_ = Speaker <<< Just
+
 merger ::
   forall ch.
   Pos ch =>
@@ -2082,6 +2088,12 @@ gain' n = Gain Nothing (ap_ n) <<< NE.singleton
 
 gainT' :: forall ch. Pos ch => AudioParameter Number -> AudioUnit ch -> AudioUnit ch
 gainT' n = Gain Nothing n <<< NE.singleton
+
+gain_' :: forall ch. Pos ch => String -> Number -> AudioUnit ch -> AudioUnit ch
+gain_' s n = Gain (Just s) (ap_ n) <<< NE.singleton
+
+gainT_' :: forall ch. Pos ch => String -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+gainT_' s n = Gain (Just s) n <<< NE.singleton
 
 instance semiringAudioUnit :: Semiring (AudioUnit ch) where
   zero = Constant Nothing (ap_ 0.0)
@@ -3286,7 +3298,7 @@ runInBrowser scene pingEvery actualSpeed ctx mic sources workers executor = do
                       ___a <- read __totalTillProgram
                       ___b <- read __totalProgram
                       ___c <- read __totalPostProgram
-                      log
+                      (if false then log else (const $ pure unit))
                         $ ( "Stats -- before glpk: "
                               <> show (___a / (toNumber curIt))
                               <> " "

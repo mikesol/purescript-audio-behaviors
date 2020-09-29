@@ -422,7 +422,7 @@ exports.touchAudio = function (/**dictHomogeneous */) {
                       timeToSet + c.value2
                     );
                   } else if (c.constructor.name == "SetGain") {
-                    generators[c.value0].gain.setValueAtTime(
+                    generators[c.value0].gain.linearRampToValueAtTime(
                       c.value1,
                       timeToSet + c.value2
                     );

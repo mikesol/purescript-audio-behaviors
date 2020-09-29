@@ -8,10 +8,12 @@ import Data.Tuple (Tuple(..), fst, snd)
 import Data.Typelevel.Num (D1)
 import Effect (Effect)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AudioUnit, Instruction, gain', runInBrowser, sinOsc, speaker')
+import FRP.Behavior.Audio (AudioParameter(..), AudioUnit, Instruction, gain', gainT', runInBrowser, sinOsc, speaker')
 import FRP.Behavior.Audio as Aud
 import Foreign (Foreign)
 
+-- a piecewise function that creates an attack/release/sustain envelope
+-- at a periodicity of every 0.9 seconds
 pwf :: Array (Tuple Number Number)
 pwf =
   join
@@ -19,11 +21,13 @@ pwf =
         ( \i ->
             map
               ( \(Tuple f s) ->
-                  Tuple (f + toNumber i) s
+                  Tuple (f + 0.11 * toNumber i) s
               )
-              [ Tuple 0.0 0.0, Tuple 0.1 0.9, Tuple 0.3 0.3 ]
+              [ Tuple 0.0 0.0, Tuple 0.02 0.7, Tuple 0.06 0.2 ]
         )
-        (range 0 100)
+        (range 0 400)
+
+kr = 15.0 / 1000.0 :: Number -- the control rate in seconds, or 66.66667 Hz
 
 scene :: Behavior Number -> Behavior (AudioUnit D1)
 scene time = f <$> time
@@ -40,15 +44,23 @@ scene time = f <$> time
         let
           right = fromMaybe (Tuple 101.0 0.0) $ head ht.rest
         in
-          let
-            m = (snd right - snd left) / (fst right - fst left)
-          in
+          -- if we are in a control cycle with a peak or trough
+          -- we lock to that
+          -- otherwise, we interpolate
+          if (fst right - s) < kr then
+            AudioParameter { param: (snd right), timeOffset: (fst right - s) }
+          else
             let
-              b = (snd right - (m * fst right))
+              m = (snd right - snd left) / (fst right - fst left)
             in
-              m * s + b
+              let
+                b = (snd right - (m * fst right))
+              in
+                AudioParameter { param: (m * s + b), timeOffset: 0.0 }
 
-  f s = speaker' (gain' (gn s) $ sinOsc 440.0)
+  f s =
+    speaker'
+      (gain' 0.1 (gainT' (gn s) $ sinOsc 440.0))
 
 type Sources
   = {}
