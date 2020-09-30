@@ -68,7 +68,7 @@ pwf3 =
         )
         (range 0 400)
 
-kr = 15.0 / 1000.0 :: Number -- the control rate in seconds, or 66.66667 Hz
+kr = 20.0 / 1000.0 :: Number -- the control rate in seconds, or 66.66667 Hz
 
 split :: ∀ t12 t13. Ord t12 ⇒ t12 → Array (Tuple t12 t13) → { init ∷ Array (Tuple t12 t13), rest ∷ Array (Tuple t12 t13) }
 split s p = span ((s >= _) <<< fst) p
@@ -98,6 +98,15 @@ gn s p =
             in
               AudioParameter { param: (m * s + b), timeOffset: 0.0 }
 
+sceneThatHitsDeadline :: Behavior Number -> Behavior (AudioUnit D1)
+sceneThatHitsDeadline time = f <$> time
+  where
+  f s =
+    speaker
+      ( (gain' 0.1 (gainT' (gn s pwf0) $ sinOsc 440.0))
+          :| Nil
+      )
+
 scene :: Behavior Number -> Behavior (AudioUnit D1)
 scene time = f <$> time
   where
@@ -122,6 +131,20 @@ sceneN time = f <$> time
           : Nil
       )
 
+sceneNN :: Behavior Number -> Behavior (AudioUnit D1)
+sceneNN time = f <$> time
+  where
+  f s =
+    speaker_ "speaker"
+      ( (gain_' "g0" 0.1 (gainT_' "gt0" (gn s pwf0) $ sinOsc_ "s0" 440.0))
+          :| (gain_' "g1" 0.1 (gainT_' "gt1" (gn s pwf1) $ sinOsc_ "s1" 660.0))
+          : (gain_' "g2" 0.1 (gainT_' "gt2" (gn s pwf2) $ sinOsc_ "s2" 990.0))
+          : (gain_' "g3" 0.1 (gainT_' "gt3" (gn s pwf3) $ sinOsc_ "s3" 220.0))
+          : (gain_' "g4" 0.05 (gainT_' "gt4" (gn s pwf1) $ sinOsc_ "s4" 1210.0))
+          : (gain_' "g5" 0.025 (gainT_' "gt5" (gn s pwf0) $ sinOsc_ "s5" 1580.0))
+          : Nil
+      )
+
 type Sources
   = {}
 
@@ -131,16 +154,12 @@ run ::
   Foreign ->
   Foreign ->
   Sources ->
-  Array Foreign ->
   (Number -> Array Instruction -> Foreign -> Foreign -> Sources -> Array Foreign -> Effect (Array Foreign)) ->
   Effect (Effect Unit)
-run = runInBrowser sceneN
+run = runInBrowser sceneNN
 
 touchAudio :: Number -> Array Instruction → Foreign → Foreign → Sources → Array Foreign → Effect (Array Foreign)
 touchAudio = Aud.touchAudio
-
-makeWorkers :: Int -> Effect (Array Foreign)
-makeWorkers = Aud.makeWorkers
 
 main :: Effect Unit
 main = pure unit

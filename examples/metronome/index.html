@@ -2,9 +2,6 @@
 <html>
   <script src="index.js"></script>
   <script>
-    // 8 workers spaced at 20ms seems to work well
-    const workers = PS["FRP.Behavior.Audio.Example.Metronome"].makeWorkers(8)();
-
     var offCb = null;
     var audioCtx = null;
     function turnOnAudio() {
@@ -13,9 +10,9 @@
         var now = new Date().getTime();
         var ctr = 0;
         // null for the microphone
-        offCb = PS["FRP.Behavior.Audio.Example.Metronome"].run(15)(10)(
+        offCb = PS["FRP.Behavior.Audio.Example.Metronome"].run(20)(15)(
           audioCtx
-        )(null)({})(workers)(function (timeToSet) {
+        )(null)({})(function (timeToSet) {
           return function (instructions) {
             return function (ctx) {
               return function (stream) {

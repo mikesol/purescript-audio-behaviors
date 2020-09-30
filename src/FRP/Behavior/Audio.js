@@ -171,9 +171,6 @@ exports._makeAudioWorkletProcessor = function (name) {
     };
   };
 };
-exports.getGlpkImpl = function () {
-  return require("glpk.js");
-};
 
 exports.touchAudio = function (/**dictHomogeneous */) {
   return function (timeToSet) {
@@ -534,58 +531,8 @@ exports.touchAudio = function (/**dictHomogeneous */) {
   };
 };
 
-exports.glpkWorkerImpl = function (worker) {
-  return function (program) {
-    return function () {
-      return new Promise(function (resolve, reject) {
-        worker.queue.push([resolve, reject]);
-        worker.postMessage(program);
-      });
-    };
-  };
-};
-
 exports.getAudioClockTime = function (ctx) {
   return function () {
     return ctx.currentTime;
-  };
-};
-
-exports.makeWorkers = function (n) {
-  return function () {
-    const workers = [];
-    for (var i = 0; i < n; i++) {
-      var w = new Worker("glpk-worker.js");
-      workers.push(w);
-      w.queue = [];
-      w.onmessage = function (e) {
-        if (e.data.initialized) {
-          return;
-        }
-        var s = this.queue.shift();
-        var o = e.data;
-        return o.result.status !== 5 ? s[1]("Error") : s[0](o.result.vars);
-      };
-      w.onerror = function (err) {
-        var s = this.queue.shift();
-        s[1](err);
-      };
-    }
-    return workers;
-  };
-};
-
-exports._glpk = function (glpk) {
-  return function (lp) {
-    return function (left) {
-      return function (right) {
-        try {
-          var o = glpk.solve(lp, glpk.GLP_MSG_OFF);
-          return o.result.status !== 5 ? left : right(o.result.vars);
-        } catch (e) {
-          return left;
-        }
-      };
-    };
   };
 };

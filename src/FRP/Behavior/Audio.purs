@@ -1,17 +1,12 @@
 module FRP.Behavior.Audio
   ( SampleFrame
   , AudioProcessor
-  , audioReconciliation
-  , audioReconciliation'
-  , audioReconciliation''
   , AudioParameter(..)
   , AudioBuffer
   , AudioUnit
   , reconciliationToInstructionSet
   , touchAudio
-  , makeWorkers
   , objectToMapping
-  , glpkWorkerImpl
   , LinearProgram
   , runInBrowser
   , runInBrowser_
@@ -29,7 +24,6 @@ module FRP.Behavior.Audio
   , PtrInfo
   , MString
   , Reconciled
-  , getGlpkImpl
   , audioIOInterleaved
   , Status(..)
   , AudioUnit''(..)
@@ -178,13 +172,10 @@ module FRP.Behavior.Audio
   ) where
 
 import Prelude
-import Control.Alt ((<|>))
 import Control.Bind (bindFlipped)
-import Control.Promise (Promise, toAffE)
 import Data.Array (catMaybes, filter, foldl, groupBy, head, index, length, mapWithIndex, range, replicate, snoc, sortWith, takeEnd, zipWith, (!!))
 import Data.Array as A
 import Data.Array.NonEmpty (toArray)
-import Data.Either (Either(..), either)
 import Data.Generic.Rep (class Generic)
 import Data.Generic.Rep.Show (genericShow)
 import Data.Int (floor, toNumber)
@@ -195,7 +186,7 @@ import Data.List as DL
 import Data.Map (Map)
 import Data.Map as M
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
-import Data.NonEmpty (NonEmpty, (:|))
+import Data.NonEmpty (NonEmpty(..), (:|))
 import Data.NonEmpty as NE
 import Data.Set (member)
 import Data.String (Pattern(..), split, take)
@@ -206,12 +197,9 @@ import Data.Unfoldable (class Unfoldable)
 import Data.Unfoldable1 as DU
 import Data.Vec (Vec, fill)
 import Data.Vec as V
-import Effect (Effect, untilE, whileE)
-import Effect.Aff (launchAff_)
-import Effect.Class (liftEffect)
+import Effect (Effect, whileE)
 import Effect.Class.Console (log)
-import Effect.Exception (throw)
-import Effect.Ref (Ref, modify, modify_, new, read, write)
+import Effect.Ref (modify, modify_, new, read, write)
 import FRP.Behavior (Behavior, behavior, sample_)
 import FRP.Event (Event, makeEvent, subscribe)
 import FRP.Event.Time (interval)
@@ -2645,6 +2633,59 @@ audioToLP r0 r1 =
               <> makeLPNodeEdgeConstraints ev
         }
 
+makeNaiveReconciliation0 ::
+  Reconcilable ->
+  Reconcilable ->
+  { prev :: Reconcilable, cur :: Reconcilable }
+makeNaiveReconciliation0 prev cur =
+  let
+    cur_ = normalizeReconcilable prev cur
+  in
+    let
+      prev_ = normalizeReconcilable cur prev
+    in
+      { prev: prev_
+      , cur: cur_
+      }
+
+-- First step: fix
+-- Second step: optimize
+makeNaiveReconciliation1 ::
+  { prev :: Reconcilable
+  , cur :: Reconcilable
+  } ->
+  Reconciled'
+makeNaiveReconciliation1 ipt =
+  let
+    cur_ = ipt.cur
+  in
+    let
+      prev_ = ipt.prev
+    in
+      { prev: prev_
+      , cur: cur_
+      , reconciliation:
+          M.fromFoldable
+            ( join
+                ( map
+                    ( \(Tuple idx0 (NonEmpty x' x)) ->
+                        ( maybe Nil
+                            ( \(NonEmpty i' i) ->
+                                DL.zipWith
+                                  ( \a b ->
+                                      Tuple a.ptr b.ptr
+                                  )
+                                  (i' : i)
+                                  (x' : x)
+                            )
+                            (M.lookup idx0 prev_.grouped)
+                        )
+                    )
+                    $ M.toUnfoldable cur_.grouped
+                )
+            )
+      }
+
 makeProgram ::
   Reconcilable ->
   Reconcilable ->
@@ -2660,22 +2701,6 @@ makeProgram prev cur =
       prev_ = normalizeReconcilable cur prev
     in
       { prev: prev_, cur: cur_, prog: audioToLP prev_ cur_ }
-
-foreign import makeWorkers :: Int -> Effect (Array Foreign)
-
-foreign import getGlpkImpl :: Effect (Promise Foreign)
-
-foreign import glpkWorkerImpl ::
-  Foreign ->
-  LinearProgram ->
-  Effect (Promise (Object Int))
-
-foreign import _glpk ::
-  Foreign ->
-  LinearProgram ->
-  Either String (Object Int) ->
-  (Object Int -> Either String (Object Int)) ->
-  Either String (Object Int)
 
 -- | the base time to set at
 -- | instructions
@@ -2694,9 +2719,6 @@ foreign import touchAudio ::
   Record a ->
   Array Foreign ->
   Effect (Array Foreign)
-
-glpk :: Foreign -> LinearProgram -> Either String (Object Int)
-glpk g lp = _glpk g lp (Left "Could not complete linear program") Right
 
 toTuple :: Array Int -> Maybe (Tuple Int Int)
 toTuple a = do
@@ -3100,41 +3122,6 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
           )
       )
 
--- reconciles the previous graph with the current one
-audioReconciliation'' :: Foreign -> Reconcilable -> Reconcilable -> Reconciled
-audioReconciliation'' g prev cur =
-  let
-    prog = makeProgram prev cur
-  in
-    reconciliationToInstructionSet
-      { prev: prog.prev
-      , cur: prog.cur
-      -- todo: this swallows error
-      -- fix?
-      , reconciliation: (either (const M.empty) objectToMapping $ glpk g prog.prog)
-      }
-
--- reconciles the previous graph with the current one
-audioReconciliation' :: Foreign -> Ref Reconcilable -> Reconcilable -> (Reconciled -> Effect Unit) -> Effect Unit
-audioReconciliation' g prev' cur f = do
-  prev <- read prev'
-  f $ audioReconciliation'' g prev cur
-
-audioReconciliation ::
-  forall ch.
-  Pos ch =>
-  Foreign ->
-  Ref Reconcilable ->
-  (Reconciled -> Effect Unit) ->
-  AudioUnit ch ->
-  Effect Unit
-audioReconciliation g u f x = do
-  let
-    i = audioToPtr x
-  let
-    ipt = { flat: i.flat, grouped: audioGrouper (fromFoldable i.flat) }
-  audioReconciliation' g u ipt f
-
 foreign import getAudioClockTime :: Foreign -> Effect Number
 
 -- | The main executor loop in the browser
@@ -3144,7 +3131,6 @@ foreign import getAudioClockTime :: Foreign -> Effect Number
 -- | - The audio context
 -- | - The microphone stream (which may be null)
 -- | - A record of sources
--- | - An array of web workers with glpk.js preloaded
 -- | - A function that takes:
 -- |   - The amount of clock time execution took in MS
 -- |   - The instructions of what to do with the audio array
@@ -3159,26 +3145,25 @@ runInBrowser ::
   Foreign ->
   Foreign ->
   Record a ->
-  Array Foreign ->
   (Number -> Array Instruction -> Foreign -> Foreign -> Record a -> Array Foreign -> Effect (Array Foreign)) ->
   Effect (Effect Unit)
-runInBrowser scene pingEvery actualSpeed ctx mic sources workers executor = do
+runInBrowser scene pingEvery actualSpeed ctx mic sources executor = do
   let
-    __contract = toNumber $ (A.length workers) * pingEvery
+    __contract = toNumber $ pingEvery
+  __totalFromStart <- new 0.0
+  ciRef <- new 0
+  __totalTillProgram <- new 0.0
+  __totalProgram <- new 0.0
+  __totalPostProgram <- new 0.0
   reconRef <-
     new
       { grouped: M.empty
       , flat: M.empty
       }
-  ciRef <- new 0
-  __totalTillProgram <- new 0.0
-  __totalProgram <- new 0.0
-  __totalPostProgram <- new 0.0
-  needToProcess <- new 0
+  let
+    tOffset = 100
   clock <- new 0
-  temporalOffsetInMilliseconds <- new 0
   units <- new ([] :: Array Foreign)
-  instructionStash <- new (M.empty :: M.Map Int (Array Instruction))
   unsub <- new (pure unit :: Effect Unit)
   audioClockStart <- getAudioClockTime ctx
   bam <-
@@ -3187,141 +3172,110 @@ runInBrowser scene pingEvery actualSpeed ctx mic sources workers executor = do
           ( scene
               ( currentTime do
                   ct <- read clock
-                  toff <- read temporalOffsetInMilliseconds
                   write (ct + pingEvery) clock
-                  pure ((toNumber (ct + toff) / 1000.0))
+                  pure (toNumber ct / 1000.0)
               )
           )
           (interval actualSpeed)
       )
       ( \aud -> do
-          curIt <- read ciRef
           acc_ <- getAudioClockTime ctx
-          tnow_ <- read temporalOffsetInMilliseconds
+          curIt <- read ciRef
+          write (curIt + 1) ciRef
+          clockNow_ <- read clock
           let
             startingPosWRT =
-              ( (toNumber ((curIt * pingEvery) + tnow_) / 1000.0)
+              ( (toNumber (clockNow_ + tOffset) / 1000.0)
                   - (acc_ - audioClockStart)
               )
-          if (startingPosWRT > 0.1) then
-            write (tnow_ - pingEvery) temporalOffsetInMilliseconds
+          if (startingPosWRT > 0.15) then
+            -- reset the clock
+            ( do
+                let
+                  newV = (clockNow_ - pingEvery)
+                -- log $ "Rewinding " <> show clockNow_ <> " " <> show newV <> " " <> show startingPosWRT
+                write newV clock
+            )
           else do
+            if (startingPosWRT < 0.025) then
+              ( do
+                  let
+                    newV = clockNow_ + pingEvery
+                  log $ "Fastforwarding " <> show clockNow_ <> " " <> show newV <> " " <> show startingPosWRT
+                  write newV clock
+              )
+            else
+              (pure unit)
+            __startTime <- map getTime now
             let
               i = audioToPtr aud
             let
               cur = { flat: i.flat, grouped: audioGrouper (DL.fromFoldable i.flat) }
-            __startTime <- map getTime now
+            __gTime <- map getTime now
+            void $ modify (_ + (__gTime - __startTime)) __totalFromStart
             prev <- read reconRef
             write cur reconRef
-            write (curIt + 1) ciRef
-            worker <- maybe (throw "Worker out of range") pure (workers !! (mod curIt (A.length workers)))
             let
-              prog = makeProgram prev cur
+              prog' = makeNaiveReconciliation0 prev cur
             __progTime <- map getTime now
-            void $ modify (_ + (__progTime - __startTime)) __totalTillProgram
-            launchAff_ do
-              res <-
-                toAffE (glpkWorkerImpl worker prog.prog)
-                  <|> (liftEffect (read unsub >>= identity >>= const (throw "Glpk failed to execute")))
-              liftEffect do
-                __glpkTime <- map getTime now
-                void $ modify (_ + (__glpkTime - __progTime)) __totalProgram
-                let
-                  instr =
-                    reconciliationToInstructionSet
-                      { prev: prog.prev, cur: prog.cur, reconciliation: objectToMapping res
-                      }
-                -- fastforward if we are in danger of missing the deadline
-                audioClockCur <- getAudioClockTime ctx
-                t0_ <- read temporalOffsetInMilliseconds
-                let
-                  posWRTTime =
-                    ( (toNumber (curIt * pingEvery + t0_) / 1000.0)
-                        - (audioClockCur - audioClockStart)
-                    )
-                -- todo: 0.01 is a magic number. find a more logical value
-                if posWRTTime < 0.01 then
-                  write
-                    ( t0_
-                        + ( ((floor $ (0.01 - posWRTTime) * 1000.0) / pingEvery)
-                              * pingEvery
-                          )
-                    )
-                    temporalOffsetInMilliseconds
-                else
-                  pure unit
-                tempOff <- read temporalOffsetInMilliseconds
-                n2p <- read needToProcess
-                void $ modify (append (M.singleton curIt (A.fromFoldable instr.instructionSet))) instructionStash
-                if n2p /= curIt then do
-                  -- useful for debugging
-                  --log
-                  --  $ "Warning: async processing out of order. Correcting... "
-                  --  <> show n2p
-                  --  <> " curIt "
-                  --  <> show curIt
-                  pure unit
-                else
-                  untilE do
-                    needNow <- read needToProcess
-                    stash <- read instructionStash
-                    case M.lookup needNow stash of
-                      Nothing -> pure true
-                      Just instructions -> do
-                        uts <- read units
-                        uts' <-
-                          executor
-                            (audioClockStart + (toNumber ((pingEvery * needNow) + tempOff) / 1000.0))
-                            instructions
-                            ctx
-                            mic
-                            sources
-                            uts
-                        write uts' units
-                        write (needNow + 1) needToProcess
-                        _ <- modify (M.delete needNow) instructionStash
-                        pure false
-                __endTime <- map getTime now
-                if (__endTime - __startTime) >= __contract then
-                  log
-                    ( "Audio control processing is too slow. It took this long: "
-                        <> show (__endTime - __startTime)
-                        <> " but it needs to take this long: "
-                        <> show __contract
-                    )
-                else
-                  pure unit
-                _postTime <- map getTime now
-                void $ modify (_ + (_postTime - __glpkTime)) __totalPostProgram
-                if curIt `mod` 100 == 0 then
-                  ( do
-                      ___a <- read __totalTillProgram
-                      ___b <- read __totalProgram
-                      ___c <- read __totalPostProgram
-                      (if false then log else (const $ pure unit))
-                        $ ( "Stats -- before glpk: "
-                              <> show (___a / (toNumber curIt))
-                              <> " "
-                              <> show (___b / (toNumber curIt))
-                              <> " "
-                              <> show (___c / (toNumber curIt))
-                              <> " . And total for the current round: "
-                              <> show (__endTime - __startTime)
-                              <> " audio clock start: "
-                              <> show audioClockStart
-                              <> " internal time: "
-                              <> show (toNumber (pingEvery * curIt) / 1000.0)
-                              <> " temporal offset "
-                              <> show tempOff
-                              <> " pos wrt time "
-                              <> show posWRTTime
-                              <> " time sending to audio unit: "
-                              <> show (audioClockStart + (toNumber (pingEvery * curIt) / 1000.0))
-                          )
-                  )
-                else
-                  pure unit
-                pure unit
+            void $ modify (_ + (__progTime - __gTime)) __totalProgram
+            let
+              prog = makeNaiveReconciliation1 prog'
+            let
+              instr = reconciliationToInstructionSet prog
+            audioClockCur <- getAudioClockTime ctx
+            let
+              instructions =
+                { t: clockNow_
+                , i: (A.fromFoldable instr.instructionSet)
+                }
+            uts <- read units
+            uts' <-
+              executor
+                (audioClockStart + (toNumber (instructions.t + tOffset) / 1000.0))
+                instructions.i
+                ctx
+                mic
+                sources
+                uts
+            write uts' units
+            __endTime <- map getTime now
+            if (__endTime - __startTime) >= __contract then
+              log
+                ( "Audio control processing is too slow. It took this long: "
+                    <> show (__endTime - __startTime)
+                    <> " but it needs to take this long: "
+                    <> show __contract
+                )
+            else
+              pure unit
+            _postTime <- map getTime now
+            void $ modify (_ + (_postTime - __progTime)) __totalPostProgram
+            if curIt `mod` 100 == 0 then
+              ( do
+                  ___a <- read __totalFromStart
+                  ___b <- read __totalProgram
+                  ___c <- read __totalPostProgram
+                  (if true then log else (const $ pure unit))
+                    $ ( "Stats ::: "
+                          <> show (___a / (toNumber curIt))
+                          <> " "
+                          <> show (___b / (toNumber curIt))
+                          <> " "
+                          <> show (___c / (toNumber curIt))
+                          <> " . And total for the current round: "
+                          <> show (__endTime - __startTime)
+                          <> " audio clock start: "
+                          <> show audioClockStart
+                          <> " internal time: "
+                          <> show (toNumber (pingEvery * curIt) / 1000.0)
+                          <> " time sending to audio unit: "
+                          <> show (audioClockStart + (toNumber (pingEvery * curIt) / 1000.0))
+                      )
+              )
+            else
+              pure unit
+            pure unit
       )
   write bam unsub
   pure bam
@@ -3338,9 +3292,8 @@ runInBrowser_ ::
   Foreign ->
   Foreign ->
   Record a ->
-  Array Foreign ->
   (Number -> Array Instruction -> Foreign -> Foreign -> Record a -> Array Foreign -> Effect (Array Foreign)) ->
   Effect (Effect Unit)
-runInBrowser_ scene' pingEvery actualSpeed ctx mic sources workers executor = do
+runInBrowser_ scene' pingEvery actualSpeed ctx mic sources executor = do
   scene <- scene'
-  runInBrowser scene pingEvery actualSpeed ctx mic sources workers executor
+  runInBrowser scene pingEvery actualSpeed ctx mic sources executor

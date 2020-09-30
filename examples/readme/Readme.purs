@@ -138,7 +138,7 @@ pwf =
         )
         (range 0 400)
 
-kr = 15.0 / 1000.0 :: Number -- the control rate in seconds, or 66.66667 Hz
+kr = 20.0 / 1000.0 :: Number -- the control rate in seconds, or 66.66667 Hz
 
 scene6 :: Mouse -> Behavior Number -> Behavior (AudioUnit D2)
 scene6 mouse time = f <$> time <*> swell
@@ -279,18 +279,14 @@ run ::
   Foreign ->
   Foreign ->
   Sources ->
-  Array Foreign ->
   (Number -> Array Instruction -> Foreign -> Foreign -> Sources -> Array Foreign -> Effect (Array Foreign)) ->
   Effect (Effect Unit)
-run a b c d e f g = do
+run a b c d e g = do
   mouse <- getMouse
-  runInBrowser (scene6' mouse) a b c d e f g
+  runInBrowser (scene6' mouse) a b c d e g
 
 touchAudio :: Number -> Array Instruction → Foreign → Foreign → Sources → Array Foreign → Effect (Array Foreign)
 touchAudio = Aud.touchAudio
-
-makeWorkers :: Int -> Effect (Array Foreign)
-makeWorkers = Aud.makeWorkers
 
 main :: Effect Unit
 main = pure unit

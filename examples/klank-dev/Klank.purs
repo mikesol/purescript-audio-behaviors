@@ -1,4 +1,5 @@
 module Klank.Dev where
+
 -- new to purescript? check out https://www.purescript.org/ for learning resources!
 import Prelude
 import Data.List ((:), List(..))
@@ -28,4 +29,3 @@ enableMicrophone = false
 
 -- add a mouse, keyboard or other device here if needed
 main = runInBrowser_ (pure scene)
-

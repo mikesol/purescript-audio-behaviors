@@ -94,6 +94,7 @@ Make sure to wear headphones to avoid feedback!
 Let's add some soothing jungle sounds to the mix. We use the function `play` to add an audio element. This function assumes that you provide an audio element with the appropriate tag to the toplevel `runInBrowser` function. In this case, the tag is `"forest"`.
 
 [Listen on klank.dev](https://klank.dev/?gist=c28a01d3bb382d8a9d24dbb636835a21)
+
 ```haskell
 -- assuming we have passed in an object
 -- with { forest: new Audio("my-recording.mp3") }
@@ -317,9 +318,9 @@ Another useful way to debug is unit tests. Most behaviors can be refactored as p
 
 ### Named units
 
-As you build larger and larger audio structures, you may notice some stuttering in your application. The more units that exist, the more work the library has to do to keep track of them, and it can result in throttling a rendering frame.
+As you build larger and larger audio structures, you may notice some stuttering in your application.
 
-One way to mitigate this significantly (like 10x significantly) is to give your audio units names. The more named audio units, the faster the computation will go.
+One way to mitigate this is to give your audio units names. Named audio units speed up computation and result in less-glitchy corner cases when the audio graph changes radically.
 
 Giving names is a bit tedious, so the recommendation is to build audio without names first and then, once you're satisfied with your scene, to give everything names. Here is how you attribute names to audio units:
 
@@ -352,7 +353,6 @@ runInBrowser ::
   Foreign -> -- audio context
   Foreign -> -- microphone if one exists
   Record a -> -- buffers, sound files, and wavetables
-  Array Foreign -> -- web workers with glpk
   (
     Number ->
     Array Instruction ->
@@ -365,17 +365,14 @@ runInBrowser ::
   Effect (Effect Unit)
 ```
 
-A lot of this is boilerplate, and you can see examples of how to hook this up in the [examples](./examples) directory. The three bits to understand here are:
+A lot of this is boilerplate, and you can see examples of how to hook this up in the [examples](./examples) directory. The two bits to understand here are:
 
 - audio clock rate
 - driver rate
-- web workers with glpk
 
 The _audio clock rate_ represents how many milliseconds are between control-rate pings to the scene. For example, if you set this to `20`, the scene will get polled every `0.02` seconds. In general, for most applications, somewhere between `10` and `20` is the sweet spot. Too low and you'll skip frames (jank), too high and you'll start hearing the quantization.
 
 The _driver rate_ represents how many milliseconds are between pings to the entire reactive system. You can think of this as the motor behind the FRP. This should _always be_ less than the audio clock rate. The closer to the audio clock rate, the more likely there will be dropped frames because the system doesn't poll fast enough to make the audio deadline. The closer to `0`, the less responsive your UI will be. In general, `5ms` less than the _audio clock rate_ is a safe bet. So if your audio clock rate is `15`, this should be `10`.
-
-Lastly, _web workers with glpk_ is an array of web workers with an emscripten port of GLPK preloaded. Here, more is always better in theory, but the danger is that anything over 8ish runs the risk of providing no marginal benefit, as you will max out the number of concurrent threads on which you can run glpk. I tend to use 8 for everything.
 
 ## Bundling on your site
 
@@ -391,17 +388,13 @@ spago -x examples.dhall bundle-app \
 
 Other examples will work the same way, with the directory and module name changing.
 
-This library relies on on `glpk.js`, which can be found [here](https://github.com/jvail/glpk.js). The files `glpk-worker.js` and `glpk-worker.wasm` need to be compiled by running `make all` copied to the directory of the project (ie [examples/hello-world](./examples/hello-world)). You'll need an [emscripten toolchain](https://emscripten.org/docs/getting_started/downloads.html#platform-notes-installation-instructions-sdk) to compile this. You will also need to copy all of the files from the `custom-units` folter into your project folder. With a correct setup, the hello-world directory should look like this:
+You will also need to copy all of the files from the `custom-units` folter into your project folder. With a correct setup, the hello-world directory should look like this:
 
 ```bash
 examples/
   hello-world/
-    glpk-worker.js # compiled glpk js
-    glpk-worker.wasm # compiled glpk wasm
     HelloWorld.purs  # incldued in the git distro
     index.html # incldued in the git distro
     index.js # the generated js from spago bundle-app
     ps-aud-mul.js # plus any other files from the custom-units folder
 ```
-
-Note that, due to a bug in `glpk-4.65`, there is a spurious console message that sometimes prints. The way around it is to apply [this patch](https://bugs.debian.org/cgi-bin/bugreport.cgi?att=1;bug=891465;filename=simplex-warning.patch;msg=5) to glpk before compiling it.

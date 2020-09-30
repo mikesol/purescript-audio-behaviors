@@ -35,7 +35,6 @@ run ::
   Foreign ->
   Foreign ->
   Sources ->
-  Array Foreign ->
   (Number -> Array Instruction -> Foreign -> Foreign -> Sources -> Array Foreign -> Effect (Array Foreign)) ->
   Effect (Effect Unit)
 run = runInBrowser scene
@@ -43,5 +42,5 @@ run = runInBrowser scene
 touchAudio :: Number -> Array Instruction → Foreign → Foreign → Sources → Array Foreign → Effect (Array Foreign)
 touchAudio = Aud.touchAudio
 
-makeWorkers :: Int -> Effect (Array Foreign)
-makeWorkers = Aud.makeWorkers
+main :: Effect Unit
+main = pure unit

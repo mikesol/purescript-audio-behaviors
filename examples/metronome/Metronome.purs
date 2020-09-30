@@ -27,7 +27,7 @@ pwf =
         )
         (range 0 400)
 
-kr = 15.0 / 1000.0 :: Number -- the control rate in seconds, or 66.66667 Hz
+kr = 20.0 / 1000.0 :: Number -- the control rate in seconds, or 66.66667 Hz
 
 scene :: Behavior Number -> Behavior (AudioUnit D1)
 scene time = f <$> time
@@ -71,16 +71,12 @@ run ::
   Foreign ->
   Foreign ->
   Sources ->
-  Array Foreign ->
   (Number -> Array Instruction -> Foreign -> Foreign -> Sources -> Array Foreign -> Effect (Array Foreign)) ->
   Effect (Effect Unit)
 run = runInBrowser scene
 
 touchAudio :: Number -> Array Instruction → Foreign → Foreign → Sources → Array Foreign → Effect (Array Foreign)
 touchAudio = Aud.touchAudio
-
-makeWorkers :: Int -> Effect (Array Foreign)
-makeWorkers = Aud.makeWorkers
 
 main :: Effect Unit
 main = pure unit
