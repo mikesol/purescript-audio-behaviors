@@ -29,9 +29,8 @@ pwf =
 
 kr = 20.0 / 1000.0 :: Number -- the control rate in seconds, or 66.66667 Hz
 
-scene :: Behavior Number -> Behavior (AudioUnit D1)
-scene time = f <$> time
-  where
+scene :: forall a. a -> Number -> Behavior (AudioUnit D1)
+scene _ time = pure $ speaker' (gain' 0.1 (gainT' (gn time) $ sinOsc 440.0)) where
   split s = span ((s >= _) <<< fst) pwf
 
   gn s =
@@ -57,10 +56,7 @@ scene time = f <$> time
                 b = (snd right - (m * fst right))
               in
                 AudioParameter { param: (m * s + b), timeOffset: 0.0 }
-
-  f s =
-    speaker'
-      (gain' 0.1 (gainT' (gn s) $ sinOsc 440.0))
+    
 
 run = runInBrowser scene
 

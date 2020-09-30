@@ -25,15 +25,12 @@ This library uses the [behaviors pattern](https://wiki.haskell.org/Functional_Re
 For example, consider the following behavior, taken from [`HelloWorld.purs`](./examples/hello-world/HelloWorld.purs):
 
 ```haskell
-scene :: Behavior Number -> Behavior (AudioUnit D1)
-scene time = f <$> time
-  where
-  f s =
-    let
-      rad = pi * s
+scene :: forall a. a ->  Number -> Behavior (AudioUnit D1)
+scene _ time = let
+      rad = pi * time
     in
-      speaker
-        $ ( (gain' 0.1 $ sinOsc (440.0 + (10.0 * sin (2.3 * rad))))
+      pure $ speaker
+         ( (gain' 0.1 $ sinOsc (440.0 + (10.0 * sin (2.3 * rad))))
               :| (gain' 0.25 $ sinOsc (235.0 + (10.0 * sin (1.7 * rad))))
               : (gain' 0.2 $ sinOsc (337.0 + (10.0 * sin rad)))
               : (gain' 0.1 $ sinOsc (530.0 + (19.0 * (5.0 * sin rad))))
@@ -64,8 +61,8 @@ Let's start with a sine wave at A440 playing at a volume of `0.5` (where `1.0` i
 [Listen on klank.dev](https://klank.dev/?gist=1d5345f85a05b84644941843709f6d6a)
 
 ```haskell
-scene :: Behavior Number -> Behavior (AudioUnit D1)
-scene _ = pure (speaker' $ (gain' 0.5 $ sinOsc 440.0))
+scene :: forall a. a -> Number -> Behavior (AudioUnit D1)
+scene _ _ = pure (speaker' $ (gain' 0.5 $ sinOsc 440.0))
 ```
 
 Note that, because this function does not depend on time, we can ignore the input.
@@ -75,8 +72,8 @@ Note that, because this function does not depend on time, we can ignore the inpu
 Let's add our voice to the mix! We'll put it above a nice low drone.
 
 ```haskell
-scene :: Behavior Number -> Behavior (AudioUnit D1)
-scene _ =
+scene :: forall a. a -> Number -> Behavior (AudioUnit D1)
+scene _ _ =
   pure
     ( speaker
         $ ( (gain' 0.2 $ sinOsc 110.0)
@@ -99,13 +96,14 @@ Let's add some soothing jungle sounds to the mix. We use the function `play` to 
 -- assuming we have passed in an object
 -- with { forest: new Audio("my-recording.mp3") }
 -- to `runInBrowser`
-scene :: Behavior Number -> Behavior (AudioUnit D1)
-scene _ =
+scene :: forall a. a -> Number -> Behavior (AudioUnit D1)
+scene _ _ =
   pure
     ( speaker
         $ ( (gain' 0.2 $ sinOsc 110.0)
               :| (gain' 0.1 $ sinOsc 220.0)
               : (gain' 0.5 $ (play "forest"))
+              : microphone
               : Nil
           )
     )
@@ -118,8 +116,8 @@ To go from mono to stereo, there is a class of functions called `dupX`, `splitX`
 If you want to make two separate audio units, then you can use a normal let block. If, on the other hand, you want to use the same underlying unit, use `dupX`. When in doubt, use `dupX`, as you'll rarely need to duplicate an identical audio source.
 
 ```haskell
-scene :: Behavior Number -> Behavior (AudioUnit D2)
-scene _ =
+scene :: forall a. a -> Number -> Behavior (AudioUnit D2)
+scene _ _ =
   pure
     $ dup1
         ( (gain' 0.2 $ sinOsc 110.0)
@@ -138,23 +136,22 @@ scene _ =
 Up until this point, our audio hasn't reacted to many behaviors. Let's fix that! One behavior to react to is the passage of time. Let's add a slow undulation to the lowest pitch in the drone that is based on the passage of time
 
 ```haskell
-scene :: Behavior Number -> Behavior (AudioUnit D2)
-scene time = f <$> time
-  where
-  f s =
-    let
-      rad = pi * s
-    in
-      dup1
-        ( (gain' 0.2 $ sinOsc (110.0 + (10.0 * sin (0.2 * rad))))
-            + (gain' 0.1 $ sinOsc 220.0)
-            + microphone
-        ) \mono ->
-        speaker
-          $ ( (panner (-0.5) (merger (mono +> mono +> empty)))
-                :| (gain' 0.5 $ (play "forest"))
-                : Nil
-            )
+scene :: forall a. a -> Number -> Behavior (AudioUnit D2)
+scene _ time =
+  let
+    rad = pi * time
+  in
+    pure
+      $ dup1
+          ( (gain' 0.2 $ sinOsc (110.0 + (10.0 * sin (0.2 * rad))))
+              + (gain' 0.1 $ sinOsc 220.0)
+              + microphone
+          ) \mono ->
+          speaker
+            $ ( (panner (-0.5) (merger (mono +> mono +> empty)))
+                  :| (gain' 0.5 $ (play "forest"))
+                  : Nil
+              )
 ```
 
 ### Getting the sound to change as a function of a mouse input event
@@ -162,8 +159,8 @@ scene time = f <$> time
 The next snippet of code uses the mouse to modulate the pitch of the higher note by roughly a major third.
 
 ```haskell
-scene :: Mouse -> Behavior Number -> Behavior (AudioUnit D2)
-scene mouse time = f <$> time <*> click
+scene5 :: forall a. Mouse -> a -> Number -> Behavior (AudioUnit D2)
+scene5 mouse _ time = f time <$> click
   where
   f s cl =
     let
@@ -179,6 +176,7 @@ scene mouse time = f <$> time <*> click
                 :| (gain' 0.5 $ (play "forest"))
                 : Nil
             )
+
   click :: Behavior Boolean
   click = map isEmpty $ buttons mouse
 ```
@@ -211,8 +209,8 @@ pwf =
 
 kr = 20.0 / 1000.0 :: Number -- the control rate in seconds, or 66.66667 Hz
 
-scene6 :: Mouse -> Behavior Number -> Behavior (AudioUnit D2)
-scene6 mouse time = f <$> time <*> click
+scene :: forall a. Mouse -> a -> Number -> Behavior (AudioUnit D2)
+scene mouse _ time = f time <$> click
   where
   split s = span ((s >= _) <<< fst) pwf
 

@@ -1,9 +1,7 @@
 module FRP.Behavior.Audio.Example.Readme where
 
 -- tests everything in the readme to make sure it works!
-
 import Prelude
-
 import Data.Array (span, last, head, range)
 import Data.Int (toNumber)
 import Data.List ((:), List(..))
@@ -24,11 +22,11 @@ import FRP.Event.Mouse (Mouse, getMouse, down)
 import Foreign (Foreign)
 import Math (pi, sin)
 
-scene0 :: Behavior Number -> Behavior (AudioUnit D1)
-scene0 _ = pure (speaker' $ (gain' 0.5 $ sinOsc 440.0))
+scene0 :: forall a. a -> Number -> Behavior (AudioUnit D1)
+scene0 _ _ = pure (speaker' $ (gain' 0.5 $ sinOsc 440.0))
 
-scene1 :: Behavior Number -> Behavior (AudioUnit D1)
-scene1 _ =
+scene1 :: forall a. a -> Number -> Behavior (AudioUnit D1)
+scene1 _ _ =
   pure
     ( speaker
         $ ( (gain' 0.2 $ sinOsc 110.0)
@@ -38,8 +36,8 @@ scene1 _ =
           )
     )
 
-scene2 :: Behavior Number -> Behavior (AudioUnit D1)
-scene2 _ =
+scene2 :: forall a. a -> Number -> Behavior (AudioUnit D1)
+scene2 _ _ =
   pure
     ( speaker
         $ ( (gain' 0.2 $ sinOsc 110.0)
@@ -50,8 +48,8 @@ scene2 _ =
           )
     )
 
-scene3 :: Behavior Number -> Behavior (AudioUnit D2)
-scene3 _ =
+scene3 :: forall a. a -> Number -> Behavior (AudioUnit D2)
+scene3 _ _ =
   pure
     $ dup1
         ( (gain' 0.2 $ sinOsc 110.0)
@@ -64,26 +62,25 @@ scene3 _ =
                 : Nil
             )
 
-scene4 :: Behavior Number -> Behavior (AudioUnit D2)
-scene4 time = f <$> time
-  where
-  f s =
-    let
-      rad = pi * s
-    in
-      dup1
-        ( (gain' 0.2 $ sinOsc (110.0 + (10.0 * sin (0.2 * rad))))
-            + (gain' 0.1 $ sinOsc 220.0)
-            + microphone
-        ) \mono ->
-        speaker
-          $ ( (panner (-0.5) (merger (mono +> mono +> empty)))
-                :| (gain' 0.5 $ (play "forest"))
-                : Nil
-            )
+scene4 :: forall a. a -> Number -> Behavior (AudioUnit D2)
+scene4 _ time =
+  let
+    rad = pi * time
+  in
+    pure
+      $ dup1
+          ( (gain' 0.2 $ sinOsc (110.0 + (10.0 * sin (0.2 * rad))))
+              + (gain' 0.1 $ sinOsc 220.0)
+              + microphone
+          ) \mono ->
+          speaker
+            $ ( (panner (-0.5) (merger (mono +> mono +> empty)))
+                  :| (gain' 0.5 $ (play "forest"))
+                  : Nil
+              )
 
-scene5 :: Mouse -> Behavior Number -> Behavior (AudioUnit D2)
-scene5 mouse time = f <$> time <*> click
+scene5 :: forall a. Mouse -> a -> Number -> Behavior (AudioUnit D2)
+scene5 mouse _ time = f time <$> click
   where
   f s cl =
     let
@@ -99,6 +96,7 @@ scene5 mouse time = f <$> time <*> click
                 :| (gain' 0.5 $ (play "forest"))
                 : Nil
             )
+
   click :: Behavior Boolean
   click = map isEmpty $ buttons mouse
 
@@ -119,8 +117,8 @@ pwf =
 
 kr = 20.0 / 1000.0 :: Number -- the control rate in seconds, or 66.66667 Hz
 
-scene6 :: Mouse -> Behavior Number -> Behavior (AudioUnit D2)
-scene6 mouse time = f <$> time <*> click
+scene6 :: forall a. Mouse -> a -> Number -> Behavior (AudioUnit D2)
+scene6 mouse _ time = f time <$> click
   where
   split s = span ((s >= _) <<< fst) pwf
 
@@ -173,7 +171,6 @@ run =
         mouse <- getMouse
         pure (scene6 mouse)
     )
-
 
 main :: Effect Unit
 main = pure unit

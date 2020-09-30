@@ -6,7 +6,9 @@ module FRP.Behavior.Audio
   , AudioUnit
   , AudioInfo
   , AV
-  , Animation
+  , Animation(..)
+  , IAudioUnit(..)
+  , IAnimation(..)
   , class RunnableMedia
   , reconciliationToInstructionSet
   , touchAudio
@@ -176,7 +178,6 @@ module FRP.Behavior.Audio
   ) where
 
 import Prelude
-
 import Control.Bind (bindFlipped)
 import Data.Array (catMaybes, filter, foldl, groupBy, head, index, length, mapWithIndex, range, replicate, snoc, sortWith, takeEnd, zipWith, (!!))
 import Data.Array as A
@@ -610,12 +611,6 @@ newtype AudioParameter a
 
 instance audioParameterFunctor :: Functor AudioParameter where
   map f (AudioParameter { param, timeOffset }) = AudioParameter { param: f param, timeOffset }
-
-newtype AV ch
-  = AV
-  { a :: Maybe (AudioUnit ch)
-  , v :: Maybe Drawing
-  }
 
 data AudioUnit ch
   = Microphone MString
@@ -3147,26 +3142,15 @@ type VisualInfo
 
 foreign import getAudioClockTime :: Foreign -> Effect Number
 
-class RunnableMedia a where
-  -- | The main executor loop in the browser
-  -- | - The scene (what we're processing)
-  -- | - How many milliseconds between pings in theory
-  -- | - How fast the pinger is actually going, should be faster to accomodate for lag
-  -- | - The audio context
-  -- | - The microphone stream (which may be null)
-  -- | - A record of sources
-  -- | - A function that takes:
-  -- |   - The amount of clock time execution took in MS
-  -- |   - The instructions of what to do with the audio array
-  -- |   - Returns a closure that does the audio magic
+class RunnableMedia a accumulator where
   runInBrowser ::
-    forall ch (microphones :: # Type) (tracks :: # Type) (buffers :: # Type) (floatArrays :: # Type) microphoneT tracksT buffersT floatArraysT.
+    forall (microphones :: # Type) (tracks :: # Type) (buffers :: # Type) (floatArrays :: # Type) microphoneT tracksT buffersT floatArraysT.
     Homogeneous microphones microphoneT =>
     Homogeneous tracks tracksT =>
     Homogeneous buffers buffersT =>
     Homogeneous floatArrays floatArraysT =>
-    Pos ch =>
-    (Behavior Number -> Behavior (a ch)) ->
+    (accumulator -> Number -> Behavior a) ->
+    accumulator ->
     Int ->
     Int ->
     Foreign ->
@@ -3174,33 +3158,45 @@ class RunnableMedia a where
     VisualInfo ->
     Effect (Effect Unit)
 
-newtype Animation ch
+newtype AV ch accumulator
+  = AV
+  { a :: Maybe (AudioUnit ch)
+  , v :: Maybe Drawing
+  , z :: accumulator
+  }
+
+newtype Animation
   = Animation Drawing
 
-instance audioUnitRunnableMedia :: RunnableMedia AudioUnit where
-  runInBrowser f = runInBrowser (\s -> map (\x -> AV { a: Just x, v: Nothing }) (f s))
+newtype IAnimation accumulator
+  = IAnimation
+  { v :: Drawing
+  , z :: accumulator
+  }
 
-instance animationRunnable :: RunnableMedia Animation where
-  runInBrowser f = runInBrowser (\s -> map (\(Animation x) -> (AV { a: Nothing, v: Just x }) :: AV D1) (f s))
+newtype IAudioUnit ch accumulator
+  = IAudioUnit
+  { a :: AudioUnit ch
+  , z :: accumulator
+  }
 
-instance avRunnableMedia :: RunnableMedia AV where
-  runInBrowser ::
-    forall ch (microphones :: # Type) (tracks :: # Type) (buffers :: # Type) (floatArrays :: # Type) microphoneT tracksT buffersT floatArraysT.
-    Homogeneous microphones microphoneT =>
-    Homogeneous tracks tracksT =>
-    Homogeneous buffers buffersT =>
-    Homogeneous floatArrays floatArraysT =>
-    Pos ch =>
-    (Behavior Number -> Behavior (AV ch)) ->
-    Int ->
-    Int ->
-    Foreign ->
-    AudioInfo (Record microphones) (Record tracks) (Record buffers) (Record floatArrays) ->
-    VisualInfo ->
-    Effect (Effect Unit)
-  runInBrowser scene pingEvery actualSpeed ctx audioInfo visualInfo = do
+instance soundscapeRunnableMedia :: Pos ch => RunnableMedia (AudioUnit ch) accumulator where
+  runInBrowser f = runInBrowser (\z s -> map (\x -> AV { a: Just x, v: Nothing, z }) (f z s))
+
+instance iSoundscapeRunnableMedia :: Pos ch => RunnableMedia (IAudioUnit ch accumulator) accumulator where
+  runInBrowser f = runInBrowser (\z s -> map (\(IAudioUnit x) -> AV { a: Just x.a, v: Nothing, z: x.z }) (f z s))
+
+instance animationRunnable :: RunnableMedia Animation accumulator where
+  runInBrowser f = runInBrowser (\z s -> map (\(Animation x) -> (AV { a: Nothing :: (Maybe (AudioUnit D1)), v: Just x, z })) ((f z s)))
+
+instance iAnimationRunnable :: RunnableMedia (IAnimation accumulator) accumulator where
+  runInBrowser f = runInBrowser (\z s -> map (\(IAnimation x) -> (AV { a: Nothing :: (Maybe (AudioUnit D1)), v: Just x.v, z: x.z })) ((f z s)))
+
+instance avRunnableMedia :: Pos ch => RunnableMedia (AV ch accumulator) accumulator where
+  runInBrowser scene accumulator pingEvery actualSpeed ctx audioInfo visualInfo = do
     let
       __contract = toNumber $ pingEvery
+    __accumulator <- new accumulator
     __totalFromStart <- new 0.0
     ciRef <- new 0
     __totalTillProgram <- new 0.0
@@ -3250,59 +3246,65 @@ instance avRunnableMedia :: RunnableMedia AV where
               else
                 pure unit
               __startTime <- map getTime now
-              let behavior = scene (pure (toNumber ct / 1000.0))
+              _accNow <- read __accumulator
+              let
+                behavior = scene _accNow (toNumber ct / 1000.0)
               bang <- create :: Effect (EventIO Unit)
-              let behaviorSampled = sample_ behavior bang.event
-              unsub <- subscribe behaviorSampled (\(AV av) -> do
-                maybe (pure unit)
-                  ( \viz -> do
-                      canvasCtx <- getContext2D visualInfo.canvas
-                      render canvasCtx viz
+              let
+                behaviorSampled = sample_ behavior bang.event
+              unsub <-
+                subscribe behaviorSampled
+                  ( \(AV av) -> do
+                      write av.z __accumulator
+                      maybe (pure unit)
+                        ( \viz -> do
+                            canvasCtx <- getContext2D visualInfo.canvas
+                            render canvasCtx viz
+                        )
+                        av.v
+                      maybe (pure unit)
+                        ( \aud -> do
+                            let
+                              i = audioToPtr aud
+                            let
+                              cur = { flat: i.flat, grouped: audioGrouper (DL.fromFoldable i.flat) }
+                            prev <- read reconRef
+                            write cur reconRef
+                            let
+                              prog' = makeNaiveReconciliation0 prev cur
+                            let
+                              prog = makeNaiveReconciliation1 prog'
+                            let
+                              instr = reconciliationToInstructionSet prog
+                            audioClockCur <- getAudioClockTime ctx
+                            let
+                              instructions =
+                                { t: clockNow_
+                                , i: (A.fromFoldable instr.instructionSet)
+                                }
+                            uts <- read units
+                            uts' <-
+                              touchAudio
+                                (audioClockStart + (toNumber (instructions.t + tOffset) / 1000.0))
+                                instructions.i
+                                ctx
+                                audioInfo
+                                uts
+                            write uts' units
+                            __endTime <- map getTime now
+                            if (__endTime - __startTime) >= __contract then
+                              log
+                                ( "Audio control processing is too slow. It took this long: "
+                                    <> show (__endTime - __startTime)
+                                    <> " but it needs to take this long: "
+                                    <> show __contract
+                                )
+                            else
+                              pure unit
+                            pure unit
+                        )
+                        av.a
                   )
-                  av.v
-                maybe (pure unit)
-                  ( \aud -> do
-                      let
-                        i = audioToPtr aud
-                      let
-                        cur = { flat: i.flat, grouped: audioGrouper (DL.fromFoldable i.flat) }
-                      prev <- read reconRef
-                      write cur reconRef
-                      let
-                        prog' = makeNaiveReconciliation0 prev cur
-                      let
-                        prog = makeNaiveReconciliation1 prog'
-                      let
-                        instr = reconciliationToInstructionSet prog
-                      audioClockCur <- getAudioClockTime ctx
-                      let
-                        instructions =
-                          { t: clockNow_
-                          , i: (A.fromFoldable instr.instructionSet)
-                          }
-                      uts <- read units
-                      uts' <-
-                        touchAudio
-                          (audioClockStart + (toNumber (instructions.t + tOffset) / 1000.0))
-                          instructions.i
-                          ctx
-                          audioInfo
-                          uts
-                      write uts' units
-                      __endTime <- map getTime now
-                      if (__endTime - __startTime) >= __contract then
-                        log
-                          ( "Audio control processing is too slow. It took this long: "
-                              <> show (__endTime - __startTime)
-                              <> " but it needs to take this long: "
-                              <> show __contract
-                          )
-                      else
-                        pure unit
-                      pure unit
-                  )
-                  av.a
-                )
               bang.push unit
               unsub
         )
@@ -3311,20 +3313,20 @@ instance avRunnableMedia :: RunnableMedia AV where
 -- | The main executor loop in the browser
 -- | Accepts an effectful scene
 runInBrowser_ ::
-  forall ch (microphones :: # Type) (tracks :: # Type) (buffers :: # Type) (floatArrays :: # Type) microphoneT tracksT buffersT floatArraysT a.
+  forall accumulator (microphones :: # Type) (tracks :: # Type) (buffers :: # Type) (floatArrays :: # Type) microphoneT tracksT buffersT floatArraysT a.
   Homogeneous microphones microphoneT =>
   Homogeneous tracks tracksT =>
   Homogeneous buffers buffersT =>
   Homogeneous floatArrays floatArraysT =>
-  RunnableMedia a =>
-  Pos ch =>
-  Effect (Behavior Number -> Behavior (a ch)) ->
+  RunnableMedia a accumulator =>
+  Effect (accumulator -> Number -> Behavior a) ->
+  accumulator ->
   Int ->
   Int ->
   Foreign ->
   AudioInfo (Record microphones) (Record tracks) (Record buffers) (Record floatArrays) ->
   VisualInfo ->
   Effect (Effect Unit)
-runInBrowser_ scene' pingEvery actualSpeed ctx audioInfo visualInfo = do
+runInBrowser_ scene' accumulator pingEvery actualSpeed ctx audioInfo visualInfo = do
   scene <- scene'
-  runInBrowser scene pingEvery actualSpeed ctx audioInfo visualInfo
+  runInBrowser scene accumulator pingEvery actualSpeed ctx audioInfo visualInfo
