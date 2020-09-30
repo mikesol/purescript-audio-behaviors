@@ -402,19 +402,25 @@ exports.touchAudio = function (/**dictHomogeneous */) {
                     } else if (
                       c.value1.constructor.name == "SplitRes$prime$prime"
                     ) {
-                      generators[c.value0].gain.setValueAtTime(1.0, timeToSet);
+                      generators[c.value0].gain.linearRampToValueAtTime(
+                        1.0,
+                        timeToSet
+                      );
                     } else if (
                       c.value1.constructor.name == "DupRes$prime$prime"
                     ) {
-                      generators[c.value0].gain.setValueAtTime(1.0, timeToSet);
+                      generators[c.value0].gain.linearRampToValueAtTime(
+                        1.0,
+                        timeToSet
+                      );
                     }
                   } else if (c.constructor.name == "SetFrequency") {
-                    generators[c.value0].frequency.setValueAtTime(
+                    generators[c.value0].frequency.linearRampToValueAtTime(
                       c.value1,
                       timeToSet + c.value2
                     );
                   } else if (c.constructor.name == "SetPan") {
-                    generators[c.value0].pan.setValueAtTime(
+                    generators[c.value0].pan.linearRampToValueAtTime(
                       c.value1,
                       timeToSet + c.value2
                     );
@@ -424,7 +430,7 @@ exports.touchAudio = function (/**dictHomogeneous */) {
                       timeToSet + c.value2
                     );
                   } else if (c.constructor.name == "SetQ") {
-                    generators[c.value0].Q.setValueAtTime(
+                    generators[c.value0].Q.linearRampToValueAtTime(
                       c.value1,
                       timeToSet + c.value2
                     );
@@ -446,22 +452,22 @@ exports.touchAudio = function (/**dictHomogeneous */) {
                     }
                     generators[c.value0].buffer = myArrayBuffer;
                   } else if (c.constructor.name == "SetDelay") {
-                    generators[c.value0].delayTime.setValueAtTime(
+                    generators[c.value0].delayTime.linearRampToValueAtTime(
                       c.value1,
                       timeToSet + c.value2
                     );
                   } else if (c.constructor.name == "SetOffset") {
-                    generators[c.value0].offset.setValueAtTime(
+                    generators[c.value0].offset.linearRampToValueAtTime(
                       c.value1,
                       timeToSet + c.value2
                     );
                   } else if (c.constructor.name == "SetLoopStart") {
-                    generators[c.value0].loopStart.setValueAtTime(
+                    generators[c.value0].loopStart.linearRampToValueAtTime(
                       c.value1,
                       timeToSet + c.value2
                     );
                   } else if (c.constructor.name == "SetLoopEnd") {
-                    generators[c.value0].loopEnd.setValueAtTime(
+                    generators[c.value0].loopEnd.linearRampToValueAtTime(
                       c.value1,
                       timeToSet + c.value2
                     );
@@ -488,32 +494,32 @@ exports.touchAudio = function (/**dictHomogeneous */) {
 
                     generators[c.value0].setPeriodicWave(wave);
                   } else if (c.constructor.name == "SetPlaybackRate") {
-                    generators[c.value0].playbackRate.setValueAtTime(
+                    generators[c.value0].playbackRate.linearRampToValueAtTime(
                       c.value1,
                       timeToSet + c.value2
                     );
                   } else if (c.constructor.name == "SetThreshold") {
-                    generators[c.value0].threshold.setValueAtTime(
+                    generators[c.value0].threshold.linearRampToValueAtTime(
                       c.value1,
                       timeToSet + c.value2
                     );
                   } else if (c.constructor.name == "SetKnee") {
-                    generators[c.value0].knee.setValueAtTime(
+                    generators[c.value0].knee.linearRampToValueAtTime(
                       c.value1,
                       timeToSet + c.value2
                     );
                   } else if (c.constructor.name == "SetRatio") {
-                    generators[c.value0].ratio.setValueAtTime(
+                    generators[c.value0].ratio.linearRampToValueAtTime(
                       c.value1,
                       timeToSet + c.value2
                     );
                   } else if (c.constructor.name == "SetAttack") {
-                    generators[c.value0].attack.setValueAtTime(
+                    generators[c.value0].attack.linearRampToValueAtTime(
                       c.value1,
                       timeToSet + c.value2
                     );
                   } else if (c.constructor.name == "SetRelease") {
-                    generators[c.value0].release.setValueAtTime(
+                    generators[c.value0].release.linearRampToValueAtTime(
                       c.value1,
                       timeToSet + c.value2
                     );
