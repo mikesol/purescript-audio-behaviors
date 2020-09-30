@@ -159,19 +159,19 @@ scene time = f <$> time
 
 ### Getting the sound to change as a function of a mouse input event
 
-The next snippet of code is taken right out of the original `purescript-behaviors` library by [Phil Freeman](https://github.com/paf31). Let's create a "swelling" effect on our upper sine wave when we click the mouse. When you click, it will sound like a groan or growl. Yikes!
+The next snippet of code uses the mouse to modulate the pitch of the higher note by roughly a major third.
 
 ```haskell
 scene :: Mouse -> Behavior Number -> Behavior (AudioUnit D2)
-scene mouse time = f <$> time <*> swell
+scene mouse time = f <$> time <*> click
   where
-  f s sw =
+  f s cl =
     let
       rad = pi * s
     in
       dup1
         ( (gain' 0.2 $ sinOsc (110.0 + (10.0 * sin (0.2 * rad))))
-            + (gain' 0.1 $ sinOsc (220.0 + sw))
+            + (gain' 0.1 $ sinOsc (220.0 + (if cl then 50.0 else 0.0)))
             + microphone
         ) \mono ->
         speaker
@@ -179,35 +179,9 @@ scene mouse time = f <$> time <*> swell
                 :| (gain' 0.5 $ (play "forest"))
                 : Nil
             )
-
-  -- `swell` is an interactive function of time defined by a differential equation:
-  --
-  -- d^2s/dt^2
-  --   | mouse down = ⍺ - βs
-  --   | mouse up   = ɣ - δs - ε ds/dt
-  --
-  -- So the function exhibits either decay or growth depending on if
-  -- the mouse is pressed or not.
-  swell :: Behavior Number
-  swell =
-    fixB 2.0 \b ->
-      integral' 2.0 (unwrap <$> Time.seconds)
-        let
-          db =
-            fixB 10.0 \db_ ->
-              integral'
-                10.0
-                (unwrap <$> Time.seconds)
-                (f <$> buttons mouse <*> b <*> db_)
-        in
-          switcher db (down $> db)
-    where
-    f bs s ds
-      | isEmpty bs = -8.0 * (s - 1.0) - ds * 2.0
-      | otherwise = 2.0 * (4.0 - s)
+  click :: Behavior Boolean
+  click = map isEmpty $ buttons mouse
 ```
-
-The functions [`integral'`](https://pursuit.purescript.org/packages/purescript-behaviors/7.0.0/docs/FRP.Behavior#v:integral'), [`fixB`](https://pursuit.purescript.org/packages/purescript-behaviors/7.0.0/docs/FRP.Behavior#v:fixB), and [`switcher`](https://pursuit.purescript.org/packages/purescript-behaviors/7.0.0/docs/FRP.Behavior#v:switcher) all come from [`purescript-behaviors`](https://pursuit.purescript.org/packages/purescript-behaviors/7.0.0).
 
 ### Making sure that certain sounds occur at a precise time
 
@@ -229,18 +203,16 @@ pwf =
         ( \i ->
             map
               ( \(Tuple f s) ->
-                  Tuple (f + 0.9 * toNumber i) s
+                  Tuple (f + 0.11 * toNumber i) s
               )
-              [ Tuple 0.0 0.0, Tuple 0.1 0.9, Tuple 0.3 0.3 ]
+              [ Tuple 0.0 0.0, Tuple 0.02 0.7, Tuple 0.06 0.2 ]
         )
-        (range 0 100)
+        (range 0 400)
 
--- the control rate in seconds, or 66.66667 Hz
--- this is the control rate in klang.dev
-kr = 15.0 / 1000.0 :: Number
+kr = 20.0 / 1000.0 :: Number -- the control rate in seconds, or 66.66667 Hz
 
-scene :: Mouse -> Behavior Number -> Behavior (AudioUnit D2)
-scene mouse time = f <$> time <*> swell
+scene6 :: Mouse -> Behavior Number -> Behavior (AudioUnit D2)
+scene6 mouse time = f <$> time <*> click
   where
   split s = span ((s >= _) <<< fst) pwf
 
@@ -252,10 +224,10 @@ scene mouse time = f <$> time <*> swell
         left = fromMaybe (Tuple 0.0 0.0) $ last ht.init
       in
         let
-          right = fromMaybe (Tuple 101.0 0.0) $ head ht.rest
+          right = fromMaybe (Tuple 201.0 0.0) $ head ht.rest
         in
-          -- if in a control cycle with a peak or trough
-          -- then we lock to that
+          -- if we are in a control cycle with a peak or trough
+          -- we lock to that
           -- otherwise, we interpolate
           if (fst right - s) < kr then
             AudioParameter { param: (snd right), timeOffset: (fst right - s) }
@@ -268,14 +240,14 @@ scene mouse time = f <$> time <*> swell
               in
                 AudioParameter { param: (m * s + b), timeOffset: 0.0 }
 
-  f s sw =
+  f s cl =
     let
       rad = pi * s
     in
       dup1
-        ( (gain' 0.2 $ sinOsc (110.0 + (10.0 * sin (0.2 * rad))))
-            + (gainT' (gn s) $ sinOsc 440.0)
-            + (gain' 0.1 $ sinOsc (220.0 + sw))
+        ( (gain' 0.2 $ sinOsc (110.0 + (3.0 * sin (0.5 * rad))))
+            + (gain' 0.1 (gainT' (gn s) $ sinOsc 440.0))
+            + (gain' 0.1 $ sinOsc (220.0 + (if cl then 50.0 else 0.0)))
             + microphone
         ) \mono ->
         speaker
@@ -283,21 +255,9 @@ scene mouse time = f <$> time <*> swell
                 :| (gain' 0.5 $ (play "forest"))
                 : Nil
             )
-  swell :: Behavior Number
-  swell =
-    fixB 2.0 \b ->
-      integral' 2.0 (unwrap <$> Time.seconds)
-        let
-          db =
-            fixB 10.0 \db_ ->
-              integral' 10.0 (unwrap <$> Time.seconds) (ft <$> buttons mouse <*> b <*> db_)
-        in
-          switcher db (down $> db)
-    where
-    ft bs s ds
-      | isEmpty bs = -8.0 * (s - 1.0) - ds * 2.0
-      | otherwise = 2.0 * (4.0 - s)
 
+  click :: Behavior Boolean
+  click = map isEmpty $ buttons mouse
 ```
 
 ### Conclusion

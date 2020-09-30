@@ -4,6 +4,10 @@ module FRP.Behavior.Audio
   , AudioParameter(..)
   , AudioBuffer
   , AudioUnit
+  , AudioInfo
+  , AV
+  , Animation
+  , class RunnableMedia
   , reconciliationToInstructionSet
   , touchAudio
   , objectToMapping
@@ -172,6 +176,7 @@ module FRP.Behavior.Audio
   ) where
 
 import Prelude
+
 import Control.Bind (bindFlipped)
 import Data.Array (catMaybes, filter, foldl, groupBy, head, index, length, mapWithIndex, range, replicate, snoc, sortWith, takeEnd, zipWith, (!!))
 import Data.Array as A
@@ -199,13 +204,15 @@ import Data.Vec (Vec, fill)
 import Data.Vec as V
 import Effect (Effect, whileE)
 import Effect.Class.Console (log)
-import Effect.Ref (modify, modify_, new, read, write)
+import Effect.Ref (modify_, new, read, write)
 import FRP.Behavior (Behavior, behavior, sample_)
-import FRP.Event (Event, makeEvent, subscribe)
+import FRP.Event (Event, EventIO, create, makeEvent, subscribe)
 import FRP.Event.Time (interval)
 import Foreign (Foreign)
 import Foreign.Object (Object, filterWithKey)
 import Foreign.Object as O
+import Graphics.Canvas (CanvasElement, getContext2D)
+import Graphics.Drawing (Drawing, render)
 import Heterogeneous.Mapping (class HMap, class Mapping, hmap)
 import Math as Math
 import Record (merge)
@@ -537,9 +544,6 @@ audioIOInterleaved processor sampleRate params currentSample nChannels bufferLen
   bam
   sequence $ map read output
 
-type AudioInfo  -- change this
-  = Array Number
-
 type PtrInfo'
   = { ptr :: Int
     , chan :: Int
@@ -606,6 +610,12 @@ newtype AudioParameter a
 
 instance audioParameterFunctor :: Functor AudioParameter where
   map f (AudioParameter { param, timeOffset }) = AudioParameter { param: f param, timeOffset }
+
+newtype AV ch
+  = AV
+  { a :: Maybe (AudioUnit ch)
+  , v :: Maybe Drawing
+  }
 
 data AudioUnit ch
   = Microphone MString
@@ -2710,13 +2720,15 @@ makeProgram prev cur =
 -- | audio units
 -- | audio units
 foreign import touchAudio ::
-  forall (a :: # Type).
-  Homogeneous a Foreign =>
+  forall (microphones :: # Type) (tracks :: # Type) (buffers :: # Type) (floatArrays :: # Type) microphoneT tracksT buffersT floatArraysT.
+  Homogeneous microphones microphoneT =>
+  Homogeneous tracks tracksT =>
+  Homogeneous buffers buffersT =>
+  Homogeneous floatArrays floatArraysT =>
   Number ->
   Array Instruction ->
   Foreign ->
-  Foreign ->
-  Record a ->
+  AudioInfo (Record microphones) (Record tracks) (Record buffers) (Record floatArrays) ->
   Array Foreign ->
   Effect (Array Foreign)
 
@@ -3122,178 +3134,197 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
           )
       )
 
+type AudioInfo microphones tracks buffers floatArrays
+  = { microphones :: microphones
+    , tracks :: tracks
+    , buffers :: buffers
+    , floatArrays :: floatArrays
+    }
+
+type VisualInfo
+  = { canvas :: CanvasElement
+    }
+
 foreign import getAudioClockTime :: Foreign -> Effect Number
 
--- | The main executor loop in the browser
--- | - The scene (what we're processing)
--- | - How many milliseconds between pings in theory
--- | - How fast the pinger is actually going, should be faster to accomodate for lag
--- | - The audio context
--- | - The microphone stream (which may be null)
--- | - A record of sources
--- | - A function that takes:
--- |   - The amount of clock time execution took in MS
--- |   - The instructions of what to do with the audio array
--- |   - Returns a closure that does the audio magic
-runInBrowser ::
-  forall ch (a :: # Type).
-  Homogeneous a Foreign =>
-  Pos ch =>
-  (Behavior Number -> Behavior (AudioUnit ch)) ->
-  Int ->
-  Int ->
-  Foreign ->
-  Foreign ->
-  Record a ->
-  (Number -> Array Instruction -> Foreign -> Foreign -> Record a -> Array Foreign -> Effect (Array Foreign)) ->
-  Effect (Effect Unit)
-runInBrowser scene pingEvery actualSpeed ctx mic sources executor = do
-  let
-    __contract = toNumber $ pingEvery
-  __totalFromStart <- new 0.0
-  ciRef <- new 0
-  __totalTillProgram <- new 0.0
-  __totalProgram <- new 0.0
-  __totalPostProgram <- new 0.0
-  reconRef <-
-    new
-      { grouped: M.empty
-      , flat: M.empty
-      }
-  let
-    tOffset = 100
-  clock <- new 0
-  units <- new ([] :: Array Foreign)
-  unsub <- new (pure unit :: Effect Unit)
-  audioClockStart <- getAudioClockTime ctx
-  bam <-
-    subscribe
-      ( sample_
-          ( scene
-              ( currentTime do
-                  ct <- read clock
-                  write (ct + pingEvery) clock
-                  pure (toNumber ct / 1000.0)
-              )
-          )
-          (interval actualSpeed)
-      )
-      ( \aud -> do
-          acc_ <- getAudioClockTime ctx
-          curIt <- read ciRef
-          write (curIt + 1) ciRef
-          clockNow_ <- read clock
-          let
-            startingPosWRT =
-              ( (toNumber (clockNow_ + tOffset) / 1000.0)
-                  - (acc_ - audioClockStart)
-              )
-          if (startingPosWRT > 0.15) then
-            -- reset the clock
-            ( do
-                let
-                  newV = (clockNow_ - pingEvery)
-                -- log $ "Rewinding " <> show clockNow_ <> " " <> show newV <> " " <> show startingPosWRT
-                write newV clock
-            )
-          else do
-            if (startingPosWRT < 0.025) then
+class RunnableMedia a where
+  -- | The main executor loop in the browser
+  -- | - The scene (what we're processing)
+  -- | - How many milliseconds between pings in theory
+  -- | - How fast the pinger is actually going, should be faster to accomodate for lag
+  -- | - The audio context
+  -- | - The microphone stream (which may be null)
+  -- | - A record of sources
+  -- | - A function that takes:
+  -- |   - The amount of clock time execution took in MS
+  -- |   - The instructions of what to do with the audio array
+  -- |   - Returns a closure that does the audio magic
+  runInBrowser ::
+    forall ch (microphones :: # Type) (tracks :: # Type) (buffers :: # Type) (floatArrays :: # Type) microphoneT tracksT buffersT floatArraysT.
+    Homogeneous microphones microphoneT =>
+    Homogeneous tracks tracksT =>
+    Homogeneous buffers buffersT =>
+    Homogeneous floatArrays floatArraysT =>
+    Pos ch =>
+    (Behavior Number -> Behavior (a ch)) ->
+    Int ->
+    Int ->
+    Foreign ->
+    AudioInfo (Record microphones) (Record tracks) (Record buffers) (Record floatArrays) ->
+    VisualInfo ->
+    Effect (Effect Unit)
+
+newtype Animation ch
+  = Animation Drawing
+
+instance audioUnitRunnableMedia :: RunnableMedia AudioUnit where
+  runInBrowser f = runInBrowser (\s -> map (\x -> AV { a: Just x, v: Nothing }) (f s))
+
+instance animationRunnable :: RunnableMedia Animation where
+  runInBrowser f = runInBrowser (\s -> map (\(Animation x) -> (AV { a: Nothing, v: Just x }) :: AV D1) (f s))
+
+instance avRunnableMedia :: RunnableMedia AV where
+  runInBrowser ::
+    forall ch (microphones :: # Type) (tracks :: # Type) (buffers :: # Type) (floatArrays :: # Type) microphoneT tracksT buffersT floatArraysT.
+    Homogeneous microphones microphoneT =>
+    Homogeneous tracks tracksT =>
+    Homogeneous buffers buffersT =>
+    Homogeneous floatArrays floatArraysT =>
+    Pos ch =>
+    (Behavior Number -> Behavior (AV ch)) ->
+    Int ->
+    Int ->
+    Foreign ->
+    AudioInfo (Record microphones) (Record tracks) (Record buffers) (Record floatArrays) ->
+    VisualInfo ->
+    Effect (Effect Unit)
+  runInBrowser scene pingEvery actualSpeed ctx audioInfo visualInfo = do
+    let
+      __contract = toNumber $ pingEvery
+    __totalFromStart <- new 0.0
+    ciRef <- new 0
+    __totalTillProgram <- new 0.0
+    __totalProgram <- new 0.0
+    __totalPostProgram <- new 0.0
+    reconRef <-
+      new
+        { grouped: M.empty
+        , flat: M.empty
+        }
+    let
+      tOffset = 100
+    clock <- new 0
+    units <- new ([] :: Array Foreign)
+    audioClockStart <- getAudioClockTime ctx
+    bam <-
+      subscribe
+        (interval actualSpeed)
+        ( const do
+            ct <- read clock
+            write (ct + pingEvery) clock
+            acc_ <- getAudioClockTime ctx
+            curIt <- read ciRef
+            write (curIt + 1) ciRef
+            clockNow_ <- read clock
+            let
+              startingPosWRT =
+                ( (toNumber (clockNow_ + tOffset) / 1000.0)
+                    - (acc_ - audioClockStart)
+                )
+            if (startingPosWRT > 0.15) then
+              -- reset the clock
               ( do
                   let
-                    newV = clockNow_ + pingEvery
-                  log $ "Fastforwarding " <> show clockNow_ <> " " <> show newV <> " " <> show startingPosWRT
+                    newV = (clockNow_ - pingEvery)
+                  -- log $ "Rewinding " <> show clockNow_ <> " " <> show newV <> " " <> show startingPosWRT
                   write newV clock
               )
-            else
-              (pure unit)
-            __startTime <- map getTime now
-            let
-              i = audioToPtr aud
-            let
-              cur = { flat: i.flat, grouped: audioGrouper (DL.fromFoldable i.flat) }
-            __gTime <- map getTime now
-            void $ modify (_ + (__gTime - __startTime)) __totalFromStart
-            prev <- read reconRef
-            write cur reconRef
-            let
-              prog' = makeNaiveReconciliation0 prev cur
-            __progTime <- map getTime now
-            void $ modify (_ + (__progTime - __gTime)) __totalProgram
-            let
-              prog = makeNaiveReconciliation1 prog'
-            let
-              instr = reconciliationToInstructionSet prog
-            audioClockCur <- getAudioClockTime ctx
-            let
-              instructions =
-                { t: clockNow_
-                , i: (A.fromFoldable instr.instructionSet)
-                }
-            uts <- read units
-            uts' <-
-              executor
-                (audioClockStart + (toNumber (instructions.t + tOffset) / 1000.0))
-                instructions.i
-                ctx
-                mic
-                sources
-                uts
-            write uts' units
-            __endTime <- map getTime now
-            if (__endTime - __startTime) >= __contract then
-              log
-                ( "Audio control processing is too slow. It took this long: "
-                    <> show (__endTime - __startTime)
-                    <> " but it needs to take this long: "
-                    <> show __contract
+            else do
+              if (startingPosWRT < 0.025) then
+                ( do
+                    let
+                      newV = clockNow_ + pingEvery
+                    log $ "Fastforwarding " <> show clockNow_ <> " " <> show newV <> " " <> show startingPosWRT
+                    write newV clock
                 )
-            else
-              pure unit
-            _postTime <- map getTime now
-            void $ modify (_ + (_postTime - __progTime)) __totalPostProgram
-            if curIt `mod` 100 == 0 then
-              ( do
-                  ___a <- read __totalFromStart
-                  ___b <- read __totalProgram
-                  ___c <- read __totalPostProgram
-                  (if true then log else (const $ pure unit))
-                    $ ( "Stats ::: "
-                          <> show (___a / (toNumber curIt))
-                          <> " "
-                          <> show (___b / (toNumber curIt))
-                          <> " "
-                          <> show (___c / (toNumber curIt))
-                          <> " . And total for the current round: "
-                          <> show (__endTime - __startTime)
-                          <> " audio clock start: "
-                          <> show audioClockStart
-                          <> " internal time: "
-                          <> show (toNumber (pingEvery * curIt) / 1000.0)
-                          <> " time sending to audio unit: "
-                          <> show (audioClockStart + (toNumber (pingEvery * curIt) / 1000.0))
-                      )
-              )
-            else
-              pure unit
-            pure unit
-      )
-  write bam unsub
-  pure bam
+              else
+                pure unit
+              __startTime <- map getTime now
+              let behavior = scene (pure (toNumber ct / 1000.0))
+              bang <- create :: Effect (EventIO Unit)
+              let behaviorSampled = sample_ behavior bang.event
+              unsub <- subscribe behaviorSampled (\(AV av) -> do
+                maybe (pure unit)
+                  ( \viz -> do
+                      canvasCtx <- getContext2D visualInfo.canvas
+                      render canvasCtx viz
+                  )
+                  av.v
+                maybe (pure unit)
+                  ( \aud -> do
+                      let
+                        i = audioToPtr aud
+                      let
+                        cur = { flat: i.flat, grouped: audioGrouper (DL.fromFoldable i.flat) }
+                      prev <- read reconRef
+                      write cur reconRef
+                      let
+                        prog' = makeNaiveReconciliation0 prev cur
+                      let
+                        prog = makeNaiveReconciliation1 prog'
+                      let
+                        instr = reconciliationToInstructionSet prog
+                      audioClockCur <- getAudioClockTime ctx
+                      let
+                        instructions =
+                          { t: clockNow_
+                          , i: (A.fromFoldable instr.instructionSet)
+                          }
+                      uts <- read units
+                      uts' <-
+                        touchAudio
+                          (audioClockStart + (toNumber (instructions.t + tOffset) / 1000.0))
+                          instructions.i
+                          ctx
+                          audioInfo
+                          uts
+                      write uts' units
+                      __endTime <- map getTime now
+                      if (__endTime - __startTime) >= __contract then
+                        log
+                          ( "Audio control processing is too slow. It took this long: "
+                              <> show (__endTime - __startTime)
+                              <> " but it needs to take this long: "
+                              <> show __contract
+                          )
+                      else
+                        pure unit
+                      pure unit
+                  )
+                  av.a
+                )
+              bang.push unit
+              unsub
+        )
+    pure bam
 
 -- | The main executor loop in the browser
 -- | Accepts an effectful scene
 runInBrowser_ ::
-  forall ch (a :: # Type).
-  Homogeneous a Foreign =>
+  forall ch (microphones :: # Type) (tracks :: # Type) (buffers :: # Type) (floatArrays :: # Type) microphoneT tracksT buffersT floatArraysT a.
+  Homogeneous microphones microphoneT =>
+  Homogeneous tracks tracksT =>
+  Homogeneous buffers buffersT =>
+  Homogeneous floatArrays floatArraysT =>
+  RunnableMedia a =>
   Pos ch =>
-  Effect (Behavior Number -> Behavior (AudioUnit ch)) ->
+  Effect (Behavior Number -> Behavior (a ch)) ->
   Int ->
   Int ->
   Foreign ->
-  Foreign ->
-  Record a ->
-  (Number -> Array Instruction -> Foreign -> Foreign -> Record a -> Array Foreign -> Effect (Array Foreign)) ->
+  AudioInfo (Record microphones) (Record tracks) (Record buffers) (Record floatArrays) ->
+  VisualInfo ->
   Effect (Effect Unit)
-runInBrowser_ scene' pingEvery actualSpeed ctx mic sources executor = do
+runInBrowser_ scene' pingEvery actualSpeed ctx audioInfo visualInfo = do
   scene <- scene'
-  runInBrowser scene pingEvery actualSpeed ctx mic sources executor
+  runInBrowser scene pingEvery actualSpeed ctx audioInfo visualInfo

@@ -10,32 +10,7 @@
         var now = new Date().getTime();
         var ctr = 0;
         // null for the microphone
-        offCb = PS["FRP.Behavior.Audio.Example.Stress0"].run(20)(18)(audioCtx)(
-          null
-        )({})(function (timeToSet) {
-          return function (instructions) {
-            return function (ctx) {
-              return function (stream) {
-                return function (sources) {
-                  return function (units) {
-                    return function () {
-                      //console.log("i*****");
-                      //for (var i = 0; i < instructions.length; i++) {
-                      //  console.log(instructions[i]);
-                      //}
-                      //return [];
-                      return PS[
-                        "FRP.Behavior.Audio.Example.Stress0"
-                      ].touchAudio(timeToSet)(instructions)(ctx)(stream)(
-                        sources
-                      )(units)();
-                    };
-                  };
-                };
-              };
-            };
-          };
-        })();
+        offCb = PS["FRP.Behavior.Audio.Example.Stress0"].run()()()()()()()()(20)(18)(audioCtx)({})({})();
       });
     }
     function turnOffAudio() {

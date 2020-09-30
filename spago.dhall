@@ -2,8 +2,10 @@
 , dependencies =
   [ "aff-promise"
   , "behaviors"
+  , "canvas"
   , "console"
   , "debug"
+  , "drawing"
   , "effect"
   , "foreign-object"
   , "heterogeneous"

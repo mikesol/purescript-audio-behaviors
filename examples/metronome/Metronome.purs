@@ -62,21 +62,7 @@ scene time = f <$> time
     speaker'
       (gain' 0.1 (gainT' (gn s) $ sinOsc 440.0))
 
-type Sources
-  = {}
-
-run ::
-  Int ->
-  Int ->
-  Foreign ->
-  Foreign ->
-  Sources ->
-  (Number -> Array Instruction -> Foreign -> Foreign -> Sources -> Array Foreign -> Effect (Array Foreign)) ->
-  Effect (Effect Unit)
 run = runInBrowser scene
-
-touchAudio :: Number -> Array Instruction → Foreign → Foreign → Sources → Array Foreign → Effect (Array Foreign)
-touchAudio = Aud.touchAudio
 
 main :: Effect Unit
 main = pure unit

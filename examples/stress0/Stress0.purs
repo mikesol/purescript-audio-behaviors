@@ -145,21 +145,7 @@ sceneNN time = f <$> time
           : Nil
       )
 
-type Sources
-  = {}
-
-run ::
-  Int ->
-  Int ->
-  Foreign ->
-  Foreign ->
-  Sources ->
-  (Number -> Array Instruction -> Foreign -> Foreign -> Sources -> Array Foreign -> Effect (Array Foreign)) ->
-  Effect (Effect Unit)
 run = runInBrowser sceneNN
-
-touchAudio :: Number -> Array Instruction → Foreign → Foreign → Sources → Array Foreign → Effect (Array Foreign)
-touchAudio = Aud.touchAudio
 
 main :: Effect Unit
 main = pure unit
