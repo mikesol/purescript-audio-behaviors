@@ -27,6 +27,7 @@ module FRP.Behavior.Audio
   , LPObjective
   , LPConstraint
   , LPVar
+  , makeAudioContext
   , makeFloatArray
   , makeAudioBuffer
   , makeAudioTrack
@@ -237,6 +238,8 @@ foreign import data BrowserFloatArray :: Type
 foreign import data BrowserAudioTrack :: Type
 
 foreign import data AudioContext :: Type
+
+foreign import makeAudioContext :: Effect AudioContext
 
 foreign import makeAudioTrack :: String -> Effect BrowserAudioTrack
 

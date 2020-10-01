@@ -171,6 +171,10 @@ exports._makeAudioWorkletProcessor = function (name) {
     };
   };
 };
+exports.makeAudioContext = function () {
+  return new (window.AudioContext || window.webkitAudioContext)();
+};
+
 exports.makeAudioTrack = function (s) {
   return function () {
     return new Audio(s);
