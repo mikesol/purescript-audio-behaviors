@@ -181,7 +181,25 @@ exports.makeAudioTrack = function (s) {
     return new Audio(s);
   };
 };
-exports.decodeAudioData = function (ctx) {
+exports.decodeAudioDataFromBase64EncodedString = function (ctx) {
+  return function (s) {
+    return function () {
+      {
+        function base64ToArrayBuffer(base64) {
+          var binaryString = window.atob(base64);
+          var len = binaryString.length;
+          var bytes = new Uint8Array(len);
+          for (var i = 0; i < len; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          return bytes.buffer;
+        }
+        return ctx.decodeAudioData(base64ToArrayBuffer(s));
+      }
+    };
+  };
+};
+exports.decodeAudioDataFromUri = function (ctx) {
   return function (s) {
     return function () {
       {

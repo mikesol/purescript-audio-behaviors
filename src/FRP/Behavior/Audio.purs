@@ -69,7 +69,7 @@ module FRP.Behavior.Audio
   , dup4
   , dup5
   , waveShaper
-  , decodeAudioData
+  , decodeAudioDataFromUri
   , periodicOsc
   , sinOsc
   , sawtoothOsc
@@ -231,7 +231,9 @@ foreign import data BrowserAudioTrack :: Type
 
 foreign import data AudioContext :: Type
 
-foreign import decodeAudioData :: AudioContext -> String -> Effect (Promise BrowserAudioBuffer)
+foreign import decodeAudioDataFromUri :: AudioContext -> String -> Effect (Promise BrowserAudioBuffer)
+
+foreign import decodeAudioDataFromBase64EncodedString :: AudioContext -> String -> Effect (Promise BrowserAudioBuffer)
 
 foreign import makeAudioContext :: Effect AudioContext
 
