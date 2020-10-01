@@ -2758,7 +2758,7 @@ foreign import touchAudio ::
   Homogeneous floatArrays floatArraysT =>
   Number ->
   Array Instruction ->
-  Foreign ->
+  AudioContext ->
   AudioInfo (Record microphones) (Record tracks) (Record buffers) (Record floatArrays) ->
   Array Foreign ->
   Effect (Array Foreign)
@@ -3176,7 +3176,7 @@ type VisualInfo
   = { canvas :: CanvasElement
     }
 
-foreign import getAudioClockTime :: Foreign -> Effect Number
+foreign import getAudioClockTime :: AudioContext -> Effect Number
 
 foreign import unsafeCanvasHack :: (CanvasElement -> Effect Number) -> CanvasElement -> Effect Number
 
@@ -3194,7 +3194,7 @@ class RunnableMedia a accumulator where
     accumulator ->
     Int ->
     Int ->
-    Foreign ->
+    AudioContext ->
     AudioInfo (Record microphones) (Record tracks) (Record buffers) (Record floatArrays) ->
     VisualInfo ->
     Effect (Effect Unit)
@@ -3357,7 +3357,7 @@ runInBrowser_ ::
   accumulator ->
   Int ->
   Int ->
-  Foreign ->
+  AudioContext ->
   AudioInfo (Record microphones) (Record tracks) (Record buffers) (Record floatArrays) ->
   VisualInfo ->
   Effect (Effect Unit)

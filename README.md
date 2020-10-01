@@ -262,11 +262,11 @@ scene mouse _ _ time = f time <$> click
 
 ### Remembering when events happened
 
-Sometimes, you don't just want to react to an event like a mouse click. You want to remember when the event happened in time.  For example, imagine that we modulate a pitch whenever a button is clicked, like in the example below.  When the pitch modulates, it should continue slowly rising until the button is released.
+Sometimes, you don't just want to react to an event like a mouse click. You want to remember when the event happened in time. For example, imagine that we modulate a pitch whenever a button is clicked, like in the example below. When the pitch modulates, it should continue slowly rising until the button is released.
 
-To accomplish this, or anything where memory needs to be retained, the scene accepts an arbitrary accumulator as its first parameter.  You can think of it as a [fold](https://pursuit.purescript.org/packages/purescript-foldable-traversable/4.1.1/docs/Data.Foldable#v:fold) over time.
+To accomplish this, or anything where memory needs to be retained, the scene accepts an arbitrary accumulator as its first parameter. You can think of it as a [fold](https://pursuit.purescript.org/packages/purescript-foldable-traversable/4.1.1/docs/Data.Foldable#v:fold) over time.
 
-To make the accumulator useful, the scene should return the accumulator as well.  The constructor `IAudioUnit` allows for this: it accepts an audio unit as well as an accumulator.
+To make the accumulator useful, the scene should return the accumulator as well. The constructor `IAudioUnit` allows for this: it accepts an audio unit as well as an accumulator.
 
 ```haskell
 pwf :: Array (Tuple Number Number)
@@ -348,11 +348,11 @@ scene mouse acc@{ onset } _ time = f time <$> click
   click = map (not <<< isEmpty) $ buttons mouse
 ```
 
-Because the accumulator object is global for an entire audio graph, it's a good idea to use row polymorphism in the accumulator object.  While using keys like `onset` is fine for small projects, if you're a library developer, you'll want to make sure to use keys more like namespaces.  That is, you'll want to make sure that they do not conflict with other vendors' keys and with users' keys.  A good practice is to use something like `{ myLibrary :: { param1 :: Number } | a }`.
+Because the accumulator object is global for an entire audio graph, it's a good idea to use row polymorphism in the accumulator object. While using keys like `onset` is fine for small projects, if you're a library developer, you'll want to make sure to use keys more like namespaces. That is, you'll want to make sure that they do not conflict with other vendors' keys and with users' keys. A good practice is to use something like `{ myLibrary :: { param1 :: Number } | a }`.
 
 #### Adding visuals
 
-Let's add a little dot that gets bigger when we click.  We'll do that using the `AV` constructor that accepts a [Drawing](https://pursuit.purescript.org/packages/purescript-drawing/4.0.0/docs/Graphics.Drawing#t:Drawing).
+Let's add a little dot that gets bigger when we click. We'll do that using the `AV` constructor that accepts a [Drawing](https://pursuit.purescript.org/packages/purescript-drawing/4.0.0/docs/Graphics.Drawing#t:Drawing).
 
 ```haskell
 pwf :: Array (Tuple Number Number)
@@ -442,7 +442,7 @@ scene mouse acc@{ onset } { w, h } time = f time <$> click
 
 ### Conclusion
 
-We started with a simple sound and built all the way up to a complex, precisely-timed stereo structure that responds to mouse events both visually and sonically.  These examples also exist in [Readme.purs](./examples/readme/Readme.purs).
+We started with a simple sound and built all the way up to a complex, precisely-timed stereo structure that responds to mouse events both visually and sonically. These examples also exist in [Readme.purs](./examples/readme/Readme.purs).
 
 From here, the only thing left is to make some noise! There are many more audio units in the library, such as filters, compressors and convolvers. Almost the whole [Web Audio API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API) is exposed.
 
@@ -496,7 +496,7 @@ class RunnableMedia a accumulator where
     accumulator -> -- initial accumulator
     Int -> -- audio clock rate
     Int -> -- driver rate
-    Foreign -> -- audioContext
+    AudioContext -> -- audioContext
     AudioInfo (Record microphones) (Record tracks) (Record buffers) (Record floatArrays) -> -- audio info
     VisualInfo -> -- visual info
     Effect (Effect Unit) -- an unsubscribe function
@@ -507,7 +507,7 @@ A lot of this is boilerplate, and you can see examples of how to hook this up in
 - audio clock rate
 - driver rate
 
-The _audio clock rate_ represents the number of milliseconds between control-rate pings to the scene. For example, if you set this to `20`, the scene will get polled every `0.02` seconds.  When we use `20.0` as the `kr` in the examples above, we're referring to this rate. In general, for most applications, somewhere between `10` and `20` is the sweet spot. Too low and you'll skip frames (jank), too high and you'll start hearing the quantization.
+The _audio clock rate_ represents the number of milliseconds between control-rate pings to the scene. For example, if you set this to `20`, the scene will get polled every `0.02` seconds. When we use `20.0` as the `kr` in the examples above, we're referring to this rate. In general, for most applications, somewhere between `10` and `20` is the sweet spot. Too low and you'll skip frames (jank), too high and you'll start hearing the quantization.
 
 The _driver rate_ represents the number of milliseconds between pings to the entire reactive system. You can think of this as the motor behind the FRP. This should _always be_ less than the audio clock rate. The closer to the audio clock rate, the more likely there will be dropped frames because the system doesn't poll fast enough to make the audio deadline. The closer to `0`, the less responsive your UI will be. In general, `5ms` less than the _audio clock rate_ is a safe bet. So if your audio clock rate is `20`, this should be `15`.
 
