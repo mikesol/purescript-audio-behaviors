@@ -171,14 +171,46 @@ exports._makeAudioWorkletProcessor = function (name) {
     };
   };
 };
+exports.makeAudioTrack = function (s) {
+  return function () {
+    return new Audio(s);
+  };
+};
+exports.makeAudioBuffer = function (ctx) {
+  return function (b) {
+    return function () {
+      var myArrayBuffer = ctx.createBuffer(
+        b.value1.length,
+        b.value1[0].length,
+        b.value0
+      );
+      for (
+        var channel = 0;
+        channel < myArrayBuffer.numberOfChannels;
+        channel++
+      ) {
+        var nowBuffering = myArrayBuffer.getChannelData(channel);
+        for (var i = 0; i < myArrayBuffer.length; i++) {
+          nowBuffering[i] = b.value1[channel][i];
+        }
+      }
+      return myArrayBuffer;
+    };
+  };
+};
+exports.makeFloatArray = function (fa) {
+  return function () {
+    return fa;
+  };
+};
 
-exports.unsafeCanvasHack = function(f) {
-  return function(c) {
-    return function() {
+exports.unsafeCanvasHack = function (f) {
+  return function (c) {
+    return function () {
       return c ? f(c)() : 0.0;
-    }
-  }
-}
+    };
+  };
+};
 exports.touchAudio = function (/**dictHomogeneous */) {
   return function (/**dictHomogeneous */) {
     return function (/**dictHomogeneous */) {

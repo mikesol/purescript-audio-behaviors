@@ -4,8 +4,13 @@ module FRP.Behavior.Audio
   , AudioParameter(..)
   , AudioBuffer
   , AudioUnit
+  , AudioContext
   , CanvasInfo
   , AudioInfo
+  , VisualInfo
+  , BrowserAudioTrack
+  , BrowserAudioBuffer
+  , BrowserFloatArray
   , AV(..)
   , Animation(..)
   , IAudioUnit(..)
@@ -17,10 +22,14 @@ module FRP.Behavior.Audio
   , LinearProgram
   , runInBrowser
   , runInBrowser_
+  , audioBuffer
   , Oversample
   , LPObjective
   , LPConstraint
   , LPVar
+  , makeFloatArray
+  , makeAudioBuffer
+  , makeAudioTrack
   , makeAudioWorkletProcessor
   , audioIO
   , Instruction(..)
@@ -220,6 +229,20 @@ import Math as Math
 import Record (merge)
 import Type.Proxy (Proxy(..))
 import Type.Row.Homogeneous (class Homogeneous)
+
+foreign import data BrowserAudioBuffer :: Type
+
+foreign import data BrowserFloatArray :: Type
+
+foreign import data BrowserAudioTrack :: Type
+
+foreign import data AudioContext :: Type
+
+foreign import makeAudioTrack :: String -> Effect BrowserAudioTrack
+
+foreign import makeAudioBuffer :: AudioContext -> AudioBuffer -> Effect BrowserAudioBuffer
+
+foreign import makeFloatArray :: Array Number -> Effect BrowserFloatArray
 
 newtype IdxContext i
   = IdxContext i
@@ -1453,6 +1476,15 @@ playDynamicBuf ::
   Number ->
   AudioUnit ch
 playDynamicBuf i v a = PlayDynamicBuf Nothing (AudioBuffer i (map V.toArray $ V.toArray v)) (ap_ a)
+
+audioBuffer ::
+  forall bch blen.
+  Pos bch =>
+  Pos blen =>
+  Int ->
+  Vec bch (Vec blen Number) ->
+  AudioBuffer
+audioBuffer i v = AudioBuffer i (map V.toArray $ V.toArray v)
 
 playDynamicBuf_ ::
   forall ch bch blen.
