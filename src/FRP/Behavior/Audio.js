@@ -35,7 +35,8 @@ function mergeAudio(retention, prev, inputs) {
   ) -> -- soundify
   Effect Unit
  */
-
+var hackR = new Float32Array(5);
+var hackI = new Float32Array(5);
 exports._makeAudioWorkletProcessor = function (name) {
   return function (retention) {
     return function (defaults) {
@@ -202,9 +203,34 @@ exports.makeAudioBuffer = function (ctx) {
     };
   };
 };
+
+exports.makePeriodicWave = function (ctx) {
+  return function (real_) {
+    return function (imag_) {
+      return function () {
+        var real = new Float32Array(real_.length);
+        var imag = new Float32Array(imag_.length);
+        for (var i = 0; i < real_.length; i++) {
+          real[i] = real_[i];
+        }
+        for (var i = 0; i < imag_.length; i++) {
+          imag[i] = imag_[i];
+        }
+        return ctx.createPeriodicWave(real, imag, {
+          disableNormalization: true,
+        });
+      };
+    };
+  };
+};
+
 exports.makeFloatArray = function (fa) {
   return function () {
-    return fa;
+    var r = new Float32Array(fa.length);
+    for (var i = 0; i < fa.length; i++) {
+      r[i] = fa[i];
+    }
+    return r;
   };
 };
 
@@ -262,10 +288,6 @@ exports.touchAudio = function (timeToSet) {
                     ? context.createBufferSource()
                     : c.value1.constructor.name == "LoopBuf$prime$prime"
                     ? context.createBufferSource()
-                    : c.value1.constructor.name == "PlayDynamicBuf$prime$prime"
-                    ? context.createBufferSource()
-                    : c.value1.constructor.name == "LoopDynamicBuf$prime$prime"
-                    ? context.createBufferSource()
                     : c.value1.constructor.name == "Lowpass$prime$prime"
                     ? context.createBiquadFilter()
                     : c.value1.constructor.name == "Bandpass$prime$prime"
@@ -282,9 +304,6 @@ exports.touchAudio = function (timeToSet) {
                     ? context.createBiquadFilter()
                     : c.value1.constructor.name == "Highpass$prime$prime"
                     ? context.createBiquadFilter()
-                    : c.value1.constructor.name ==
-                      "DynamicConvolver$prime$prime"
-                    ? context.createConvolver()
                     : c.value1.constructor.name == "Convolver$prime$prime"
                     ? context.createConvolver()
                     : c.value1.constructor.name ==
@@ -296,12 +315,6 @@ exports.touchAudio = function (timeToSet) {
                     ? context.createOscillator()
                     : c.value1.constructor.name == "PeriodicOsc$prime$prime"
                     ? context.createOscillator()
-                    : c.value1.constructor.name ==
-                      "DynamicPeriodicOsc$prime$prime"
-                    ? context.createOscillator()
-                    : c.value1.constructor.name ==
-                      "DynamicWaveShaper$prime$prime"
-                    ? context.createWaveShaper()
                     : c.value1.constructor.name == "WaveShaper$prime$prime"
                     ? context.createWaveShaper()
                     : c.value1.constructor.name == "Dup$prime$prime"
@@ -438,15 +451,10 @@ exports.touchAudio = function (timeToSet) {
                 } else if (
                   c.value1.constructor.name == "PeriodicOsc$prime$prime"
                 ) {
-                  generators[c.value0].type = "custom";
+                  // generators[c.value0].type = "custom";
                   generators[c.value0].setPeriodicWave(
-                    audioInfo.floatArrays[c.value3.value0]
+                    audioInfo.periodicWaves[c.value3.value0]
                   );
-                  generators[c.value0].start(timeToSet + c.value4.value0);
-                } else if (
-                  c.value1.constructor.name == "DynamicPeriodicOsc$prime$prime"
-                ) {
-                  generators[c.value0].type = "custom";
                   generators[c.value0].start(timeToSet + c.value4.value0);
                 } else if (
                   c.value1.constructor.name == "SplitRes$prime$prime"
@@ -527,19 +535,6 @@ exports.touchAudio = function (timeToSet) {
                 }
 
                 generators[c.value0].curve = curve;
-              } else if (c.constructor.name == "SetPeriodicWave") {
-                var real = new Float32Array(c.value1.length);
-                var imag = new Float32Array(c.value2.length);
-                for (var i = 0; i < c.value1.length; i++) {
-                  real[i] = c.value1[i];
-                  imag[i] = c.value2[i];
-                }
-
-                var wave = context.createPeriodicWave(real, imag, {
-                  disableNormalization: true,
-                });
-
-                generators[c.value0].setPeriodicWave(wave);
               } else if (c.constructor.name == "SetPlaybackRate") {
                 generators[c.value0].playbackRate.linearRampToValueAtTime(
                   c.value1,

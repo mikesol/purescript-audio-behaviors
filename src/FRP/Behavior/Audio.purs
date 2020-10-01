@@ -8,6 +8,7 @@ module FRP.Behavior.Audio
   , CanvasInfo
   , AudioInfo
   , VisualInfo
+  , BrowserPeriodicWave
   , BrowserAudioTrack
   , BrowserAudioBuffer
   , BrowserFloatArray
@@ -16,6 +17,7 @@ module FRP.Behavior.Audio
   , IAudioUnit(..)
   , IAnimation(..)
   , class RunnableMedia
+  , periodicWave
   , reconciliationToInstructionSet
   , touchAudio
   , objectToMapping
@@ -23,7 +25,7 @@ module FRP.Behavior.Audio
   , runInBrowser
   , runInBrowser_
   , audioBuffer
-  , Oversample
+  , Oversample(..)
   , LPObjective
   , LPConstraint
   , LPVar
@@ -51,8 +53,6 @@ module FRP.Behavior.Audio
   , play
   , playBuf
   , loopBuf
-  , playDynamicBuf
-  , loopDynamicBuf
   , lowpass
   , highpass
   , bandpass
@@ -62,7 +62,6 @@ module FRP.Behavior.Audio
   , notch
   , allpass
   , convolver
-  , dynamicConvolver
   , dynamicsCompressor
   , dup1
   , dup2
@@ -70,9 +69,7 @@ module FRP.Behavior.Audio
   , dup4
   , dup5
   , waveShaper
-  , dynamicWaveShaper
   , periodicOsc
-  , dynamicPeriodicOsc
   , sinOsc
   , sawtoothOsc
   , traingleOsc
@@ -95,8 +92,6 @@ module FRP.Behavior.Audio
   , play_
   , playBuf_
   , loopBuf_
-  , playDynamicBuf_
-  , loopDynamicBuf_
   , lowpass_
   , highpass_
   , bandpass_
@@ -106,7 +101,6 @@ module FRP.Behavior.Audio
   , notch_
   , allpass_
   , convolver_
-  , dynamicConvolver_
   , dynamicsCompressor_
   , dup1_
   , dup2_
@@ -114,9 +108,7 @@ module FRP.Behavior.Audio
   , dup4_
   , dup5_
   , waveShaper_
-  , dynamicWaveShaper_
   , periodicOsc_
-  , dynamicPeriodicOsc_
   , sinOsc_
   , sawtoothOsc_
   , traingleOsc_
@@ -135,8 +127,6 @@ module FRP.Behavior.Audio
   , gain_
   , playBufT
   , loopBufT
-  , playDynamicBufT
-  , loopDynamicBufT
   , lowpassT
   , highpassT
   , bandpassT
@@ -147,7 +137,6 @@ module FRP.Behavior.Audio
   , allpassT
   , dynamicsCompressorT
   , periodicOscT
-  , dynamicPeriodicOscT
   , sinOscT
   , sawtoothOscT
   , traingleOscT
@@ -158,8 +147,6 @@ module FRP.Behavior.Audio
   , gainT
   , playBufT_
   , loopBufT_
-  , playDynamicBufT_
-  , loopDynamicBufT_
   , lowpassT_
   , highpassT_
   , bandpassT_
@@ -170,7 +157,6 @@ module FRP.Behavior.Audio
   , allpassT_
   , dynamicsCompressorT_
   , periodicOscT_
-  , dynamicPeriodicOscT_
   , sinOscT_
   , sawtoothOscT_
   , traingleOscT_
@@ -233,6 +219,8 @@ import Record (merge)
 import Type.Proxy (Proxy(..))
 import Type.Row.Homogeneous (class Homogeneous)
 
+foreign import data BrowserPeriodicWave :: Type
+
 foreign import data BrowserAudioBuffer :: Type
 
 foreign import data BrowserFloatArray :: Type
@@ -242,6 +230,8 @@ foreign import data BrowserAudioTrack :: Type
 foreign import data AudioContext :: Type
 
 foreign import makeAudioContext :: Effect AudioContext
+
+foreign import makePeriodicWave :: AudioContext -> Array Number -> Array Number -> Effect BrowserPeriodicWave
 
 foreign import makeAudioTrack :: String -> Effect BrowserAudioTrack
 
@@ -646,8 +636,6 @@ data AudioUnit ch
   | Play MString String Number
   | PlayBuf MString String (AudioParameter Number)
   | LoopBuf MString String (AudioParameter Number) Number Number
-  | PlayDynamicBuf MString AudioBuffer (AudioParameter Number)
-  | LoopDynamicBuf MString AudioBuffer (AudioParameter Number) Number Number
   | Lowpass MString (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
   | Highpass MString (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
   | Bandpass MString (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
@@ -657,14 +645,11 @@ data AudioUnit ch
   | Notch MString (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
   | Allpass MString (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
   | Convolver MString String (AudioUnit ch)
-  | DynamicConvolver MString AudioBuffer (AudioUnit ch)
   | DynamicsCompressor MString (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
   | SawtoothOsc MString (AudioParameter Number)
   | TriangleOsc MString (AudioParameter Number)
   | PeriodicOsc MString (AudioParameter Number) String
-  | DynamicPeriodicOsc MString (AudioParameter Number) (Array Number) (Array Number)
   | WaveShaper MString String Oversample (AudioUnit ch)
-  | DynamicWaveShaper MString (Array Number) Oversample (AudioUnit ch)
   | Dup1 MString (AudioUnit D1) (AudioUnit D1 -> AudioUnit ch)
   | Dup2 MString (AudioUnit D2) (AudioUnit D2 -> AudioUnit ch)
   | Dup3 MString (AudioUnit D3) (AudioUnit D3 -> AudioUnit ch)
@@ -694,8 +679,6 @@ data AudioUnit'
   | Play' String Number
   | PlayBuf' String (AudioParameter Number)
   | LoopBuf' String (AudioParameter Number) Number Number
-  | PlayDynamicBuf' AudioBuffer (AudioParameter Number)
-  | LoopDynamicBuf' AudioBuffer (AudioParameter Number) Number Number
   | Lowpass' (AudioParameter Number) (AudioParameter Number) (AudioParameter Number)
   | Highpass' (AudioParameter Number) (AudioParameter Number) (AudioParameter Number)
   | Bandpass' (AudioParameter Number) (AudioParameter Number) (AudioParameter Number)
@@ -705,14 +688,11 @@ data AudioUnit'
   | Notch' (AudioParameter Number) (AudioParameter Number) (AudioParameter Number)
   | Allpass' (AudioParameter Number) (AudioParameter Number) (AudioParameter Number)
   | Convolver' String
-  | DynamicConvolver' AudioBuffer
   | DynamicsCompressor' (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioParameter Number)
   | SawtoothOsc' (AudioParameter Number)
   | TriangleOsc' (AudioParameter Number)
   | PeriodicOsc' (AudioParameter Number) String
-  | DynamicPeriodicOsc' (AudioParameter Number) (Array Number) (Array Number)
   | WaveShaper' String Oversample
-  | DynamicWaveShaper' (Array Number) Oversample
   | Dup'
   | SinOsc' (AudioParameter Number)
   | SquareOsc' (AudioParameter Number)
@@ -742,8 +722,6 @@ data AudioUnit''
   | Play''
   | PlayBuf''
   | LoopBuf''
-  | PlayDynamicBuf''
-  | LoopDynamicBuf''
   | Lowpass''
   | Highpass''
   | Bandpass''
@@ -753,14 +731,11 @@ data AudioUnit''
   | Notch''
   | Allpass''
   | Convolver''
-  | DynamicConvolver''
   | DynamicsCompressor''
   | SawtoothOsc''
   | TriangleOsc''
   | PeriodicOsc''
-  | DynamicPeriodicOsc''
   | WaveShaper''
-  | DynamicWaveShaper''
   | Dup''
   | SinOsc''
   | SquareOsc''
@@ -797,10 +772,6 @@ au' (PlayBuf name buf speed) = { au: PlayBuf' buf speed, name }
 
 au' (LoopBuf name buf speed start end) = { au: LoopBuf' buf speed start end, name }
 
-au' (PlayDynamicBuf name buf speed) = { au: PlayDynamicBuf' buf speed, name }
-
-au' (LoopDynamicBuf name buf speed start end) = { au: LoopDynamicBuf' buf speed start end, name }
-
 au' (Lowpass name f q g _) = { au: Lowpass' f q g, name }
 
 au' (Highpass name f q g _) = { au: Highpass' f q g, name }
@@ -819,8 +790,6 @@ au' (Allpass name f q g _) = { au: Allpass' f q g, name }
 
 au' (Convolver name buf _) = { au: Convolver' buf, name }
 
-au' (DynamicConvolver name buf _) = { au: DynamicConvolver' buf, name }
-
 au' (DynamicsCompressor name thresh knee ratio attack release _) =
   { au: DynamicsCompressor' thresh knee ratio attack release
   , name
@@ -832,11 +801,7 @@ au' (TriangleOsc name n) = { au: (TriangleOsc' n), name }
 
 au' (PeriodicOsc name n s) = { au: (PeriodicOsc' n s), name }
 
-au' (DynamicPeriodicOsc name n r i) = { au: (DynamicPeriodicOsc' n r i), name }
-
 au' (WaveShaper name curve os _) = { au: (WaveShaper' curve os), name }
-
-au' (DynamicWaveShaper name curve os _) = { au: (DynamicWaveShaper' curve os), name }
 
 au' (Dup1 name _ _) = { au: Dup', name } -- hack, we set the actual value later
 
@@ -895,10 +860,6 @@ au'' (PlayBuf' _ _) = PlayBuf''
 
 au'' (LoopBuf' _ _ _ _) = LoopBuf''
 
-au'' (PlayDynamicBuf' _ _) = PlayDynamicBuf''
-
-au'' (LoopDynamicBuf' _ _ _ _) = LoopDynamicBuf''
-
 au'' (Lowpass' _ _ _) = Lowpass''
 
 au'' (Highpass' _ _ _) = Highpass''
@@ -917,8 +878,6 @@ au'' (Allpass' _ _ _) = Allpass''
 
 au'' (Convolver' _) = Convolver''
 
-au'' (DynamicConvolver' _) = DynamicConvolver''
-
 au'' (DynamicsCompressor' _ _ _ _ _) = DynamicsCompressor''
 
 au'' (SawtoothOsc' _) = SawtoothOsc''
@@ -927,11 +886,7 @@ au'' (TriangleOsc' _) = TriangleOsc''
 
 au'' (PeriodicOsc' _ _) = PeriodicOsc''
 
-au'' (DynamicPeriodicOsc' _ _ _) = DynamicPeriodicOsc''
-
 au'' (WaveShaper' _ _) = WaveShaper''
-
-au'' (DynamicWaveShaper' _ _) = DynamicWaveShaper''
 
 au'' Dup' = Dup''
 
@@ -974,10 +929,6 @@ tagToAU PlayBuf'' = PlayBuf' "" (ap_ (-1.0))
 
 tagToAU LoopBuf'' = LoopBuf' "" (ap_ (-1.0)) (-1.0) (-1.0)
 
-tagToAU PlayDynamicBuf'' = PlayDynamicBuf' (AudioBuffer 0 [ [] ]) (ap_ (-1.0))
-
-tagToAU LoopDynamicBuf'' = LoopDynamicBuf' (AudioBuffer 0 [ [] ]) (ap_ (-1.0)) (-1.0) (-1.0)
-
 tagToAU Lowpass'' = Lowpass' (ap_ (-1.0)) (ap_ (-1.0)) (ap_ (-1.0))
 
 tagToAU Highpass'' = Highpass' (ap_ (-1.0)) (ap_ (-1.0)) (ap_ (-1.0))
@@ -996,8 +947,6 @@ tagToAU Allpass'' = Allpass' (ap_ (-1.0)) (ap_ (-1.0)) (ap_ (-1.0))
 
 tagToAU Convolver'' = Convolver' ""
 
-tagToAU DynamicConvolver'' = DynamicConvolver' (AudioBuffer 0 [ [] ])
-
 tagToAU DynamicsCompressor'' = DynamicsCompressor' (ap_ (-1.0)) (ap_ (-1.0)) (ap_ (-1.0)) (ap_ (-1.0)) (ap_ (-1.0))
 
 tagToAU SawtoothOsc'' = SawtoothOsc' (ap_ 50000.0)
@@ -1006,11 +955,7 @@ tagToAU TriangleOsc'' = TriangleOsc' (ap_ 50000.0)
 
 tagToAU PeriodicOsc'' = PeriodicOsc' (ap_ 50000.0) ""
 
-tagToAU DynamicPeriodicOsc'' = DynamicPeriodicOsc' (ap_ 50000.0) [] []
-
 tagToAU WaveShaper'' = WaveShaper' "" None
-
-tagToAU DynamicWaveShaper'' = DynamicWaveShaper' [] None
 
 tagToAU Dup'' = Dup'
 
@@ -1267,10 +1212,6 @@ audioToPtr = go (-1) M.empty
 
   go' ptr v@(LoopBuf _ _ _ _ _) = terminus ptr v
 
-  go' ptr v@(PlayDynamicBuf _ _ _) = terminus ptr v
-
-  go' ptr v@(LoopDynamicBuf _ _ _ _ _) = terminus ptr v
-
   go' ptr v@(Lowpass _ _ _ _ a) = passthrough ptr v a
 
   go' ptr v@(Highpass _ _ _ _ a) = passthrough ptr v a
@@ -1289,8 +1230,6 @@ audioToPtr = go (-1) M.empty
 
   go' ptr v@(Convolver _ _ a) = passthrough ptr v a
 
-  go' ptr v@(DynamicConvolver _ _ a) = passthrough ptr v a
-
   go' ptr v@(DynamicsCompressor _ _ _ _ _ _ a) = passthrough ptr v a
 
   go' ptr v@(SawtoothOsc _ _) = terminus ptr v
@@ -1299,11 +1238,7 @@ audioToPtr = go (-1) M.empty
 
   go' ptr v@(PeriodicOsc _ _ _) = terminus ptr v
 
-  go' ptr v@(DynamicPeriodicOsc _ _ _ _) = terminus ptr v
-
   go' ptr v@(WaveShaper _ _ _ a) = passthrough ptr v a
-
-  go' ptr v@(DynamicWaveShaper _ _ _ a) = passthrough ptr v a
 
   go' ptr v@(Dup1 name a f) = closurethrough ptr v a $ f DupRes
 
@@ -1471,16 +1406,14 @@ loopBufT_ ::
   AudioUnit ch
 loopBufT_ s handle a b c = LoopBuf (Just s) handle a b c
 
-playDynamicBuf ::
-  forall ch bch blen.
-  Pos ch =>
-  Pos bch =>
-  Pos blen =>
-  Int ->
-  Vec bch (Vec blen Number) ->
-  Number ->
-  AudioUnit ch
-playDynamicBuf i v a = PlayDynamicBuf Nothing (AudioBuffer i (map V.toArray $ V.toArray v)) (ap_ a)
+periodicWave ::
+  forall len.
+  Pos len =>
+  AudioContext ->
+  Vec len Number ->
+  Vec len Number ->
+  Effect BrowserPeriodicWave
+periodicWave ctx a b = makePeriodicWave ctx (V.toArray a) (V.toArray b)
 
 audioBuffer ::
   forall bch blen.
@@ -1490,95 +1423,6 @@ audioBuffer ::
   Vec bch (Vec blen Number) ->
   AudioBuffer
 audioBuffer i v = AudioBuffer i (map V.toArray $ V.toArray v)
-
-playDynamicBuf_ ::
-  forall ch bch blen.
-  Pos ch =>
-  Pos bch =>
-  Pos blen =>
-  String ->
-  Int ->
-  Vec bch (Vec blen Number) ->
-  Number ->
-  AudioUnit ch
-playDynamicBuf_ s i v a = PlayDynamicBuf (Just s) (AudioBuffer i (map V.toArray $ V.toArray v)) (ap_ a)
-
-playDynamicBufT ::
-  forall ch bch blen.
-  Pos ch =>
-  Pos bch =>
-  Pos blen =>
-  Int ->
-  Vec bch (Vec blen Number) ->
-  AudioParameter Number ->
-  AudioUnit ch
-playDynamicBufT i v a = PlayDynamicBuf Nothing (AudioBuffer i (map V.toArray $ V.toArray v)) a
-
-playDynamicBufT_ ::
-  forall ch bch blen.
-  Pos ch =>
-  Pos bch =>
-  Pos blen =>
-  String ->
-  Int ->
-  Vec bch (Vec blen Number) ->
-  AudioParameter Number ->
-  AudioUnit ch
-playDynamicBufT_ s i v a = PlayDynamicBuf (Just s) (AudioBuffer i (map V.toArray $ V.toArray v)) a
-
-loopDynamicBuf ::
-  forall ch bch blen.
-  Pos ch =>
-  Pos bch =>
-  Pos blen =>
-  Int ->
-  Vec bch (Vec blen Number) ->
-  Number ->
-  Number ->
-  Number ->
-  AudioUnit ch
-loopDynamicBuf i v a b c = LoopDynamicBuf Nothing (AudioBuffer i (map V.toArray $ V.toArray v)) (ap_ a) b c
-
-loopDynamicBuf_ ::
-  forall ch bch blen.
-  Pos ch =>
-  Pos bch =>
-  Pos blen =>
-  String ->
-  Int ->
-  Vec bch (Vec blen Number) ->
-  Number ->
-  Number ->
-  Number ->
-  AudioUnit ch
-loopDynamicBuf_ s i v a b c = LoopDynamicBuf (Just s) (AudioBuffer i (map V.toArray $ V.toArray v)) (ap_ a) b c
-
-loopDynamicBufT ::
-  forall ch bch blen.
-  Pos ch =>
-  Pos bch =>
-  Pos blen =>
-  Int ->
-  Vec bch (Vec blen Number) ->
-  AudioParameter Number ->
-  Number ->
-  Number ->
-  AudioUnit ch
-loopDynamicBufT i v a b c = LoopDynamicBuf Nothing (AudioBuffer i (map V.toArray $ V.toArray v)) a b c
-
-loopDynamicBufT_ ::
-  forall ch bch blen.
-  Pos ch =>
-  Pos bch =>
-  Pos blen =>
-  String ->
-  Int ->
-  Vec bch (Vec blen Number) ->
-  AudioParameter Number ->
-  Number ->
-  Number ->
-  AudioUnit ch
-loopDynamicBufT_ s i v a b c = LoopDynamicBuf (Just s) (AudioBuffer i (map V.toArray $ V.toArray v)) a b c
 
 lowpass :: forall ch. Pos ch => Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
 lowpass a b c = Lowpass Nothing (ap_ a) (ap_ b) (ap_ c)
@@ -1692,29 +1536,6 @@ convolver_ ::
   AudioUnit ch ->
   AudioUnit ch
 convolver_ s handle = Convolver (Just s) handle
-
-dynamicConvolver ::
-  forall ch bch blen.
-  Pos ch =>
-  Pos bch =>
-  Pos blen =>
-  Int ->
-  Vec bch (Vec blen Number) ->
-  AudioUnit ch ->
-  AudioUnit ch
-dynamicConvolver i v = DynamicConvolver Nothing (AudioBuffer i (map V.toArray $ V.toArray v))
-
-dynamicConvolver_ ::
-  forall ch bch blen.
-  Pos ch =>
-  Pos bch =>
-  Pos blen =>
-  String ->
-  Int ->
-  Vec bch (Vec blen Number) ->
-  AudioUnit ch ->
-  AudioUnit ch
-dynamicConvolver_ s i v = DynamicConvolver (Just s) (AudioBuffer i (map V.toArray $ V.toArray v))
 
 dynamicsCompressor ::
   forall ch.
@@ -1841,36 +1662,13 @@ waveShaper_ ::
   AudioUnit ch
 waveShaper_ s handle = WaveShaper (Just s) handle
 
-dynamicWaveShaper ::
-  forall ch.
-  Pos ch =>
-  Array Number ->
-  Oversample ->
-  AudioUnit ch ->
-  AudioUnit ch
-dynamicWaveShaper = DynamicWaveShaper Nothing
-
-dynamicWaveShaper_ ::
-  forall ch.
-  Pos ch =>
-  String ->
-  Array Number ->
-  Oversample ->
-  AudioUnit ch ->
-  AudioUnit ch
-dynamicWaveShaper_ s = DynamicWaveShaper (Just s)
-
 periodicOsc ::
-  forall ch.
-  Pos ch =>
   String ->
   Number ->
   AudioUnit D1
 periodicOsc handle n = PeriodicOsc Nothing (ap_ n) handle
 
 periodicOsc_ ::
-  forall ch.
-  Pos ch =>
   String ->
   String ->
   Number ->
@@ -1878,59 +1676,17 @@ periodicOsc_ ::
 periodicOsc_ s handle n = PeriodicOsc (Just s) (ap_ n) handle
 
 periodicOscT ::
-  forall ch.
-  Pos ch =>
   String ->
   AudioParameter Number ->
   AudioUnit D1
 periodicOscT handle n = PeriodicOsc Nothing n handle
 
 periodicOscT_ ::
-  forall ch.
-  Pos ch =>
   String ->
   String ->
   AudioParameter Number ->
   AudioUnit D1
 periodicOscT_ s handle n = PeriodicOsc (Just s) n handle
-
-dynamicPeriodicOsc ::
-  forall len.
-  Pos len =>
-  Number ->
-  Vec len Number ->
-  Vec len Number ->
-  AudioUnit D1
-dynamicPeriodicOsc n a b = DynamicPeriodicOsc Nothing (ap_ n) (V.toArray a) (V.toArray b)
-
-dynamicPeriodicOsc_ ::
-  forall len.
-  Pos len =>
-  String ->
-  Number ->
-  Vec len Number ->
-  Vec len Number ->
-  AudioUnit D1
-dynamicPeriodicOsc_ s n a b = DynamicPeriodicOsc (Just s) (ap_ n) (V.toArray a) (V.toArray b)
-
-dynamicPeriodicOscT ::
-  forall len.
-  Pos len =>
-  AudioParameter Number ->
-  Vec len Number ->
-  Vec len Number ->
-  AudioUnit D1
-dynamicPeriodicOscT n a b = DynamicPeriodicOsc Nothing n (V.toArray a) (V.toArray b)
-
-dynamicPeriodicOscT_ ::
-  forall len.
-  Pos len =>
-  String ->
-  AudioParameter Number ->
-  Vec len Number ->
-  Vec len Number ->
-  AudioUnit D1
-dynamicPeriodicOscT_ s n a b = DynamicPeriodicOsc (Just s) n (V.toArray a) (V.toArray b)
 
 sinOsc :: Number -> AudioUnit D1
 sinOsc n = SinOsc Nothing (ap_ n)
@@ -2149,10 +1905,6 @@ ucomp (PlayBuf' s0 _) (PlayBuf' s1 _) = s0 == s1
 
 ucomp (LoopBuf' s0 _ _ _) (LoopBuf' s1 _ _ _) = s0 == s1
 
-ucomp (PlayDynamicBuf' s0 _) (PlayDynamicBuf' s1 _) = true
-
-ucomp (LoopDynamicBuf' s0 _ _ _) (LoopDynamicBuf' s1 _ _ _) = true
-
 ucomp (Lowpass' _ _ _) (Lowpass' _ _ _) = true
 
 ucomp (Highpass' _ _ _) (Highpass' _ _ _) = true
@@ -2171,8 +1923,6 @@ ucomp (Allpass' _ _ _) (Allpass' _ _ _) = true
 
 ucomp (Convolver' s0) (Convolver' s1) = s0 == s1
 
-ucomp (DynamicConvolver' _) (DynamicConvolver' _) = true
-
 ucomp (DynamicsCompressor' _ _ _ _ _) (DynamicsCompressor' _ _ _ _ _) = true
 
 ucomp (SawtoothOsc' _) (SawtoothOsc' _) = true
@@ -2181,11 +1931,7 @@ ucomp (TriangleOsc' _) (TriangleOsc' _) = true
 
 ucomp (PeriodicOsc' _ s0) (PeriodicOsc' _ s1) = s0 == s1
 
-ucomp (DynamicPeriodicOsc' _ _ _) (DynamicPeriodicOsc' _ _ _) = true
-
 ucomp (WaveShaper' s0 _) (WaveShaper' s1 _) = s0 == s1
-
-ucomp (DynamicWaveShaper' _ _) (DynamicWaveShaper' _ _) = true
 
 ucomp (Dup') (Dup') = true
 
@@ -2269,14 +2015,6 @@ toCoef (Convolver' a) (Convolver' b) =
   else
     0.0
 
-toCoef (DynamicConvolver' (AudioBuffer sr0 u0)) (DynamicConvolver' (AudioBuffer sr1 u1)) =
-  if sr0 /= sr1 || (A.length u0) /= (A.length u1) then
-    10000.0
-  else
-    -- to do, make this a weighted sum dependent on size...
-    -- only will really matter if using convolvers of different lengths
-    (foldl (+) 0.0 (join (A.zipWith (A.zipWith (\a b -> Math.abs $ a - b)) u0 u1)))
-
 toCoef (DynamicsCompressor' (AudioParameter { param: a }) (AudioParameter { param: b }) (AudioParameter { param: c }) (AudioParameter { param: d }) (AudioParameter { param: e })) (DynamicsCompressor' (AudioParameter { param: v }) (AudioParameter { param: w }) (AudioParameter { param: x }) (AudioParameter { param: y }) (AudioParameter { param: z })) =
   foldl (+)
     0.0
@@ -2289,25 +2027,12 @@ toCoef (TriangleOsc' f0) (TriangleOsc' f1) = oscMULT * twoCoef f0 f1
 -- todo : make periodic osc wavetable weighted?
 toCoef (PeriodicOsc' f0 _) (PeriodicOsc' f1 _) = oscMULT * twoCoef f0 f1
 
-toCoef (DynamicPeriodicOsc' f0 q x) (DynamicPeriodicOsc' f1 r y) =
-  (oscMULT * twoCoef f0 f1)
-    + foldl (+) 0.0 (A.zipWith (\a b -> Math.abs $ a - b) q r)
-    + foldl (+) 0.0 (A.zipWith (\a b -> Math.abs $ a - b) x y)
-
 toCoef (WaveShaper' l0 e0) (WaveShaper' l1 e1) =
   ( if e0 /= e1 then
       5.0
     else
       0.0
   )
-
-toCoef (DynamicWaveShaper' l0 e0) (DynamicWaveShaper' l1 e1) =
-  ( if e0 /= e1 then
-      5.0
-    else
-      0.0
-  )
-    + foldl (+) 0.0 (A.zipWith (\a b -> Math.abs $ a - b) l0 l1)
 
 toCoef (Dup') (Dup') = 0.0
 
@@ -2753,11 +2478,11 @@ makeProgram prev cur =
 -- | audio units
 -- | audio units
 foreign import touchAudio ::
-  forall microphone track buffer floatArray.
+  forall microphone track buffer floatArray periodicWave.
   Number ->
   Array Instruction ->
   AudioContext ->
-  AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) ->
+  AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
   Array Foreign ->
   Effect (Array Foreign)
 
@@ -2856,17 +2581,11 @@ startConstructor (PlayBuf' _ n) = Just (apT n)
 
 startConstructor (LoopBuf' _ n _ _) = Just (apT n)
 
-startConstructor (PlayDynamicBuf' _ n) = Just (apT n)
-
-startConstructor (LoopDynamicBuf' _ n _ _) = Just (apT n)
-
 startConstructor (SawtoothOsc' n) = Just (apT n)
 
 startConstructor (TriangleOsc' n) = Just (apT n)
 
 startConstructor (PeriodicOsc' n _) = Just (apT n)
-
-startConstructor (DynamicPeriodicOsc' n _ _) = Just (apT n)
 
 startConstructor (SinOsc' n) = Just (apT n)
 
@@ -2929,17 +2648,11 @@ isGen (PlayBuf' _ _) = true
 
 isGen (LoopBuf' _ _ _ _) = true
 
-isGen (PlayDynamicBuf' _ _) = true
-
-isGen (LoopDynamicBuf' _ _ _ _) = true
-
 isGen (SawtoothOsc' _) = true
 
 isGen (TriangleOsc' _) = true
 
 isGen (PeriodicOsc' _ _) = true
-
-isGen (DynamicPeriodicOsc' _ _ _) = true
 
 isGen (SinOsc' _) = true
 
@@ -3062,18 +2775,6 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
     , if e /= ex then Just $ SetLoopEnd i e else Nothing
     ]
 
-  set' i (PlayDynamicBuf' b@(AudioBuffer v a) n) (PlayDynamicBuf' bx nx) =
-    [ if b /= bx then Just $ SetBuffer i v a else Nothing
-    , if napeq n nx then Just $ SetPlaybackRate i (apP n) (apT n) else Nothing
-    ]
-
-  set' i (LoopDynamicBuf' b@(AudioBuffer v a) n s e) (LoopDynamicBuf' bx nx sx ex) =
-    [ if b /= bx then Just $ SetBuffer i v a else Nothing
-    , if napeq n nx then Just $ SetPlaybackRate i (apP n) (apT n) else Nothing
-    , if s /= sx then Just $ SetLoopStart i s else Nothing
-    , if e /= ex then Just $ SetLoopEnd i e else Nothing
-    ]
-
   set' i (Lowpass' a b c) (Lowpass' x y z) = setFilter i a b c x y z
 
   set' i (Highpass' a b c) (Highpass' x y z) = setFilter i a b c x y z
@@ -3089,10 +2790,6 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
   set' i (Peaking' a b c) (Peaking' x y z) = setFilter i a b c x y z
 
   set' i (Notch' a b c) (Notch' x y z) = setFilter i a b c x y z
-
-  set' i (DynamicConvolver' b@(AudioBuffer v a)) (DynamicConvolver' bx) =
-    pure
-      $ if b /= bx then Just $ SetBuffer i v a else Nothing
 
   set' i (DynamicsCompressor' a b c d e) (DynamicsCompressor' v w x y z) =
     [ if napeq a v then Just $ SetThreshold i (apP a) (apT a) else Nothing
@@ -3112,24 +2809,8 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
 
   set' i (PeriodicOsc' n _) (PeriodicOsc' nx _) = pure $ if napeq n nx then Just $ SetFrequency i (apP n) (apT n) else Nothing
 
-  set' i (DynamicPeriodicOsc' n rl im) (DynamicPeriodicOsc' nx rlx imx) =
-    [ if napeq n nx then Just $ SetFrequency i (apP n) (apT n) else Nothing
-    , if rl /= rlx || im /= imx then Just $ SetPeriodicWave i rl im else Nothing
-    ]
-
   set' i (WaveShaper' _ o) (WaveShaper' _ ox) =
     [ if o /= ox then
-        Just
-          ( SetOversample i
-              $ os2s o
-          )
-      else
-        Nothing
-    ]
-
-  set' i (DynamicWaveShaper' a o) (DynamicWaveShaper' ax ox) =
-    [ if a /= ax then Just $ SetCurve i a else Nothing
-    , if o /= ox then
         Just
           ( SetOversample i
               $ os2s o
@@ -3163,11 +2844,12 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
           )
       )
 
-type AudioInfo microphones tracks buffers floatArrays
+type AudioInfo microphones tracks buffers floatArrays periodicWaves
   = { microphones :: microphones
     , tracks :: tracks
     , buffers :: buffers
     , floatArrays :: floatArrays
+    , periodicWaves :: periodicWaves
     }
 
 -- the reason canvas elements are effectful is because,
@@ -3185,13 +2867,13 @@ type CanvasInfo
 
 class RunnableMedia a accumulator where
   runInBrowser ::
-    forall microphone track buffer floatArray.
+    forall microphone track buffer floatArray periodicWave.
     (accumulator -> CanvasInfo -> Number -> Behavior a) ->
     accumulator ->
     Int ->
     Int ->
     AudioContext ->
-    AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) ->
+    AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
     VisualInfo ->
     Effect (Effect Unit)
 
@@ -3377,14 +3059,14 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (AV ch accumulator) accumula
 -- | The main executor loop in the browser
 -- | Accepts an effectful scene
 runInBrowser_ ::
-  forall accumulator microphone track buffer floatArray a.
+  forall accumulator microphone track buffer floatArray periodicWave a.
   RunnableMedia a accumulator =>
   Effect (accumulator -> CanvasInfo -> Number -> Behavior a) ->
   accumulator ->
   Int ->
   Int ->
   AudioContext ->
-  AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) ->
+  AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
   VisualInfo ->
   Effect (Effect Unit)
 runInBrowser_ scene' accumulator pingEvery actualSpeed ctx audioInfo visualInfo = do
