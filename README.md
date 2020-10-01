@@ -25,8 +25,8 @@ This library uses the [behaviors pattern](https://wiki.haskell.org/Functional_Re
 For example, consider the following behavior, taken from [`HelloWorld.purs`](./examples/hello-world/HelloWorld.purs):
 
 ```haskell
-scene :: forall a. a ->  Number -> Behavior (AudioUnit D1)
-scene _ time = let
+scene :: forall a. a -> CanvasInfo -> Number -> Behavior (AudioUnit D1)
+scene _ _ time = let
       rad = pi * time
     in
       pure $ speaker
@@ -53,6 +53,8 @@ In this section, we'll build a scene from the ground up. In doing so, we'll acco
 1. Getting the sound to change as a function of time.
 1. Getting the sound to change as a function of a mouse input event.
 1. Making sure that certain sounds occur at a precise time.
+1. Remembering when events happened.
+1. Adding visuals
 
 ### Getting a static sound to play
 
@@ -61,8 +63,8 @@ Let's start with a sine wave at A440 playing at a volume of `0.5` (where `1.0` i
 [Listen on klank.dev](https://klank.dev/?gist=1d5345f85a05b84644941843709f6d6a)
 
 ```haskell
-scene :: forall a. a -> Number -> Behavior (AudioUnit D1)
-scene _ _ = pure (speaker' $ (gain' 0.5 $ sinOsc 440.0))
+scene :: forall a. a -> CanvasInfo -> Number -> Behavior (AudioUnit D1)
+scene _ _ _ = pure (speaker' $ (gain' 0.5 $ sinOsc 440.0))
 ```
 
 Note that, because this function does not depend on time, we can ignore the input.
@@ -72,8 +74,8 @@ Note that, because this function does not depend on time, we can ignore the inpu
 Let's add our voice to the mix! We'll put it above a nice low drone.
 
 ```haskell
-scene :: forall a. a -> Number -> Behavior (AudioUnit D1)
-scene _ _ =
+scene :: forall a. a -> CanvasInfo -> Number -> Behavior (AudioUnit D1)
+scene _ _ _ =
   pure
     ( speaker
         $ ( (gain' 0.2 $ sinOsc 110.0)
@@ -96,8 +98,8 @@ Let's add some soothing jungle sounds to the mix. We use the function `play` to 
 -- assuming we have passed in an object
 -- with { forest: new Audio("my-recording.mp3") }
 -- to `runInBrowser`
-scene :: forall a. a -> Number -> Behavior (AudioUnit D1)
-scene _ _ =
+scene :: forall a. a -> CanvasInfo -> Number -> Behavior (AudioUnit D1)
+scene _ _ _ =
   pure
     ( speaker
         $ ( (gain' 0.2 $ sinOsc 110.0)
@@ -116,8 +118,8 @@ To go from mono to stereo, there is a class of functions called `dupX`, `splitX`
 If you want to make two separate audio units, then you can use a normal let block. If, on the other hand, you want to use the same underlying unit, use `dupX`. When in doubt, use `dupX`, as you'll rarely need to duplicate an identical audio source.
 
 ```haskell
-scene :: forall a. a -> Number -> Behavior (AudioUnit D2)
-scene _ _ =
+scene :: forall a. a -> CanvasInfo -> Number -> Behavior (AudioUnit D2)
+scene _ _ _ =
   pure
     $ dup1
         ( (gain' 0.2 $ sinOsc 110.0)
@@ -136,8 +138,8 @@ scene _ _ =
 Up until this point, our audio hasn't reacted to many behaviors. Let's fix that! One behavior to react to is the passage of time. Let's add a slow undulation to the lowest pitch in the drone that is based on the passage of time
 
 ```haskell
-scene :: forall a. a -> Number -> Behavior (AudioUnit D2)
-scene _ time =
+scene :: forall a. a -> CanvasInfo -> Number -> Behavior (AudioUnit D2)
+scene _ _ time =
   let
     rad = pi * time
   in
@@ -159,8 +161,8 @@ scene _ time =
 The next snippet of code uses the mouse to modulate the pitch of the higher note by roughly a major third.
 
 ```haskell
-scene5 :: forall a. Mouse -> a -> Number -> Behavior (AudioUnit D2)
-scene5 mouse _ time = f time <$> click
+scene :: forall a. Mouse -> a -> CanvasInfo -> Number -> Behavior (AudioUnit D2)
+scene mouse _ _ time = f time <$> click
   where
   f s cl =
     let
@@ -178,7 +180,7 @@ scene5 mouse _ time = f time <$> click
             )
 
   click :: Behavior Boolean
-  click = map isEmpty $ buttons mouse
+  click = map (not <<< isEmpty) $ buttons mouse
 ```
 
 ### Making sure that certain sounds occur at a precise time
@@ -209,8 +211,8 @@ pwf =
 
 kr = 20.0 / 1000.0 :: Number -- the control rate in seconds, or 66.66667 Hz
 
-scene :: forall a. Mouse -> a -> Number -> Behavior (AudioUnit D2)
-scene mouse _ time = f time <$> click
+scene :: forall a. Mouse -> a -> CanvasInfo -> Number -> Behavior (AudioUnit D2)
+scene mouse _ _ time = f time <$> click
   where
   split s = span ((s >= _) <<< fst) pwf
 
@@ -255,7 +257,187 @@ scene mouse _ time = f time <$> click
             )
 
   click :: Behavior Boolean
-  click = map isEmpty $ buttons mouse
+  click = map (not <<< isEmpty) $ buttons mouse
+```
+
+### Remembering when events happened
+
+Sometimes, you don't just want to react to an event like a mouse click. You want to remember when the event happened in time.  For example, imagine that we modulate a pitch whenever a button is clicked, like in the example below.  When the pitch modulates, it should continue slowly rising until the button is released.
+
+To accomplish this, or anything where memory needs to be retained, the scene accepts an arbitrary accumulator as its first parameter.  You can think of it as a [fold](https://pursuit.purescript.org/packages/purescript-foldable-traversable/4.1.1/docs/Data.Foldable#v:fold) over time.
+
+To make the accumulator useful, the scene should return the accumulator as well.  The constructor `IAudioUnit` allows for this: it accepts an audio unit as well as an accumulator.
+
+```haskell
+pwf :: Array (Tuple Number Number)
+pwf =
+  join
+    $ map
+        ( \i ->
+            map
+              ( \(Tuple f s) ->
+                  Tuple (f + 0.11 * toNumber i) s
+              )
+              [ Tuple 0.0 0.0, Tuple 0.02 0.7, Tuple 0.06 0.2 ]
+        )
+        (range 0 400)
+
+kr = 20.0 / 1000.0 :: Number -- the control rate in seconds, or 66.66667 Hz
+
+initialOnset = { onset: Nothing } :: { onset :: Maybe Number }
+
+scene ::
+  forall a.
+  Mouse ->
+  { onset :: Maybe Number | a } ->
+  CanvasInfo ->
+  Number ->
+  Behavior (IAudioUnit D2 { onset :: Maybe Number | a })
+scene mouse acc@{ onset } _ time = f time <$> click
+  where
+  split s = span ((s >= _) <<< fst) pwf
+
+  gn s =
+    let
+      ht = split s
+    in
+      let
+        left = fromMaybe (Tuple 0.0 0.0) $ last ht.init
+      in
+        let
+          right = fromMaybe (Tuple 201.0 0.0) $ head ht.rest
+        in
+          -- if we are in a control cycle with a peak or trough
+          -- we lock to that
+          -- otherwise, we interpolate
+          if (fst right - s) < kr then
+            AudioParameter { param: (snd right), timeOffset: (fst right - s) }
+          else
+            let
+              m = (snd right - snd left) / (fst right - fst left)
+            in
+              let
+                b = (snd right - (m * fst right))
+              in
+                AudioParameter { param: (m * s + b), timeOffset: 0.0 }
+
+  f s cl =
+    IAudioUnit
+      ( dup1
+          ( (gain' 0.2 $ sinOsc (110.0 + (3.0 * sin (0.5 * rad))))
+              + (gain' 0.1 (gainT' (gn s) $ sinOsc 440.0))
+              + (gain' 0.1 $ sinOsc (220.0 + (if cl then (50.0 + maybe 0.0 (\t -> 10.0 * (s - t)) stTime) else 0.0)))
+              + microphone
+          ) \mono ->
+          speaker
+            $ ( (panner (-0.5) (merger (mono +> mono +> empty)))
+                  :| (gain' 0.5 $ (play "forest"))
+                  : Nil
+              )
+      )
+      (acc { onset = stTime })
+    where
+    rad = pi * s
+
+    stTime = case Tuple onset cl of
+      (Tuple Nothing true) -> Just s
+      (Tuple (Just y) true) -> Just y
+      (Tuple _ false) -> Nothing
+
+  click :: Behavior Boolean
+  click = map (not <<< isEmpty) $ buttons mouse
+```
+
+Because the accumulator object is global for an entire audio graph, it's a good idea to use row polymorphism in the accumulator object.  While using keys like `onset` is fine for small projects, if you're a library developer, you'll want to make sure to use keys more like namespaces.  That is, you'll want to make sure that they do not conflict with other vendors' keys and with users' keys.  A good practice is to use something like `{ myLibrary :: { param1 :: Number } | a }`.
+
+#### Adding visuals
+
+Let's add a little dot that gets bigger when we click.  We'll do that using the `AV` constructor that accepts a [Drawing](https://pursuit.purescript.org/packages/purescript-drawing/4.0.0/docs/Graphics.Drawing#t:Drawing).
+
+```haskell
+pwf :: Array (Tuple Number Number)
+pwf =
+  join
+    $ map
+        ( \i ->
+            map
+              ( \(Tuple f s) ->
+                  Tuple (f + 0.11 * toNumber i) s
+              )
+              [ Tuple 0.0 0.0, Tuple 0.02 0.7, Tuple 0.06 0.2 ]
+        )
+        (range 0 400)
+
+kr = 20.0 / 1000.0 :: Number -- the control rate in seconds, or 66.66667 Hz
+
+initialOnset = { onset: Nothing } :: { onset :: Maybe Number }
+
+scene ::
+  forall a.
+  Mouse ->
+  { onset :: Maybe Number | a } ->
+  CanvasInfo ->
+  Number ->
+  Behavior (AV D2 { onset :: Maybe Number | a })
+scene mouse acc@{ onset } { w, h } time = f time <$> click
+  where
+  split s = span ((s >= _) <<< fst) pwf
+
+  gn s =
+    let
+      ht = split s
+    in
+      let
+        left = fromMaybe (Tuple 0.0 0.0) $ last ht.init
+      in
+        let
+          right = fromMaybe (Tuple 201.0 0.0) $ head ht.rest
+        in
+          -- if we are in a control cycle with a peak or trough
+          -- we lock to that
+          -- otherwise, we interpolate
+          if (fst right - s) < kr then
+            AudioParameter { param: (snd right), timeOffset: (fst right - s) }
+          else
+            let
+              m = (snd right - snd left) / (fst right - fst left)
+            in
+              let
+                b = (snd right - (m * fst right))
+              in
+                AudioParameter { param: (m * s + b), timeOffset: 0.0 }
+
+  f s cl =
+    AV
+      ( Just
+          $ dup1
+              ( (gain' 0.2 $ sinOsc (110.0 + (3.0 * sin (0.5 * rad))))
+                  + (gain' 0.1 (gainT' (gn s) $ sinOsc 440.0))
+                  + (gain' 0.1 $ sinOsc (220.0 + (if cl then (50.0 + maybe 0.0 (\t -> 10.0 * (s - t)) stTime) else 0.0)))
+                  + microphone
+              ) \mono ->
+              speaker
+                $ ( (panner (-0.5) (merger (mono +> mono +> empty)))
+                      :| (gain' 0.5 $ (play "forest"))
+                      : Nil
+                  )
+      )
+      ( Just
+          $ filled
+              (fillColor (rgb 0 0 0))
+              (circle (w / 2.0) (h / 2.0) (if cl then 25.0 else 5.0))
+      )
+      (acc { onset = stTime })
+    where
+    rad = pi * s
+
+    stTime = case Tuple onset cl of
+      (Tuple Nothing true) -> Just s
+      (Tuple (Just y) true) -> Just y
+      (Tuple _ false) -> Nothing
+
+  click :: Behavior Boolean
+  click = map (not <<< isEmpty) $ buttons mouse
 ```
 
 ### Conclusion

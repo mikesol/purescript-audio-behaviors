@@ -6,11 +6,11 @@ import Data.NonEmpty ((:|))
 import Data.Typelevel.Num (D1)
 import Effect (Effect)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AudioUnit, gain', runInBrowser, sinOsc, speaker)
+import FRP.Behavior.Audio (AudioUnit, gain', runInBrowser, sinOsc, speaker, CanvasInfo)
 import Math (pi, sin)
 
-scene :: forall a. a ->  Number -> Behavior (AudioUnit D1)
-scene _ time = let
+scene :: forall a. a -> CanvasInfo -> Number -> Behavior (AudioUnit D1)
+scene _ _ time = let
       rad = pi * time
     in
       pure $ speaker

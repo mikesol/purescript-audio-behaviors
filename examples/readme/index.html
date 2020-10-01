@@ -5,22 +5,24 @@
     var offCb = null;
     var audioCtx = null;
     const myAudio = new Audio("forest.mp3");
-
     function turnOnAudio() {
+      const myCanvas = document.getElementById("frp");
       navigator.mediaDevices.getUserMedia({ audio: true }).then(function (mic) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         audioCtx.audioWorklet.addModule("ps-aud-mul.js").then(function () {
           var now = new Date().getTime();
           var ctr = 0;
           // null for the microphone
-          offCb = PS["FRP.Behavior.Audio.Example.Readme"].run()()()()()()()()()(20)(15)(audioCtx)(
+          offCb = PS["FRP.Behavior.Audio.Example.Readme"].run()()()()()()()()(PS["FRP.Behavior.Audio.Example.Readme"].initialOnset)(20)(15)(audioCtx)(
             {
               microphones: { mic },
               tracks: {
                 forest: myAudio,
               },
             }
-          )({})();
+          )({
+            canvas: myCanvas
+          })();
         });
       });
     }
@@ -34,5 +36,6 @@
   <body>
     <button onclick="turnOnAudio();">turn on</button>
     <button onclick="turnOffAudio();">turn off</button>
+    <canvas id="frp" width="150" height="150"></canvas>
   </body>
 </html>

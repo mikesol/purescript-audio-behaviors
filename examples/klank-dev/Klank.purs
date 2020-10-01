@@ -1,16 +1,18 @@
 module Klank.Dev where
 
 -- new to purescript? check out https://www.purescript.org/ for learning resources!
+
 import Prelude
+
 import Data.List ((:), List(..))
 import Data.NonEmpty ((:|))
 import Data.Typelevel.Num (D1)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AudioUnit, gain', runInBrowser_, sinOsc, speaker)
+import FRP.Behavior.Audio (AudioUnit, CanvasInfo, gain', runInBrowser_, sinOsc, speaker)
 import Math (pi, sin)
 
-scene :: forall a. a -> Number -> Behavior (AudioUnit D1)
-scene _ time = let
+scene :: forall a. a -> CanvasInfo -> Number -> Behavior (AudioUnit D1)
+scene _ _ time = let
       rad = pi * time
     in
       pure $ speaker

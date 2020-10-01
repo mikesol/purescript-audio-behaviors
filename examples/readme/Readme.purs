@@ -2,10 +2,11 @@ module FRP.Behavior.Audio.Example.Readme where
 
 -- tests everything in the readme to make sure it works!
 import Prelude
+import Color (rgb)
 import Data.Array (span, last, head, range)
 import Data.Int (toNumber)
 import Data.List ((:), List(..))
-import Data.Maybe (fromMaybe)
+import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Newtype (unwrap)
 import Data.NonEmpty ((:|))
 import Data.Set (isEmpty)
@@ -14,19 +15,20 @@ import Data.Typelevel.Num (D1, D2)
 import Data.Vec ((+>), empty)
 import Effect (Effect)
 import FRP.Behavior (Behavior, integral', fixB, switcher)
-import FRP.Behavior.Audio (AudioParameter(..), AudioUnit, Instruction, dup1, gain', gainT', merger, microphone, panner, play, runInBrowser, runInBrowser_, sinOsc, speaker, speaker')
+import FRP.Behavior.Audio (AV(..), AudioParameter(..), AudioUnit, IAudioUnit(..), Instruction, CanvasInfo, dup1, gain', gainT', merger, microphone, panner, play, runInBrowser, runInBrowser_, sinOsc, speaker, speaker')
 import FRP.Behavior.Audio as Aud
 import FRP.Behavior.Mouse (buttons)
 import FRP.Behavior.Time as Time
 import FRP.Event.Mouse (Mouse, getMouse, down)
 import Foreign (Foreign)
+import Graphics.Drawing (circle, fillColor, filled)
 import Math (pi, sin)
 
-scene0 :: forall a. a -> Number -> Behavior (AudioUnit D1)
-scene0 _ _ = pure (speaker' $ (gain' 0.5 $ sinOsc 440.0))
+scene0 :: forall a. a -> CanvasInfo -> Number -> Behavior (AudioUnit D1)
+scene0 _ _ _ = pure (speaker' $ (gain' 0.5 $ sinOsc 440.0))
 
-scene1 :: forall a. a -> Number -> Behavior (AudioUnit D1)
-scene1 _ _ =
+scene1 :: forall a. a -> CanvasInfo -> Number -> Behavior (AudioUnit D1)
+scene1 _ _ _ =
   pure
     ( speaker
         $ ( (gain' 0.2 $ sinOsc 110.0)
@@ -36,8 +38,8 @@ scene1 _ _ =
           )
     )
 
-scene2 :: forall a. a -> Number -> Behavior (AudioUnit D1)
-scene2 _ _ =
+scene2 :: forall a. a -> CanvasInfo -> Number -> Behavior (AudioUnit D1)
+scene2 _ _ _ =
   pure
     ( speaker
         $ ( (gain' 0.2 $ sinOsc 110.0)
@@ -48,8 +50,8 @@ scene2 _ _ =
           )
     )
 
-scene3 :: forall a. a -> Number -> Behavior (AudioUnit D2)
-scene3 _ _ =
+scene3 :: forall a. a -> CanvasInfo -> Number -> Behavior (AudioUnit D2)
+scene3 _ _ _ =
   pure
     $ dup1
         ( (gain' 0.2 $ sinOsc 110.0)
@@ -62,8 +64,8 @@ scene3 _ _ =
                 : Nil
             )
 
-scene4 :: forall a. a -> Number -> Behavior (AudioUnit D2)
-scene4 _ time =
+scene4 :: forall a. a -> CanvasInfo -> Number -> Behavior (AudioUnit D2)
+scene4 _ _ time =
   let
     rad = pi * time
   in
@@ -79,8 +81,8 @@ scene4 _ time =
                   : Nil
               )
 
-scene5 :: forall a. Mouse -> a -> Number -> Behavior (AudioUnit D2)
-scene5 mouse _ time = f time <$> click
+scene5 :: forall a. Mouse -> a -> CanvasInfo -> Number -> Behavior (AudioUnit D2)
+scene5 mouse _ _ time = f time <$> click
   where
   f s cl =
     let
@@ -98,7 +100,7 @@ scene5 mouse _ time = f time <$> click
             )
 
   click :: Behavior Boolean
-  click = map isEmpty $ buttons mouse
+  click = map (not <<< isEmpty) $ buttons mouse
 
 -- a piecewise function that creates an attack/release/sustain envelope
 -- at a periodicity of every 0.9 seconds
@@ -117,8 +119,8 @@ pwf =
 
 kr = 20.0 / 1000.0 :: Number -- the control rate in seconds, or 66.66667 Hz
 
-scene6 :: forall a. Mouse -> a -> Number -> Behavior (AudioUnit D2)
-scene6 mouse _ time = f time <$> click
+scene6 :: forall a. Mouse -> a -> CanvasInfo -> Number -> Behavior (AudioUnit D2)
+scene6 mouse _ _ time = f time <$> click
   where
   split s = span ((s >= _) <<< fst) pwf
 
@@ -163,13 +165,143 @@ scene6 mouse _ time = f time <$> click
             )
 
   click :: Behavior Boolean
-  click = map isEmpty $ buttons mouse
+  click = map (not <<< isEmpty) $ buttons mouse
+
+initialOnset = { onset: Nothing } :: { onset :: Maybe Number }
+
+scene7 ::
+  forall a.
+  Mouse ->
+  { onset :: Maybe Number | a } ->
+  CanvasInfo ->
+  Number ->
+  Behavior (IAudioUnit D2 { onset :: Maybe Number | a })
+scene7 mouse acc@{ onset } _ time = f time <$> click
+  where
+  split s = span ((s >= _) <<< fst) pwf
+
+  gn s =
+    let
+      ht = split s
+    in
+      let
+        left = fromMaybe (Tuple 0.0 0.0) $ last ht.init
+      in
+        let
+          right = fromMaybe (Tuple 201.0 0.0) $ head ht.rest
+        in
+          -- if we are in a control cycle with a peak or trough
+          -- we lock to that
+          -- otherwise, we interpolate
+          if (fst right - s) < kr then
+            AudioParameter { param: (snd right), timeOffset: (fst right - s) }
+          else
+            let
+              m = (snd right - snd left) / (fst right - fst left)
+            in
+              let
+                b = (snd right - (m * fst right))
+              in
+                AudioParameter { param: (m * s + b), timeOffset: 0.0 }
+
+  f s cl =
+    IAudioUnit
+      ( dup1
+          ( (gain' 0.2 $ sinOsc (110.0 + (3.0 * sin (0.5 * rad))))
+              + (gain' 0.1 (gainT' (gn s) $ sinOsc 440.0))
+              + (gain' 0.1 $ sinOsc (220.0 + (if cl then (50.0 + maybe 0.0 (\t -> 10.0 * (s - t)) stTime) else 0.0)))
+              + microphone
+          ) \mono ->
+          speaker
+            $ ( (panner (-0.5) (merger (mono +> mono +> empty)))
+                  :| (gain' 0.5 $ (play "forest"))
+                  : Nil
+              )
+      )
+      (acc { onset = stTime })
+    where
+    rad = pi * s
+
+    stTime = case Tuple onset cl of
+      (Tuple Nothing true) -> Just s
+      (Tuple (Just y) true) -> Just y
+      (Tuple _ false) -> Nothing
+
+  click :: Behavior Boolean
+  click = map (not <<< isEmpty) $ buttons mouse
+
+scene8 ::
+  forall a.
+  Mouse ->
+  { onset :: Maybe Number | a } ->
+  CanvasInfo ->
+  Number ->
+  Behavior (AV D2 { onset :: Maybe Number | a })
+scene8 mouse acc@{ onset } { w, h } time = f time <$> click
+  where
+  split s = span ((s >= _) <<< fst) pwf
+
+  gn s =
+    let
+      ht = split s
+    in
+      let
+        left = fromMaybe (Tuple 0.0 0.0) $ last ht.init
+      in
+        let
+          right = fromMaybe (Tuple 201.0 0.0) $ head ht.rest
+        in
+          -- if we are in a control cycle with a peak or trough
+          -- we lock to that
+          -- otherwise, we interpolate
+          if (fst right - s) < kr then
+            AudioParameter { param: (snd right), timeOffset: (fst right - s) }
+          else
+            let
+              m = (snd right - snd left) / (fst right - fst left)
+            in
+              let
+                b = (snd right - (m * fst right))
+              in
+                AudioParameter { param: (m * s + b), timeOffset: 0.0 }
+
+  f s cl =
+    AV
+      ( Just
+          $ dup1
+              ( (gain' 0.2 $ sinOsc (110.0 + (3.0 * sin (0.5 * rad))))
+                  + (gain' 0.1 (gainT' (gn s) $ sinOsc 440.0))
+                  + (gain' 0.1 $ sinOsc (220.0 + (if cl then (50.0 + maybe 0.0 (\t -> 10.0 * (s - t)) stTime) else 0.0)))
+                  + microphone
+              ) \mono ->
+              speaker
+                $ ( (panner (-0.5) (merger (mono +> mono +> empty)))
+                      :| (gain' 0.5 $ (play "forest"))
+                      : Nil
+                  )
+      )
+      ( Just
+          $ filled
+              (fillColor (rgb 0 0 0))
+              (circle (w / 2.0) (h / 2.0) (if cl then 25.0 else 5.0))
+      )
+      (acc { onset = stTime })
+    where
+    rad = pi * s
+
+    stTime = case Tuple onset cl of
+      (Tuple Nothing true) -> Just s
+      (Tuple (Just y) true) -> Just y
+      (Tuple _ false) -> Nothing
+
+  click :: Behavior Boolean
+  click = map (not <<< isEmpty) $ buttons mouse
 
 run =
   runInBrowser_
     ( do
         mouse <- getMouse
-        pure (scene6 mouse)
+        pure (scene8 mouse)
     )
 
 main :: Effect Unit

@@ -172,6 +172,13 @@ exports._makeAudioWorkletProcessor = function (name) {
   };
 };
 
+exports.unsafeCanvasHack = function(f) {
+  return function(c) {
+    return function() {
+      return c ? f(c)() : 0.0;
+    }
+  }
+}
 exports.touchAudio = function (/**dictHomogeneous */) {
   return function (/**dictHomogeneous */) {
     return function (/**dictHomogeneous */) {

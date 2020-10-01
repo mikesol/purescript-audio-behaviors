@@ -4,8 +4,9 @@ module FRP.Behavior.Audio
   , AudioParameter(..)
   , AudioBuffer
   , AudioUnit
+  , CanvasInfo
   , AudioInfo
-  , AV
+  , AV(..)
   , Animation(..)
   , IAudioUnit(..)
   , IAnimation(..)
@@ -178,6 +179,7 @@ module FRP.Behavior.Audio
   ) where
 
 import Prelude
+
 import Control.Bind (bindFlipped)
 import Data.Array (catMaybes, filter, foldl, groupBy, head, index, length, mapWithIndex, range, replicate, snoc, sortWith, takeEnd, zipWith, (!!))
 import Data.Array as A
@@ -212,7 +214,7 @@ import FRP.Event.Time (interval)
 import Foreign (Foreign)
 import Foreign.Object (Object, filterWithKey)
 import Foreign.Object as O
-import Graphics.Canvas (CanvasElement, getContext2D)
+import Graphics.Canvas (CanvasElement, clearRect, getCanvasHeight, getCanvasWidth, getContext2D)
 import Graphics.Drawing (Drawing, render)
 import Heterogeneous.Mapping (class HMap, class Mapping, hmap)
 import Math as Math
@@ -3141,7 +3143,8 @@ type VisualInfo
     }
 
 foreign import getAudioClockTime :: Foreign -> Effect Number
-
+foreign import unsafeCanvasHack :: (CanvasElement -> Effect Number) -> CanvasElement -> Effect Number
+type CanvasInfo = { w :: Number, h :: Number }
 class RunnableMedia a accumulator where
   runInBrowser ::
     forall (microphones :: # Type) (tracks :: # Type) (buffers :: # Type) (floatArrays :: # Type) microphoneT tracksT buffersT floatArraysT.
@@ -3149,7 +3152,7 @@ class RunnableMedia a accumulator where
     Homogeneous tracks tracksT =>
     Homogeneous buffers buffersT =>
     Homogeneous floatArrays floatArraysT =>
-    (accumulator -> Number -> Behavior a) ->
+    (accumulator -> CanvasInfo -> Number -> Behavior a) ->
     accumulator ->
     Int ->
     Int ->
@@ -3158,39 +3161,29 @@ class RunnableMedia a accumulator where
     VisualInfo ->
     Effect (Effect Unit)
 
-newtype AV ch accumulator
-  = AV
-  { a :: Maybe (AudioUnit ch)
-  , v :: Maybe Drawing
-  , z :: accumulator
-  }
+data AV ch accumulator
+  = AV (Maybe (AudioUnit ch)) (Maybe Drawing) accumulator
 
-newtype Animation
+data Animation
   = Animation Drawing
 
-newtype IAnimation accumulator
-  = IAnimation
-  { v :: Drawing
-  , z :: accumulator
-  }
+data IAnimation accumulator
+  = IAnimation Drawing accumulator
 
-newtype IAudioUnit ch accumulator
-  = IAudioUnit
-  { a :: AudioUnit ch
-  , z :: accumulator
-  }
+data IAudioUnit ch accumulator
+  = IAudioUnit (AudioUnit ch) accumulator
 
 instance soundscapeRunnableMedia :: Pos ch => RunnableMedia (AudioUnit ch) accumulator where
-  runInBrowser f = runInBrowser (\z s -> map (\x -> AV { a: Just x, v: Nothing, z }) (f z s))
+  runInBrowser f = runInBrowser (\z wh s -> map (\x -> AV (Just x) Nothing z) (f z wh s))
 
 instance iSoundscapeRunnableMedia :: Pos ch => RunnableMedia (IAudioUnit ch accumulator) accumulator where
-  runInBrowser f = runInBrowser (\z s -> map (\(IAudioUnit x) -> AV { a: Just x.a, v: Nothing, z: x.z }) (f z s))
+  runInBrowser f = runInBrowser (\z wh s -> map (\(IAudioUnit xa xz) -> AV (Just xa) Nothing xz) (f z wh s))
 
 instance animationRunnable :: RunnableMedia Animation accumulator where
-  runInBrowser f = runInBrowser (\z s -> map (\(Animation x) -> (AV { a: Nothing :: (Maybe (AudioUnit D1)), v: Just x, z })) ((f z s)))
+  runInBrowser f = runInBrowser (\z wh s -> map (\(Animation x) -> (AV (Nothing :: Maybe (AudioUnit D1)) (Just x) z)) (f z wh s))
 
 instance iAnimationRunnable :: RunnableMedia (IAnimation accumulator) accumulator where
-  runInBrowser f = runInBrowser (\z s -> map (\(IAnimation x) -> (AV { a: Nothing :: (Maybe (AudioUnit D1)), v: Just x.v, z: x.z })) ((f z s)))
+  runInBrowser f = runInBrowser (\z wh s -> map (\(IAnimation xv xz) -> (AV (Nothing :: Maybe (AudioUnit D1)) (Just xv) xz)) (f z wh s))
 
 instance avRunnableMedia :: Pos ch => RunnableMedia (AV ch accumulator) accumulator where
   runInBrowser scene accumulator pingEvery actualSpeed ctx audioInfo visualInfo = do
@@ -3247,21 +3240,24 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (AV ch accumulator) accumula
                 pure unit
               __startTime <- map getTime now
               _accNow <- read __accumulator
+              __w <- unsafeCanvasHack getCanvasWidth visualInfo.canvas
+              __h <- unsafeCanvasHack getCanvasHeight visualInfo.canvas
               let
-                behavior = scene _accNow (toNumber ct / 1000.0)
+                behavior = scene _accNow { w: __w, h: __h } (toNumber ct / 1000.0)
               bang <- create :: Effect (EventIO Unit)
               let
                 behaviorSampled = sample_ behavior bang.event
               unsub <-
                 subscribe behaviorSampled
-                  ( \(AV av) -> do
-                      write av.z __accumulator
+                  ( \(AV ava avv avz) -> do
+                      write avz __accumulator
                       maybe (pure unit)
                         ( \viz -> do
                             canvasCtx <- getContext2D visualInfo.canvas
+                            clearRect canvasCtx { height: __h, width: __w, x: 0.0, y: 0.0 }
                             render canvasCtx viz
                         )
-                        av.v
+                        avv
                       maybe (pure unit)
                         ( \aud -> do
                             let
@@ -3303,7 +3299,7 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (AV ch accumulator) accumula
                               pure unit
                             pure unit
                         )
-                        av.a
+                        ava
                   )
               bang.push unit
               unsub
@@ -3319,7 +3315,7 @@ runInBrowser_ ::
   Homogeneous buffers buffersT =>
   Homogeneous floatArrays floatArraysT =>
   RunnableMedia a accumulator =>
-  Effect (accumulator -> Number -> Behavior a) ->
+  Effect (accumulator -> CanvasInfo -> Number -> Behavior a) ->
   accumulator ->
   Int ->
   Int ->
