@@ -313,7 +313,32 @@ exports.touchAudio = function (timeToSet) {
                     : c.value1.constructor.name == "SquareOsc$prime$prime"
                     ? context.createOscillator()
                     : c.value1.constructor.name == "Mul$prime$prime"
-                    ? new AudioWorkletNode(context, "ps-aud-mul")
+                    ? (function () {
+                        var nConnections = 0;
+                        for (var j = 0; j < instructions.length; j++) {
+                          // this hack is necessary because
+                          // custom audio worklets need explicit
+                          // channel assignments. maybe make explicit everywhere?
+                          var d = instructions[j];
+                          if (
+                            d.constructor.name == "ConnectTo" &&
+                            d.value1 == c.value0
+                          ) {
+                            d.value2 = {
+                              constructor: { name: "Just" },
+                              value0: {
+                                value0: 0,
+                                value1: nConnections,
+                              },
+                            };
+                            nConnections += 1;
+                          }
+                        }
+                        return new AudioWorkletNode(context, "ps-aud-mul", {
+                          numberOfInputs: nConnections,
+                          numberOfOutputs: 1,
+                        });
+                      })()
                     : c.value1.constructor.name == "Add$prime$prime"
                     ? context.createGain()
                     : c.value1.constructor.name == "Delay$prime$prime"
