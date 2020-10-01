@@ -442,7 +442,9 @@ scene mouse acc@{ onset } { w, h } time = f time <$> click
 
 ### Conclusion
 
-We've built from a simple sound all the way up to a complex, precisely-timed stereo structure that responds to mouse events. There are many more audio units in the library, such as filters, compressors and convolvers. Almost the whole [Web Audio API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API) is exposed.
+We started with a simple sound and built all the way up to a complex, precisely-timed stereo structure that responds to mouse events both visually and sonically.  These examples also exist in [Readme.purs](./examples/readme/Readme.purs).
+
+From here, the only thing left is to make some noise! There are many more audio units in the library, such as filters, compressors and convolvers. Almost the whole [Web Audio API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API) is exposed.
 
 To see a list of exported audio units, you can check out [`Audio.purs`](./src/FRP/Behavior/Audio.purs). In a future version of this, we will refactor things so that all of the audio units are in one package.
 
