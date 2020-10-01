@@ -193,6 +193,7 @@ import Control.Bind (bindFlipped)
 import Data.Array (catMaybes, filter, foldl, groupBy, head, index, length, mapWithIndex, range, replicate, snoc, sortWith, takeEnd, zipWith, (!!))
 import Data.Array as A
 import Data.Array.NonEmpty (toArray)
+import Data.Either (either)
 import Data.Generic.Rep (class Generic)
 import Data.Generic.Rep.Show (genericShow)
 import Data.Int (floor, toNumber)
@@ -216,6 +217,7 @@ import Data.Vec (Vec, fill)
 import Data.Vec as V
 import Effect (Effect, whileE)
 import Effect.Class.Console (log)
+import Effect.Exception (try)
 import Effect.Ref (modify_, new, read, write)
 import FRP.Behavior (Behavior, behavior, sample_)
 import FRP.Event (Event, EventIO, create, makeEvent, subscribe)
@@ -2751,15 +2753,11 @@ makeProgram prev cur =
 -- | audio units
 -- | audio units
 foreign import touchAudio ::
-  forall (microphones :: # Type) (tracks :: # Type) (buffers :: # Type) (floatArrays :: # Type) microphoneT tracksT buffersT floatArraysT.
-  Homogeneous microphones microphoneT =>
-  Homogeneous tracks tracksT =>
-  Homogeneous buffers buffersT =>
-  Homogeneous floatArrays floatArraysT =>
+  forall microphone track buffer floatArray.
   Number ->
   Array Instruction ->
   AudioContext ->
-  AudioInfo (Record microphones) (Record tracks) (Record buffers) (Record floatArrays) ->
+  AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) ->
   Array Foreign ->
   Effect (Array Foreign)
 
@@ -3172,30 +3170,28 @@ type AudioInfo microphones tracks buffers floatArrays
     , floatArrays :: floatArrays
     }
 
+-- the reason canvas elements are effectful is because,
+-- unlike audio elements in html,
+-- canvases can be killed off based on a rendering function, ie in halogen
+-- we want to be able to throw if the canvas does not exist
 type VisualInfo
-  = { canvases :: Object CanvasElement
+  = { canvases :: Object (Effect CanvasElement)
     }
 
 foreign import getAudioClockTime :: AudioContext -> Effect Number
-
-foreign import unsafeCanvasHack :: (CanvasElement -> Effect Number) -> CanvasElement -> Effect Number
 
 type CanvasInfo
   = { w :: Number, h :: Number }
 
 class RunnableMedia a accumulator where
   runInBrowser ::
-    forall (microphones :: # Type) (tracks :: # Type) (buffers :: # Type) (floatArrays :: # Type) microphoneT tracksT buffersT floatArraysT.
-    Homogeneous microphones microphoneT =>
-    Homogeneous tracks tracksT =>
-    Homogeneous buffers buffersT =>
-    Homogeneous floatArrays floatArraysT =>
+    forall microphone track buffer floatArray.
     (accumulator -> CanvasInfo -> Number -> Behavior a) ->
     accumulator ->
     Int ->
     Int ->
     AudioContext ->
-    AudioInfo (Record microphones) (Record tracks) (Record buffers) (Record floatArrays) ->
+    AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) ->
     VisualInfo ->
     Effect (Effect Unit)
 
@@ -3211,7 +3207,7 @@ data IAnimation accumulator
 data IAudioUnit ch accumulator
   = IAudioUnit (AudioUnit ch) accumulator
 
-getFirstCanvas :: Object CanvasElement -> Maybe CanvasElement
+getFirstCanvas :: Object (Effect CanvasElement) -> Maybe (Effect CanvasElement)
 getFirstCanvas = map snd <<< A.head <<< O.toUnfoldable
 
 instance soundscapeRunnableMedia :: Pos ch => RunnableMedia (AudioUnit ch) accumulator where
@@ -3281,16 +3277,28 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (AV ch accumulator) accumula
                 pure unit
               __startTime <- map getTime now
               _accNow <- read __accumulator
+              let
+                __cvsNow = getFirstCanvas visualInfo.canvases
               __w <-
-                fromMaybe (pure 0.0)
-                  $ map
-                      (unsafeCanvasHack getCanvasWidth)
-                      (getFirstCanvas visualInfo.canvases)
+                maybe (pure 0.0)
+                  ( \_cvsNow -> do
+                      __r <-
+                        try do
+                          __cvs <- _cvsNow
+                          getCanvasWidth __cvs
+                      either (const $ pure 0.0) pure __r
+                  )
+                  __cvsNow
               __h <-
-                fromMaybe (pure 0.0)
-                  $ map
-                      (unsafeCanvasHack getCanvasHeight)
-                      (getFirstCanvas visualInfo.canvases)
+                maybe (pure 0.0)
+                  ( \_cvsNow -> do
+                      __r <-
+                        try do
+                          __cvs <- _cvsNow
+                          getCanvasHeight __cvs
+                      either (const $ pure 0.0) pure __r
+                  )
+                  __cvsNow
               let
                 behavior = scene _accNow { w: __w, h: __h } (toNumber ct / 1000.0)
               bang <- create :: Effect (EventIO Unit)
@@ -3306,10 +3314,14 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (AV ch accumulator) accumula
                               cvs_ = getFirstCanvas visualInfo.canvases
                             maybe
                               (pure unit)
-                              ( \cvs -> do
-                                  canvasCtx <- getContext2D cvs
-                                  clearRect canvasCtx { height: __h, width: __w, x: 0.0, y: 0.0 }
-                                  render canvasCtx viz
+                              ( \cvs__ -> do
+                                  _ <-
+                                    try do
+                                      cvs <- cvs__
+                                      canvasCtx <- getContext2D cvs
+                                      clearRect canvasCtx { height: __h, width: __w, x: 0.0, y: 0.0 }
+                                      render canvasCtx viz
+                                  pure unit
                               )
                               cvs_
                         )
@@ -3365,18 +3377,14 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (AV ch accumulator) accumula
 -- | The main executor loop in the browser
 -- | Accepts an effectful scene
 runInBrowser_ ::
-  forall accumulator (microphones :: # Type) (tracks :: # Type) (buffers :: # Type) (floatArrays :: # Type) microphoneT tracksT buffersT floatArraysT a.
-  Homogeneous microphones microphoneT =>
-  Homogeneous tracks tracksT =>
-  Homogeneous buffers buffersT =>
-  Homogeneous floatArrays floatArraysT =>
+  forall accumulator microphone track buffer floatArray a.
   RunnableMedia a accumulator =>
   Effect (accumulator -> CanvasInfo -> Number -> Behavior a) ->
   accumulator ->
   Int ->
   Int ->
   AudioContext ->
-  AudioInfo (Record microphones) (Record tracks) (Record buffers) (Record floatArrays) ->
+  AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) ->
   VisualInfo ->
   Effect (Effect Unit)
 runInBrowser_ scene' accumulator pingEvery actualSpeed ctx audioInfo visualInfo = do

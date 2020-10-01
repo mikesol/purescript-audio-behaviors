@@ -13,7 +13,7 @@
           var now = new Date().getTime();
           var ctr = 0;
           // null for the microphone
-          offCb = PS["FRP.Behavior.Audio.Example.Readme"].run()()()()()()()()(
+          offCb = PS["FRP.Behavior.Audio.Example.Readme"].run(
             PS["FRP.Behavior.Audio.Example.Readme"].initialOnset
           )(20)(15)(audioCtx)({
             microphones: { mic },
@@ -21,7 +21,11 @@
               forest: myAudio,
             },
           })({
-            canvases: { myCanvas },
+            canvases: {
+              myCanvas: function () {
+                return myCanvas;
+              },
+            },
           })();
         });
       });
