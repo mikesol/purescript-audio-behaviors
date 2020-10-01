@@ -54,7 +54,7 @@ In this section, we'll build a scene from the ground up. In doing so, we'll acco
 1. Getting the sound to change as a function of a mouse input event.
 1. Making sure that certain sounds occur at a precise time.
 1. Remembering when events happened.
-1. Adding visuals
+1. Adding visuals.
 
 ### Getting a static sound to play
 
