@@ -482,29 +482,24 @@ myAwesomeFilter t = highpass_ ("myAwesomeFilter_" <> t) 1000.0 0.3 0.5
 
 Under the hood, `purescript-audio-behaviors` tries _really hard_ to guarantee that, no matter how laggy or janky the browser is, audio is rendered at a consistent rate so that there is no stutter. There are several parameters that influence this, and they all have tradeoffs.
 
-All of the parameters are passed to the function `runInBrowser`, which has the following signature:
+All of the parameters are passed to the function `runInBrowser` in the class `RunnableMedia`, which has the following signature:
 
 ```haskell
-runInBrowser ::
-  forall ch (a :: # Type).
-  Homogeneous a Foreign =>
-  Pos ch =>
-  (Behavior Number -> Behavior (AudioUnit ch)) -> -- the scene
-  Int -> -- audio clock rate
-  Int -> -- driver rate
-  Foreign -> -- audio context
-  Foreign -> -- microphone if one exists
-  Record a -> -- buffers, sound files, and wavetables
-  (
-    Number ->
-    Array Instruction ->
-    Foreign ->
-    Foreign ->
-    Record a ->
-    Array Foreign ->
-    Effect (Array Foreign)
-  ) -> -- renderer
-  Effect (Effect Unit)
+class RunnableMedia a accumulator where
+  runInBrowser ::
+    forall (microphones :: # Type) (tracks :: # Type) (buffers :: # Type) (floatArrays :: # Type) microphoneT tracksT buffersT floatArraysT.
+    Homogeneous microphones microphoneT =>
+    Homogeneous tracks tracksT =>
+    Homogeneous buffers buffersT =>
+    Homogeneous floatArrays floatArraysT =>
+    (accumulator -> CanvasInfo -> Number -> Behavior a) -> -- scene
+    accumulator -> -- initial accumulator
+    Int -> -- audio clock rate
+    Int -> -- driver rate
+    Foreign -> -- audioContext
+    AudioInfo (Record microphones) (Record tracks) (Record buffers) (Record floatArrays) -> -- audio info
+    VisualInfo -> -- visual info
+    Effect (Effect Unit) -- an unsubscribe function
 ```
 
 A lot of this is boilerplate, and you can see examples of how to hook this up in the [examples](./examples) directory. The two bits to understand here are:
@@ -512,9 +507,9 @@ A lot of this is boilerplate, and you can see examples of how to hook this up in
 - audio clock rate
 - driver rate
 
-The _audio clock rate_ represents how many milliseconds are between control-rate pings to the scene. For example, if you set this to `20`, the scene will get polled every `0.02` seconds. In general, for most applications, somewhere between `10` and `20` is the sweet spot. Too low and you'll skip frames (jank), too high and you'll start hearing the quantization.
+The _audio clock rate_ represents the number of milliseconds between control-rate pings to the scene. For example, if you set this to `20`, the scene will get polled every `0.02` seconds.  When we use `20.0` as the `kr` in the examples above, we're referring to this rate. In general, for most applications, somewhere between `10` and `20` is the sweet spot. Too low and you'll skip frames (jank), too high and you'll start hearing the quantization.
 
-The _driver rate_ represents how many milliseconds are between pings to the entire reactive system. You can think of this as the motor behind the FRP. This should _always be_ less than the audio clock rate. The closer to the audio clock rate, the more likely there will be dropped frames because the system doesn't poll fast enough to make the audio deadline. The closer to `0`, the less responsive your UI will be. In general, `5ms` less than the _audio clock rate_ is a safe bet. So if your audio clock rate is `15`, this should be `10`.
+The _driver rate_ represents the number of milliseconds between pings to the entire reactive system. You can think of this as the motor behind the FRP. This should _always be_ less than the audio clock rate. The closer to the audio clock rate, the more likely there will be dropped frames because the system doesn't poll fast enough to make the audio deadline. The closer to `0`, the less responsive your UI will be. In general, `5ms` less than the _audio clock rate_ is a safe bet. So if your audio clock rate is `20`, this should be `15`.
 
 ## Bundling on your site
 

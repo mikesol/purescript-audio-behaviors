@@ -179,7 +179,6 @@ module FRP.Behavior.Audio
   ) where
 
 import Prelude
-
 import Control.Bind (bindFlipped)
 import Data.Array (catMaybes, filter, foldl, groupBy, head, index, length, mapWithIndex, range, replicate, snoc, sortWith, takeEnd, zipWith, (!!))
 import Data.Array as A
@@ -3143,8 +3142,12 @@ type VisualInfo
     }
 
 foreign import getAudioClockTime :: Foreign -> Effect Number
+
 foreign import unsafeCanvasHack :: (CanvasElement -> Effect Number) -> CanvasElement -> Effect Number
-type CanvasInfo = { w :: Number, h :: Number }
+
+type CanvasInfo
+  = { w :: Number, h :: Number }
+
 class RunnableMedia a accumulator where
   runInBrowser ::
     forall (microphones :: # Type) (tracks :: # Type) (buffers :: # Type) (floatArrays :: # Type) microphoneT tracksT buffersT floatArraysT.
