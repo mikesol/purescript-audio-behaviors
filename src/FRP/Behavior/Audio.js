@@ -181,6 +181,21 @@ exports.makeAudioTrack = function (s) {
     return new Audio(s);
   };
 };
+exports.decodeAudioData = function (ctx) {
+  return function (s) {
+    return function () {
+      {
+        return fetch(s)
+          .then(function (b) {
+            return b.arrayBuffer();
+          })
+          .then(function (b) {
+            return ctx.decodeAudioData(b);
+          });
+      }
+    };
+  };
+};
 exports.makeAudioBuffer = function (ctx) {
   return function (b) {
     return function () {
@@ -517,15 +532,9 @@ exports.touchAudio = function (timeToSet) {
                   timeToSet + c.value2
                 );
               } else if (c.constructor.name == "SetLoopStart") {
-                generators[c.value0].loopStart.linearRampToValueAtTime(
-                  c.value1,
-                  timeToSet + c.value2
-                );
+                generators[c.value0].loopStart = c.value1;
               } else if (c.constructor.name == "SetLoopEnd") {
-                generators[c.value0].loopEnd.linearRampToValueAtTime(
-                  c.value1,
-                  timeToSet + c.value2
-                );
+                generators[c.value0].loopEnd = c.value1;
               } else if (c.constructor.name == "SetOversample") {
                 generators[c.value0].oversample = c.value1;
               } else if (c.constructor.name == "SetCurve") {

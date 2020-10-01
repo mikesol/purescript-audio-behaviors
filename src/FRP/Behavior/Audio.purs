@@ -69,6 +69,7 @@ module FRP.Behavior.Audio
   , dup4
   , dup5
   , waveShaper
+  , decodeAudioData
   , periodicOsc
   , sinOsc
   , sawtoothOsc
@@ -176,6 +177,7 @@ module FRP.Behavior.Audio
 
 import Prelude
 import Control.Bind (bindFlipped)
+import Control.Promise (Promise)
 import Data.Array (catMaybes, filter, foldl, groupBy, head, index, length, mapWithIndex, range, replicate, snoc, sortWith, takeEnd, zipWith, (!!))
 import Data.Array as A
 import Data.Array.NonEmpty (toArray)
@@ -228,6 +230,8 @@ foreign import data BrowserFloatArray :: Type
 foreign import data BrowserAudioTrack :: Type
 
 foreign import data AudioContext :: Type
+
+foreign import decodeAudioData :: AudioContext -> String -> Effect (Promise BrowserAudioBuffer)
 
 foreign import makeAudioContext :: Effect AudioContext
 
@@ -636,14 +640,14 @@ data AudioUnit ch
   | Play MString String Number
   | PlayBuf MString String (AudioParameter Number)
   | LoopBuf MString String (AudioParameter Number) Number Number
-  | Lowpass MString (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
-  | Highpass MString (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
-  | Bandpass MString (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
-  | Lowshelf MString (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
-  | Highshelf MString (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
+  | Lowpass MString (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
+  | Highpass MString (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
+  | Bandpass MString (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
+  | Lowshelf MString (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
+  | Highshelf MString (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
   | Peaking MString (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
-  | Notch MString (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
-  | Allpass MString (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
+  | Notch MString (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
+  | Allpass MString (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
   | Convolver MString String (AudioUnit ch)
   | DynamicsCompressor MString (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
   | SawtoothOsc MString (AudioParameter Number)
@@ -679,14 +683,14 @@ data AudioUnit'
   | Play' String Number
   | PlayBuf' String (AudioParameter Number)
   | LoopBuf' String (AudioParameter Number) Number Number
-  | Lowpass' (AudioParameter Number) (AudioParameter Number) (AudioParameter Number)
-  | Highpass' (AudioParameter Number) (AudioParameter Number) (AudioParameter Number)
-  | Bandpass' (AudioParameter Number) (AudioParameter Number) (AudioParameter Number)
-  | Lowshelf' (AudioParameter Number) (AudioParameter Number) (AudioParameter Number)
-  | Highshelf' (AudioParameter Number) (AudioParameter Number) (AudioParameter Number)
+  | Lowpass' (AudioParameter Number) (AudioParameter Number)
+  | Highpass' (AudioParameter Number) (AudioParameter Number)
+  | Bandpass' (AudioParameter Number) (AudioParameter Number)
+  | Lowshelf' (AudioParameter Number) (AudioParameter Number)
+  | Highshelf' (AudioParameter Number) (AudioParameter Number)
   | Peaking' (AudioParameter Number) (AudioParameter Number) (AudioParameter Number)
-  | Notch' (AudioParameter Number) (AudioParameter Number) (AudioParameter Number)
-  | Allpass' (AudioParameter Number) (AudioParameter Number) (AudioParameter Number)
+  | Notch' (AudioParameter Number) (AudioParameter Number)
+  | Allpass' (AudioParameter Number) (AudioParameter Number)
   | Convolver' String
   | DynamicsCompressor' (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioParameter Number)
   | SawtoothOsc' (AudioParameter Number)
@@ -772,21 +776,21 @@ au' (PlayBuf name buf speed) = { au: PlayBuf' buf speed, name }
 
 au' (LoopBuf name buf speed start end) = { au: LoopBuf' buf speed start end, name }
 
-au' (Lowpass name f q g _) = { au: Lowpass' f q g, name }
+au' (Lowpass name f q _) = { au: Lowpass' f q, name }
 
-au' (Highpass name f q g _) = { au: Highpass' f q g, name }
+au' (Highpass name f q _) = { au: Highpass' f q, name }
 
-au' (Bandpass name f q g _) = { au: Bandpass' f q g, name }
+au' (Bandpass name f q _) = { au: Bandpass' f q, name }
 
-au' (Lowshelf name f q g _) = { au: Lowshelf' f q g, name }
+au' (Lowshelf name f g _) = { au: Lowshelf' f g, name }
 
-au' (Highshelf name f q g _) = { au: Highshelf' f q g, name }
+au' (Highshelf name f g _) = { au: Highshelf' f g, name }
 
 au' (Peaking name f q g _) = { au: Peaking' f q g, name }
 
-au' (Notch name f q g _) = { au: Notch' f q g, name }
+au' (Notch name f q _) = { au: Notch' f q, name }
 
-au' (Allpass name f q g _) = { au: Allpass' f q g, name }
+au' (Allpass name f q _) = { au: Allpass' f q, name }
 
 au' (Convolver name buf _) = { au: Convolver' buf, name }
 
@@ -860,21 +864,21 @@ au'' (PlayBuf' _ _) = PlayBuf''
 
 au'' (LoopBuf' _ _ _ _) = LoopBuf''
 
-au'' (Lowpass' _ _ _) = Lowpass''
+au'' (Lowpass' _ _) = Lowpass''
 
-au'' (Highpass' _ _ _) = Highpass''
+au'' (Highpass' _ _) = Highpass''
 
-au'' (Bandpass' _ _ _) = Bandpass''
+au'' (Bandpass' _ _) = Bandpass''
 
-au'' (Lowshelf' _ _ _) = Lowshelf''
+au'' (Lowshelf' _ _) = Lowshelf''
 
-au'' (Highshelf' _ _ _) = Highshelf''
+au'' (Highshelf' _ _) = Highshelf''
 
 au'' (Peaking' _ _ _) = Peaking''
 
-au'' (Notch' _ _ _) = Notch''
+au'' (Notch' _ _) = Notch''
 
-au'' (Allpass' _ _ _) = Allpass''
+au'' (Allpass' _ _) = Allpass''
 
 au'' (Convolver' _) = Convolver''
 
@@ -929,21 +933,21 @@ tagToAU PlayBuf'' = PlayBuf' "" (ap_ (-1.0))
 
 tagToAU LoopBuf'' = LoopBuf' "" (ap_ (-1.0)) (-1.0) (-1.0)
 
-tagToAU Lowpass'' = Lowpass' (ap_ (-1.0)) (ap_ (-1.0)) (ap_ (-1.0))
+tagToAU Lowpass'' = Lowpass' (ap_ (-1.0)) (ap_ (-1.0))
 
-tagToAU Highpass'' = Highpass' (ap_ (-1.0)) (ap_ (-1.0)) (ap_ (-1.0))
+tagToAU Highpass'' = Highpass' (ap_ (-1.0)) (ap_ (-1.0))
 
-tagToAU Bandpass'' = Bandpass' (ap_ (-1.0)) (ap_ (-1.0)) (ap_ (-1.0))
+tagToAU Bandpass'' = Bandpass' (ap_ (-1.0)) (ap_ (-1.0))
 
-tagToAU Lowshelf'' = Lowshelf' (ap_ (-1.0)) (ap_ (-1.0)) (ap_ (-1.0))
+tagToAU Lowshelf'' = Lowshelf' (ap_ (-1.0)) (ap_ (-1.0))
 
-tagToAU Highshelf'' = Highshelf' (ap_ (-1.0)) (ap_ (-1.0)) (ap_ (-1.0))
+tagToAU Highshelf'' = Highshelf' (ap_ (-1.0)) (ap_ (-1.0))
 
 tagToAU Peaking'' = Peaking' (ap_ (-1.0)) (ap_ (-1.0)) (ap_ (-1.0))
 
-tagToAU Notch'' = Notch' (ap_ (-1.0)) (ap_ (-1.0)) (ap_ (-1.0))
+tagToAU Notch'' = Notch' (ap_ (-1.0)) (ap_ (-1.0))
 
-tagToAU Allpass'' = Allpass' (ap_ (-1.0)) (ap_ (-1.0)) (ap_ (-1.0))
+tagToAU Allpass'' = Allpass' (ap_ (-1.0)) (ap_ (-1.0))
 
 tagToAU Convolver'' = Convolver' ""
 
@@ -1212,21 +1216,21 @@ audioToPtr = go (-1) M.empty
 
   go' ptr v@(LoopBuf _ _ _ _ _) = terminus ptr v
 
-  go' ptr v@(Lowpass _ _ _ _ a) = passthrough ptr v a
+  go' ptr v@(Lowpass _ _ _ a) = passthrough ptr v a
 
-  go' ptr v@(Highpass _ _ _ _ a) = passthrough ptr v a
+  go' ptr v@(Highpass _ _ _ a) = passthrough ptr v a
 
-  go' ptr v@(Bandpass _ _ _ _ a) = passthrough ptr v a
+  go' ptr v@(Bandpass _ _ _ a) = passthrough ptr v a
 
-  go' ptr v@(Lowshelf _ _ _ _ a) = passthrough ptr v a
+  go' ptr v@(Lowshelf _ _ _ a) = passthrough ptr v a
 
-  go' ptr v@(Highshelf _ _ _ _ a) = passthrough ptr v a
+  go' ptr v@(Highshelf _ _ _ a) = passthrough ptr v a
 
   go' ptr v@(Peaking _ _ _ _ a) = passthrough ptr v a
 
-  go' ptr v@(Notch _ _ _ _ a) = passthrough ptr v a
+  go' ptr v@(Notch _ _ _ a) = passthrough ptr v a
 
-  go' ptr v@(Allpass _ _ _ _ a) = passthrough ptr v a
+  go' ptr v@(Allpass _ _ _ a) = passthrough ptr v a
 
   go' ptr v@(Convolver _ _ a) = passthrough ptr v a
 
@@ -1424,65 +1428,65 @@ audioBuffer ::
   AudioBuffer
 audioBuffer i v = AudioBuffer i (map V.toArray $ V.toArray v)
 
-lowpass :: forall ch. Pos ch => Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
-lowpass a b c = Lowpass Nothing (ap_ a) (ap_ b) (ap_ c)
+lowpass :: forall ch. Pos ch => Number -> Number -> AudioUnit ch -> AudioUnit ch
+lowpass a b = Lowpass Nothing (ap_ a) (ap_ b)
 
-lowpass_ :: forall ch. Pos ch => String -> Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
-lowpass_ s a b c = Lowpass (Just s) (ap_ a) (ap_ b) (ap_ c)
+lowpass_ :: forall ch. Pos ch => String -> Number -> Number -> AudioUnit ch -> AudioUnit ch
+lowpass_ s a b = Lowpass (Just s) (ap_ a) (ap_ b)
 
-lowpassT :: forall ch. Pos ch => AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
-lowpassT a b c = Lowpass Nothing a b c
+lowpassT :: forall ch. Pos ch => AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+lowpassT a b = Lowpass Nothing a b
 
-lowpassT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
-lowpassT_ s a b c = Lowpass (Just s) a b c
+lowpassT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+lowpassT_ s a b = Lowpass (Just s) a b
 
-highpass :: forall ch. Pos ch => Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
-highpass a b c = Highpass Nothing (ap_ a) (ap_ b) (ap_ c)
+highpass :: forall ch. Pos ch => Number -> Number -> AudioUnit ch -> AudioUnit ch
+highpass a b = Highpass Nothing (ap_ a) (ap_ b)
 
-highpass_ :: forall ch. Pos ch => String -> Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
-highpass_ s a b c = Highpass (Just s) (ap_ a) (ap_ b) (ap_ c)
+highpass_ :: forall ch. Pos ch => String -> Number -> Number -> AudioUnit ch -> AudioUnit ch
+highpass_ s a b = Highpass (Just s) (ap_ a) (ap_ b)
 
-highpassT :: forall ch. Pos ch => AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
-highpassT a b c = Highpass Nothing a b c
+highpassT :: forall ch. Pos ch => AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+highpassT a b = Highpass Nothing a b
 
-highpassT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
-highpassT_ s a b c = Highpass (Just s) a b c
+highpassT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+highpassT_ s a b = Highpass (Just s) a b
 
-bandpass :: forall ch. Pos ch => Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
-bandpass a b c = Bandpass Nothing (ap_ a) (ap_ b) (ap_ c)
+bandpass :: forall ch. Pos ch => Number -> Number -> AudioUnit ch -> AudioUnit ch
+bandpass a b = Bandpass Nothing (ap_ a) (ap_ b)
 
-bandpass_ :: forall ch. Pos ch => String -> Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
-bandpass_ s a b c = Bandpass (Just s) (ap_ a) (ap_ b) (ap_ c)
+bandpass_ :: forall ch. Pos ch => String -> Number -> Number -> AudioUnit ch -> AudioUnit ch
+bandpass_ s a b = Bandpass (Just s) (ap_ a) (ap_ b)
 
-bandpassT :: forall ch. Pos ch => AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
-bandpassT a b c = Bandpass Nothing a b c
+bandpassT :: forall ch. Pos ch => AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+bandpassT a b = Bandpass Nothing a b
 
-bandpassT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
-bandpassT_ s a b c = Bandpass (Just s) a b c
+bandpassT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+bandpassT_ s a b = Bandpass (Just s) a b
 
-lowshelf :: forall ch. Pos ch => Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
-lowshelf a b c = Lowshelf Nothing (ap_ a) (ap_ b) (ap_ c)
+lowshelf :: forall ch. Pos ch => Number -> Number -> AudioUnit ch -> AudioUnit ch
+lowshelf a b = Lowshelf Nothing (ap_ a) (ap_ b)
 
-lowshelf_ :: forall ch. Pos ch => String -> Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
-lowshelf_ s a b c = Lowshelf (Just s) (ap_ a) (ap_ b) (ap_ c)
+lowshelf_ :: forall ch. Pos ch => String -> Number -> Number -> AudioUnit ch -> AudioUnit ch
+lowshelf_ s a b = Lowshelf (Just s) (ap_ a) (ap_ b)
 
-lowshelfT :: forall ch. Pos ch => AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
-lowshelfT a b c = Lowshelf Nothing a b c
+lowshelfT :: forall ch. Pos ch => AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+lowshelfT a b = Lowshelf Nothing a b
 
-lowshelfT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
-lowshelfT_ s a b c = Lowshelf (Just s) a b c
+lowshelfT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+lowshelfT_ s a b = Lowshelf (Just s) a b
 
-highshelf :: forall ch. Pos ch => Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
-highshelf a b c = Highshelf Nothing (ap_ a) (ap_ b) (ap_ c)
+highshelf :: forall ch. Pos ch => Number -> Number -> AudioUnit ch -> AudioUnit ch
+highshelf a b = Highshelf Nothing (ap_ a) (ap_ b)
 
-highshelf_ :: forall ch. Pos ch => String -> Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
-highshelf_ s a b c = Highshelf (Just s) (ap_ a) (ap_ b) (ap_ c)
+highshelf_ :: forall ch. Pos ch => String -> Number -> Number -> AudioUnit ch -> AudioUnit ch
+highshelf_ s a b = Highshelf (Just s) (ap_ a) (ap_ b)
 
-highshelfT :: forall ch. Pos ch => AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
-highshelfT a b c = Highshelf Nothing a b c
+highshelfT :: forall ch. Pos ch => AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+highshelfT a b = Highshelf Nothing a b
 
-highshelfT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
-highshelfT_ s a b c = Highshelf (Just s) a b c
+highshelfT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+highshelfT_ s a b = Highshelf (Just s) a b
 
 peaking :: forall ch. Pos ch => Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
 peaking a b c = Peaking Nothing (ap_ a) (ap_ b) (ap_ c)
@@ -1496,29 +1500,29 @@ peakingT a b c = Peaking Nothing a b c
 peakingT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
 peakingT_ s a b c = Peaking (Just s) a b c
 
-notch :: forall ch. Pos ch => Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
-notch a b c = Notch Nothing (ap_ a) (ap_ b) (ap_ c)
+notch :: forall ch. Pos ch => Number -> Number -> AudioUnit ch -> AudioUnit ch
+notch a b = Notch Nothing (ap_ a) (ap_ b)
 
-notch_ :: forall ch. Pos ch => String -> Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
-notch_ s a b c = Notch (Just s) (ap_ a) (ap_ b) (ap_ c)
+notch_ :: forall ch. Pos ch => String -> Number -> Number -> AudioUnit ch -> AudioUnit ch
+notch_ s a b = Notch (Just s) (ap_ a) (ap_ b)
 
-notchT :: forall ch. Pos ch => AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
-notchT a b c = Notch Nothing a b c
+notchT :: forall ch. Pos ch => AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+notchT a b = Notch Nothing a b
 
-notchT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
-notchT_ s a b c = Notch (Just s) a b c
+notchT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+notchT_ s a b = Notch (Just s) a b
 
-allpass :: forall ch. Pos ch => Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
-allpass a b c = Allpass Nothing (ap_ a) (ap_ b) (ap_ c)
+allpass :: forall ch. Pos ch => Number -> Number -> AudioUnit ch -> AudioUnit ch
+allpass a b = Allpass Nothing (ap_ a) (ap_ b)
 
-allpass_ :: forall ch. Pos ch => String -> Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
-allpass_ s a b c = Allpass (Just s) (ap_ a) (ap_ b) (ap_ c)
+allpass_ :: forall ch. Pos ch => String -> Number -> Number -> AudioUnit ch -> AudioUnit ch
+allpass_ s a b = Allpass (Just s) (ap_ a) (ap_ b)
 
-allpassT :: forall ch. Pos ch => AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
-allpassT a b c = Allpass Nothing a b c
+allpassT :: forall ch. Pos ch => AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+allpassT a b = Allpass Nothing a b
 
-allpassT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
-allpassT_ s a b c = Allpass (Just s) a b c
+allpassT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+allpassT_ s a b = Allpass (Just s) a b
 
 convolver ::
   forall ch.
@@ -1905,21 +1909,21 @@ ucomp (PlayBuf' s0 _) (PlayBuf' s1 _) = s0 == s1
 
 ucomp (LoopBuf' s0 _ _ _) (LoopBuf' s1 _ _ _) = s0 == s1
 
-ucomp (Lowpass' _ _ _) (Lowpass' _ _ _) = true
+ucomp (Lowpass' _ _) (Lowpass' _ _) = true
 
-ucomp (Highpass' _ _ _) (Highpass' _ _ _) = true
+ucomp (Highpass' _ _) (Highpass' _ _) = true
 
-ucomp (Bandpass' _ _ _) (Bandpass' _ _ _) = true
+ucomp (Bandpass' _ _) (Bandpass' _ _) = true
 
-ucomp (Lowshelf' _ _ _) (Lowshelf' _ _ _) = true
+ucomp (Lowshelf' _ _) (Lowshelf' _ _) = true
 
-ucomp (Highshelf' _ _ _) (Highshelf' _ _ _) = true
+ucomp (Highshelf' _ _) (Highshelf' _ _) = true
 
 ucomp (Peaking' _ _ _) (Peaking' _ _ _) = true
 
-ucomp (Notch' _ _ _) (Notch' _ _ _) = true
+ucomp (Notch' _ _) (Notch' _ _) = true
 
-ucomp (Allpass' _ _ _) (Allpass' _ _ _) = true
+ucomp (Allpass' _ _) (Allpass' _ _) = true
 
 ucomp (Convolver' s0) (Convolver' s1) = s0 == s1
 
@@ -1990,21 +1994,21 @@ twoCoef (AudioParameter { param: f0 }) (AudioParameter { param: f1 }) = (Math.ab
 toCoef :: AudioUnit' -> AudioUnit' -> Number
 toCoef Microphone' Microphone' = 0.0
 
-toCoef (Lowpass' a b c) (Lowpass' x y z) = filtCoef a b c x y z
+toCoef (Lowpass' a b) (Lowpass' x y) = filtCoef a b (ap_ 0.0) x y (ap_ 0.0)
 
-toCoef (Highpass' a b c) (Highpass' x y z) = filtCoef a b c x y z
+toCoef (Highpass' a b) (Highpass' x y) = filtCoef a b (ap_ 0.0) x y (ap_ 0.0)
 
-toCoef (Bandpass' a b c) (Bandpass' x y z) = filtCoef a b c x y z
+toCoef (Bandpass' a b) (Bandpass' x y) = filtCoef a b (ap_ 0.0) x y (ap_ 0.0)
 
-toCoef (Lowshelf' a b c) (Lowshelf' x y z) = filtCoef a b c x y z
+toCoef (Lowshelf' a c) (Lowshelf' x z) = filtCoef a (ap_ 0.0) c x (ap_ 0.0) z
 
-toCoef (Highshelf' a b c) (Highshelf' x y z) = filtCoef a b c x y z
+toCoef (Highshelf' a c) (Highshelf' x z) = filtCoef a (ap_ 0.0) c x (ap_ 0.0) z
 
 toCoef (Peaking' a b c) (Peaking' x y z) = filtCoef a b c x y z
 
-toCoef (Notch' a b c) (Notch' x y z) = filtCoef a b c x y z
+toCoef (Notch' a b) (Notch' x y) = filtCoef a b (ap_ 0.0) x y (ap_ 0.0)
 
-toCoef (Allpass' a b c) (Allpass' x y z) = filtCoef a b c x y z
+toCoef (Allpass' a b) (Allpass' x y) = filtCoef a b (ap_ 0.0) x y (ap_ 0.0)
 
 -- we use types in the function-level constructor to gate closeness
 -- we still assess an absurd penalty just as a precaution
@@ -2572,6 +2576,8 @@ sourceConstructor (PeriodicOsc' _ s) = Just s
 
 sourceConstructor (WaveShaper' s _) = Just s
 
+sourceConstructor (Convolver' s) = Just s
+
 sourceConstructor _ = Nothing
 
 startConstructor :: AudioUnit' -> Maybe Number
@@ -2761,9 +2767,19 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
     in
       (map (uncurry $ uncurry ConnectTo) $ map (\i -> Tuple i (harmonizeCurrChannels i)) conn)
 
+  setFQFilter i a b x y =
+    [ if napeq a x then Just $ SetFrequency i (apP a) (apT a) else Nothing
+    , if napeq b y then Just $ SetQ i (apP b) (apT b) else Nothing
+    ]
+
   setFilter i a b c x y z =
     [ if napeq a x then Just $ SetFrequency i (apP a) (apT a) else Nothing
     , if napeq b y then Just $ SetQ i (apP b) (apT b) else Nothing
+    , if napeq c z then Just $ SetGain i (apP c) (apT c) else Nothing
+    ]
+
+  setFGFilter i a c x z =
+    [ if napeq a x then Just $ SetFrequency i (apP a) (apT a) else Nothing
     , if napeq c z then Just $ SetGain i (apP c) (apT c) else Nothing
     ]
 
@@ -2775,21 +2791,21 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
     , if e /= ex then Just $ SetLoopEnd i e else Nothing
     ]
 
-  set' i (Lowpass' a b c) (Lowpass' x y z) = setFilter i a b c x y z
+  set' i (Lowpass' a b) (Lowpass' x y) = setFQFilter i a b x y
 
-  set' i (Highpass' a b c) (Highpass' x y z) = setFilter i a b c x y z
+  set' i (Highpass' a b) (Highpass' x y) = setFQFilter i a b x y
 
-  set' i (Bandpass' a b c) (Bandpass' x y z) = setFilter i a b c x y z
+  set' i (Bandpass' a b) (Bandpass' x y) = setFQFilter i a b x y
 
-  set' i (Allpass' a b c) (Allpass' x y z) = setFilter i a b c x y z
+  set' i (Allpass' a b) (Allpass' x y) = setFQFilter i a b x y
 
-  set' i (Highshelf' a b c) (Highshelf' x y z) = setFilter i a b c x y z
+  set' i (Highshelf' a c) (Highshelf' x z) = setFGFilter i a c x z
 
-  set' i (Lowshelf' a b c) (Lowshelf' x y z) = setFilter i a b c x y z
+  set' i (Lowshelf' a c) (Lowshelf' x z) = setFGFilter i a c x z
 
   set' i (Peaking' a b c) (Peaking' x y z) = setFilter i a b c x y z
 
-  set' i (Notch' a b c) (Notch' x y z) = setFilter i a b c x y z
+  set' i (Notch' a b) (Notch' x y) = setFQFilter i a b x y
 
   set' i (DynamicsCompressor' a b c d e) (DynamicsCompressor' v w x y z) =
     [ if napeq a v then Just $ SetThreshold i (apP a) (apT a) else Nothing
