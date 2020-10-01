@@ -13,15 +13,15 @@
           var now = new Date().getTime();
           var ctr = 0;
           // null for the microphone
-          offCb = PS["FRP.Behavior.Audio.Example.Readme"].run()()()()()()()()(PS["FRP.Behavior.Audio.Example.Readme"].initialOnset)(20)(15)(audioCtx)(
-            {
-              microphones: { mic },
-              tracks: {
-                forest: myAudio,
-              },
-            }
-          )({
-            canvas: myCanvas
+          offCb = PS["FRP.Behavior.Audio.Example.Readme"].run()()()()()()()()(
+            PS["FRP.Behavior.Audio.Example.Readme"].initialOnset
+          )(20)(15)(audioCtx)({
+            microphones: { mic },
+            tracks: {
+              forest: myAudio,
+            },
+          })({
+            canvases: { myCanvas },
           })();
         });
       });

@@ -3173,7 +3173,7 @@ type AudioInfo microphones tracks buffers floatArrays
     }
 
 type VisualInfo
-  = { canvas :: CanvasElement
+  = { canvases :: Object CanvasElement
     }
 
 foreign import getAudioClockTime :: AudioContext -> Effect Number
@@ -3210,6 +3210,9 @@ data IAnimation accumulator
 
 data IAudioUnit ch accumulator
   = IAudioUnit (AudioUnit ch) accumulator
+
+getFirstCanvas :: Object CanvasElement -> Maybe CanvasElement
+getFirstCanvas = map snd <<< A.head <<< O.toUnfoldable
 
 instance soundscapeRunnableMedia :: Pos ch => RunnableMedia (AudioUnit ch) accumulator where
   runInBrowser f = runInBrowser (\z wh s -> map (\x -> AV (Just x) Nothing z) (f z wh s))
@@ -3278,8 +3281,16 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (AV ch accumulator) accumula
                 pure unit
               __startTime <- map getTime now
               _accNow <- read __accumulator
-              __w <- unsafeCanvasHack getCanvasWidth visualInfo.canvas
-              __h <- unsafeCanvasHack getCanvasHeight visualInfo.canvas
+              __w <-
+                fromMaybe (pure 0.0)
+                  $ map
+                      (unsafeCanvasHack getCanvasWidth)
+                      (getFirstCanvas visualInfo.canvases)
+              __h <-
+                fromMaybe (pure 0.0)
+                  $ map
+                      (unsafeCanvasHack getCanvasHeight)
+                      (getFirstCanvas visualInfo.canvases)
               let
                 behavior = scene _accNow { w: __w, h: __h } (toNumber ct / 1000.0)
               bang <- create :: Effect (EventIO Unit)
@@ -3291,9 +3302,16 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (AV ch accumulator) accumula
                       write avz __accumulator
                       maybe (pure unit)
                         ( \viz -> do
-                            canvasCtx <- getContext2D visualInfo.canvas
-                            clearRect canvasCtx { height: __h, width: __w, x: 0.0, y: 0.0 }
-                            render canvasCtx viz
+                            let
+                              cvs_ = getFirstCanvas visualInfo.canvases
+                            maybe
+                              (pure unit)
+                              ( \cvs -> do
+                                  canvasCtx <- getContext2D cvs
+                                  clearRect canvasCtx { height: __h, width: __w, x: 0.0, y: 0.0 }
+                                  render canvasCtx viz
+                              )
+                              cvs_
                         )
                         avv
                       maybe (pure unit)
