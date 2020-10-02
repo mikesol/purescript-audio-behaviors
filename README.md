@@ -60,8 +60,6 @@ In this section, we'll build a scene from the ground up. In doing so, we'll acco
 
 Let's start with a sine wave at A440 playing at a volume of `0.5` (where `1.0` is the loudest volume).
 
-[Listen on klank.dev](https://klank.dev/?gist=1d5345f85a05b84644941843709f6d6a)
-
 ```haskell
 scene :: Number -> Behavior (AudioUnit D1)
 scene = const $ pure (speaker' $ (gain' 0.5 $ sinOsc 440.0))
@@ -92,8 +90,6 @@ Make sure to wear headphones to avoid feedback!
 ### Adding playback from an audio tag
 
 Let's add some soothing jungle sounds to the mix. We use the function `play` to add an audio element. This function assumes that you provide an audio element with the appropriate tag to the toplevel `runInBrowser` function. In this case, the tag is `"forest"`.
-
-[Listen on klank.dev](https://klank.dev/?gist=c28a01d3bb382d8a9d24dbb636835a21)
 
 ```haskell
 -- assuming we have passed in an object
