@@ -37,6 +37,7 @@ module FRP.Behavior.Audio
   , LPObjective
   , LPConstraint
   , LPVar
+  , FFIPredicates
   , makeAudioContext
   , makeFloatArray
   , makeAudioBuffer
@@ -199,7 +200,7 @@ import Data.List (List(..), fromFoldable, partition, (:))
 import Data.List as DL
 import Data.Map (Map)
 import Data.Map as M
-import Data.Maybe (Maybe(..), fromMaybe, maybe)
+import Data.Maybe (Maybe(..), fromMaybe, isNothing, maybe)
 import Data.NonEmpty (NonEmpty(..), (:|))
 import Data.NonEmpty as NE
 import Data.Set (member)
@@ -730,6 +731,176 @@ instance showAudioUnit' :: Show AudioUnit' where
   show s = genericShow s
 
 derive instance eqAudioUnit' :: Eq AudioUnit'
+
+isMicrophone_ :: AudioUnit'' -> Boolean
+isMicrophone_ Microphone'' = true
+
+isMicrophone_ _ = false
+
+isPlay_ :: AudioUnit'' -> Boolean
+isPlay_ Play'' = true
+
+isPlay_ _ = false
+
+isPlayBuf_ :: AudioUnit'' -> Boolean
+isPlayBuf_ PlayBuf'' = true
+
+isPlayBuf_ _ = false
+
+isLoopBuf_ :: AudioUnit'' -> Boolean
+isLoopBuf_ LoopBuf'' = true
+
+isLoopBuf_ _ = false
+
+isLowpass_ :: AudioUnit'' -> Boolean
+isLowpass_ Lowpass'' = true
+
+isLowpass_ _ = false
+
+isHighpass_ :: AudioUnit'' -> Boolean
+isHighpass_ Highpass'' = true
+
+isHighpass_ _ = false
+
+isBandpass_ :: AudioUnit'' -> Boolean
+isBandpass_ Bandpass'' = true
+
+isBandpass_ _ = false
+
+isLowshelf_ :: AudioUnit'' -> Boolean
+isLowshelf_ Lowshelf'' = true
+
+isLowshelf_ _ = false
+
+isHighshelf_ :: AudioUnit'' -> Boolean
+isHighshelf_ Highshelf'' = true
+
+isHighshelf_ _ = false
+
+isPeaking_ :: AudioUnit'' -> Boolean
+isPeaking_ Peaking'' = true
+
+isPeaking_ _ = false
+
+isNotch_ :: AudioUnit'' -> Boolean
+isNotch_ Notch'' = true
+
+isNotch_ _ = false
+
+isAllpass_ :: AudioUnit'' -> Boolean
+isAllpass_ Allpass'' = true
+
+isAllpass_ _ = false
+
+isConvolver_ :: AudioUnit'' -> Boolean
+isConvolver_ Convolver'' = true
+
+isConvolver_ _ = false
+
+isDynamicsCompressor_ :: AudioUnit'' -> Boolean
+isDynamicsCompressor_ DynamicsCompressor'' = true
+
+isDynamicsCompressor_ _ = false
+
+isSawtoothOsc_ :: AudioUnit'' -> Boolean
+isSawtoothOsc_ SawtoothOsc'' = true
+
+isSawtoothOsc_ _ = false
+
+isTriangleOsc_ :: AudioUnit'' -> Boolean
+isTriangleOsc_ TriangleOsc'' = true
+
+isTriangleOsc_ _ = false
+
+isPeriodicOsc_ :: AudioUnit'' -> Boolean
+isPeriodicOsc_ PeriodicOsc'' = true
+
+isPeriodicOsc_ _ = false
+
+isWaveShaper_ :: AudioUnit'' -> Boolean
+isWaveShaper_ WaveShaper'' = true
+
+isWaveShaper_ _ = false
+
+isDup_ :: AudioUnit'' -> Boolean
+isDup_ Dup'' = true
+
+isDup_ _ = false
+
+isSinOsc_ :: AudioUnit'' -> Boolean
+isSinOsc_ SinOsc'' = true
+
+isSinOsc_ _ = false
+
+isSquareOsc_ :: AudioUnit'' -> Boolean
+isSquareOsc_ SquareOsc'' = true
+
+isSquareOsc_ _ = false
+
+isSplitter_ :: AudioUnit'' -> Boolean
+isSplitter_ Splitter'' = true
+
+isSplitter_ _ = false
+
+isStereoPanner_ :: AudioUnit'' -> Boolean
+isStereoPanner_ StereoPanner'' = true
+
+isStereoPanner_ _ = false
+
+isMul_ :: AudioUnit'' -> Boolean
+isMul_ Mul'' = true
+
+isMul_ _ = false
+
+isAdd_ :: AudioUnit'' -> Boolean
+isAdd_ Add'' = true
+
+isAdd_ _ = false
+
+isSwap_ :: AudioUnit'' -> Boolean
+isSwap_ Swap'' = true
+
+isSwap_ _ = false
+
+isMerger_ :: AudioUnit'' -> Boolean
+isMerger_ Merger'' = true
+
+isMerger_ _ = false
+
+isConstant_ :: AudioUnit'' -> Boolean
+isConstant_ Constant'' = true
+
+isConstant_ _ = false
+
+isDelay_ :: AudioUnit'' -> Boolean
+isDelay_ Delay'' = true
+
+isDelay_ _ = false
+
+isGain_ :: AudioUnit'' -> Boolean
+isGain_ Gain'' = true
+
+isGain_ _ = false
+
+isSpeaker_ :: AudioUnit'' -> Boolean
+isSpeaker_ Speaker'' = true
+
+isSpeaker_ _ = false
+
+isNoSound_ :: AudioUnit'' -> Boolean
+isNoSound_ NoSound'' = true
+
+isNoSound_ _ = false
+
+isSplitRes_ :: AudioUnit'' -> Boolean
+isSplitRes_ SplitRes'' = true
+
+isSplitRes_ _ = false
+
+isDupRes_ :: AudioUnit'' -> Boolean
+isDupRes_ DupRes'' = true
+
+isDupRes_ _ = false
 
 data AudioUnit''
   = Microphone''
@@ -2493,6 +2664,7 @@ makeProgram prev cur =
 -- | audio units
 foreign import touchAudio ::
   forall microphone track buffer floatArray periodicWave.
+  FFIPredicates ->
   Number ->
   Array Instruction ->
   AudioContext ->
@@ -2560,6 +2732,244 @@ data Instruction
   | SetGain Int Number Number -- gain for gain node
   | SetDelay Int Number Number -- delay for delay node
   | SetOffset Int Number Number -- offset for const node
+
+isStop_ :: Instruction -> Boolean
+isStop_ (Stop _) = true
+
+isStop_ _ = false
+
+isDisconnectFrom_ :: Instruction -> Boolean
+isDisconnectFrom_ (DisconnectFrom _ _) = true
+
+isDisconnectFrom_ _ = false
+
+isConnectTo_ :: Instruction -> Boolean
+isConnectTo_ (ConnectTo _ _ _) = true
+
+isConnectTo_ _ = false
+
+isShuffle_ :: Instruction -> Boolean
+isShuffle_ (Shuffle _) = true
+
+isShuffle_ _ = false
+
+isNewUnit_ :: Instruction -> Boolean
+isNewUnit_ (NewUnit _ _ _ _ _) = true
+
+isNewUnit_ _ = false
+
+isSetFrequency_ :: Instruction -> Boolean
+isSetFrequency_ (SetFrequency _ _ _) = true
+
+isSetFrequency_ _ = false
+
+isSetThreshold_ :: Instruction -> Boolean
+isSetThreshold_ (SetThreshold _ _ _) = true
+
+isSetThreshold_ _ = false
+
+isSetKnee_ :: Instruction -> Boolean
+isSetKnee_ (SetKnee _ _ _) = true
+
+isSetKnee_ _ = false
+
+isSetRatio_ :: Instruction -> Boolean
+isSetRatio_ (SetRatio _ _ _) = true
+
+isSetRatio_ _ = false
+
+isSetAttack_ :: Instruction -> Boolean
+isSetAttack_ (SetAttack _ _ _) = true
+
+isSetAttack_ _ = false
+
+isSetRelease_ :: Instruction -> Boolean
+isSetRelease_ (SetRelease _ _ _) = true
+
+isSetRelease_ _ = false
+
+isSetBuffer_ :: Instruction -> Boolean
+isSetBuffer_ (SetBuffer _ _ _) = true
+
+isSetBuffer_ _ = false
+
+isSetQ_ :: Instruction -> Boolean
+isSetQ_ (SetQ _ _ _) = true
+
+isSetQ_ _ = false
+
+isSetPlaybackRate_ :: Instruction -> Boolean
+isSetPlaybackRate_ (SetPlaybackRate _ _ _) = true
+
+isSetPlaybackRate_ _ = false
+
+isSetPeriodicWave_ :: Instruction -> Boolean
+isSetPeriodicWave_ (SetPeriodicWave _ _ _) = true
+
+isSetPeriodicWave_ _ = false
+
+isSetCurve_ :: Instruction -> Boolean
+isSetCurve_ (SetCurve _ _) = true
+
+isSetCurve_ _ = false
+
+isSetOversample_ :: Instruction -> Boolean
+isSetOversample_ (SetOversample _ _) = true
+
+isSetOversample_ _ = false
+
+isSetLoopStart_ :: Instruction -> Boolean
+isSetLoopStart_ (SetLoopStart _ _) = true
+
+isSetLoopStart_ _ = false
+
+isSetLoopEnd_ :: Instruction -> Boolean
+isSetLoopEnd_ (SetLoopEnd _ _) = true
+
+isSetLoopEnd_ _ = false
+
+isSetPan_ :: Instruction -> Boolean
+isSetPan_ (SetPan _ _ _) = true
+
+isSetPan_ _ = false
+
+isSetGain_ :: Instruction -> Boolean
+isSetGain_ (SetGain _ _ _) = true
+
+isSetGain_ _ = false
+
+isSetDelay_ :: Instruction -> Boolean
+isSetDelay_ (SetDelay _ _ _) = true
+
+isSetDelay_ _ = false
+
+isSetOffset_ :: Instruction -> Boolean
+isSetOffset_ (SetOffset _ _ _) = true
+
+isSetOffset_ _ = false
+
+type FFIPredicates
+  = { isNothing :: forall a. Maybe a -> Boolean
+    , isMicrophone :: (AudioUnit'' -> Boolean)
+    , isPlay :: (AudioUnit'' -> Boolean)
+    , isPlayBuf :: (AudioUnit'' -> Boolean)
+    , isLoopBuf :: (AudioUnit'' -> Boolean)
+    , isLowpass :: (AudioUnit'' -> Boolean)
+    , isHighpass :: (AudioUnit'' -> Boolean)
+    , isBandpass :: (AudioUnit'' -> Boolean)
+    , isLowshelf :: (AudioUnit'' -> Boolean)
+    , isHighshelf :: (AudioUnit'' -> Boolean)
+    , isPeaking :: (AudioUnit'' -> Boolean)
+    , isNotch :: (AudioUnit'' -> Boolean)
+    , isAllpass :: (AudioUnit'' -> Boolean)
+    , isConvolver :: (AudioUnit'' -> Boolean)
+    , isDynamicsCompressor :: (AudioUnit'' -> Boolean)
+    , isSawtoothOsc :: (AudioUnit'' -> Boolean)
+    , isTriangleOsc :: (AudioUnit'' -> Boolean)
+    , isPeriodicOsc :: (AudioUnit'' -> Boolean)
+    , isWaveShaper :: (AudioUnit'' -> Boolean)
+    , isDup :: (AudioUnit'' -> Boolean)
+    , isSinOsc :: (AudioUnit'' -> Boolean)
+    , isSquareOsc :: (AudioUnit'' -> Boolean)
+    , isSplitter :: (AudioUnit'' -> Boolean)
+    , isStereoPanner :: (AudioUnit'' -> Boolean)
+    , isMul :: (AudioUnit'' -> Boolean)
+    , isAdd :: (AudioUnit'' -> Boolean)
+    , isSwap :: (AudioUnit'' -> Boolean)
+    , isMerger :: (AudioUnit'' -> Boolean)
+    , isConstant :: (AudioUnit'' -> Boolean)
+    , isDelay :: (AudioUnit'' -> Boolean)
+    , isGain :: (AudioUnit'' -> Boolean)
+    , isSpeaker :: (AudioUnit'' -> Boolean)
+    , isNoSound :: (AudioUnit'' -> Boolean)
+    , isSplitRes :: (AudioUnit'' -> Boolean)
+    , isDupRes :: (AudioUnit'' -> Boolean)
+    , isStop :: (Instruction -> Boolean)
+    , isDisconnectFrom :: (Instruction -> Boolean)
+    , isConnectTo :: (Instruction -> Boolean)
+    , isShuffle :: (Instruction -> Boolean)
+    , isNewUnit :: (Instruction -> Boolean)
+    , isSetFrequency :: (Instruction -> Boolean)
+    , isSetThreshold :: (Instruction -> Boolean)
+    , isSetKnee :: (Instruction -> Boolean)
+    , isSetRatio :: (Instruction -> Boolean)
+    , isSetAttack :: (Instruction -> Boolean)
+    , isSetRelease :: (Instruction -> Boolean)
+    , isSetBuffer :: (Instruction -> Boolean)
+    , isSetQ :: (Instruction -> Boolean)
+    , isSetPlaybackRate :: (Instruction -> Boolean)
+    , isSetPeriodicWave :: (Instruction -> Boolean)
+    , isSetCurve :: (Instruction -> Boolean)
+    , isSetOversample :: (Instruction -> Boolean)
+    , isSetLoopStart :: (Instruction -> Boolean)
+    , isSetLoopEnd :: (Instruction -> Boolean)
+    , isSetPan :: (Instruction -> Boolean)
+    , isSetGain :: (Instruction -> Boolean)
+    , isSetDelay :: (Instruction -> Boolean)
+    , isSetOffset :: (Instruction -> Boolean)
+    }
+
+toFFI =
+  { isNothing: isNothing
+  , isMicrophone: isMicrophone_
+  , isPlay: isPlay_
+  , isPlayBuf: isPlayBuf_
+  , isLoopBuf: isLoopBuf_
+  , isLowpass: isLowpass_
+  , isHighpass: isHighpass_
+  , isBandpass: isBandpass_
+  , isLowshelf: isLowshelf_
+  , isHighshelf: isHighshelf_
+  , isPeaking: isPeaking_
+  , isNotch: isNotch_
+  , isAllpass: isAllpass_
+  , isConvolver: isConvolver_
+  , isDynamicsCompressor: isDynamicsCompressor_
+  , isSawtoothOsc: isSawtoothOsc_
+  , isTriangleOsc: isTriangleOsc_
+  , isPeriodicOsc: isPeriodicOsc_
+  , isWaveShaper: isWaveShaper_
+  , isDup: isDup_
+  , isSinOsc: isSinOsc_
+  , isSquareOsc: isSquareOsc_
+  , isSplitter: isSplitter_
+  , isStereoPanner: isStereoPanner_
+  , isMul: isMul_
+  , isAdd: isAdd_
+  , isSwap: isSwap_
+  , isMerger: isMerger_
+  , isConstant: isConstant_
+  , isDelay: isDelay_
+  , isGain: isGain_
+  , isSpeaker: isSpeaker_
+  , isNoSound: isNoSound_
+  , isSplitRes: isSplitRes_
+  , isDupRes: isDupRes_
+  , isStop: isStop_
+  , isDisconnectFrom: isDisconnectFrom_
+  , isConnectTo: isConnectTo_
+  , isShuffle: isShuffle_
+  , isNewUnit: isNewUnit_
+  , isSetFrequency: isSetFrequency_
+  , isSetThreshold: isSetThreshold_
+  , isSetKnee: isSetKnee_
+  , isSetRatio: isSetRatio_
+  , isSetAttack: isSetAttack_
+  , isSetRelease: isSetRelease_
+  , isSetBuffer: isSetBuffer_
+  , isSetQ: isSetQ_
+  , isSetPlaybackRate: isSetPlaybackRate_
+  , isSetPeriodicWave: isSetPeriodicWave_
+  , isSetCurve: isSetCurve_
+  , isSetOversample: isSetOversample_
+  , isSetLoopStart: isSetLoopStart_
+  , isSetLoopEnd: isSetLoopEnd_
+  , isSetPan: isSetPan_
+  , isSetGain: isSetGain_
+  , isSetDelay: isSetDelay_
+  , isSetOffset: isSetOffset_
+  } ::
+    FFIPredicates
 
 derive instance genericInstruction :: Generic Instruction _
 
@@ -3097,6 +3507,7 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
                             uts <- read units
                             uts' <-
                               touchAudio
+                                toFFI
                                 (audioClockStart + (toNumber (instructions.t + tOffset) / 1000.0))
                                 instructions.i
                                 ctx

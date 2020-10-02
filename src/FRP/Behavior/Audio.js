@@ -1,4 +1,4 @@
-"use strict";
+("use strict");
 
 function copyAudio(inputs) {
   var out = new Array(inputs.length).fill(null);
@@ -20,23 +20,7 @@ function mergeAudio(retention, prev, inputs) {
     }
   }
 }
-/**
-  String -> -- name
-  Number -> -- retention
-  (Effect Boolean -> Event Unit) -> -- driver
-  (Effect Number -> Behavior Number) -> -- currentTime
-  (Effect SampleFrame -> Behavior SampleFrame) -> -- sampleFrame
-  (Effect r -> Behavior r) -> -- control params
-  AudioProcessor r -> -- audio processor
-  ( Event Unit ->
-    Behavior SampleFrame ->
-    (SampleFrame -> Effect Unit) ->
-    Effect (Effect Unit)
-  ) -> -- soundify
-  Effect Unit
- */
-var hackR = new Float32Array(5);
-var hackI = new Float32Array(5);
+
 exports._makeAudioWorkletProcessor = function (name) {
   return function (retention) {
     return function (defaults) {
@@ -267,98 +251,97 @@ exports.makeFloatArray = function (fa) {
   };
 };
 
-exports.touchAudio = function (timeToSet) {
-  return function (instructions) {
-    return function (context) {
-      return function (audioInfo) {
-        return function (g) {
-          return function () {
-            // should never happen
-            if (timeToSet < context.currentTime) {
-              console.warn(
-                "Programming error: we are setting in the past",
-                timeToSet,
-                context.currentTime
-              );
-              timeToSet = context.currentTime;
-            }
-            var generators = g;
-            for (var i = 0; i < instructions.length; i++) {
-              var c = instructions[i];
-              if (c.constructor.name == "DisconnectFrom") {
-                generators[c.value0].disconnect(generators[c.value1]);
-              } else if (c.constructor.name == "ConnectTo") {
-                if (c.value2.constructor.name == "Nothing") {
-                  generators[c.value0].connect(generators[c.value1]);
-                } else {
-                  generators[c.value0].connect(
-                    generators[c.value1],
-                    c.value2.value0.value0,
-                    c.value2.value0.value1
-                  );
-                }
-              } else if (c.constructor.name == "Shuffle") {
-                var old = generators;
-                var generators = new Array(c.value0.length);
-                for (var j = 0; j < c.value0.length; j++) {
-                  generators[c.value0[j].value1] = old[c.value0[j].value0];
-                }
-              } else if (c.constructor.name == "NewUnit") {
-                generators[c.value0] =
-                  c.value1.constructor.name == "Speaker$prime$prime"
+exports.touchAudio = function (predicates) {
+  return function (timeToSet) {
+    return function (instructions) {
+      return function (context) {
+        return function (audioInfo) {
+          return function (g) {
+            return function () {
+              // should never happen
+              if (timeToSet < context.currentTime) {
+                console.warn(
+                  "Programming error: we are setting in the past",
+                  timeToSet,
+                  context.currentTime
+                );
+                timeToSet = context.currentTime;
+              }
+              var generators = g;
+              for (var i = 0; i < instructions.length; i++) {
+                var c = instructions[i];
+                if (predicates.isDisconnectFrom(c)) {
+                  generators[c.value0].disconnect(generators[c.value1]);
+                } else if (predicates.isConnectTo(c)) {
+                  if (predicates.isNothing(c.value2)) {
+                    generators[c.value0].connect(generators[c.value1]);
+                  } else {
+                    generators[c.value0].connect(
+                      generators[c.value1],
+                      c.value2.value0.value0,
+                      c.value2.value0.value1
+                    );
+                  }
+                } else if (predicates.isShuffle(c)) {
+                  var old = generators;
+                  var generators = new Array(c.value0.length);
+                  for (var j = 0; j < c.value0.length; j++) {
+                    generators[c.value0[j].value1] = old[c.value0[j].value0];
+                  }
+                } else if (predicates.isNewUnit(c)) {
+                  generators[c.value0] = predicates.isSpeaker(c.value1)
                     ? context.destination
-                    : c.value1.constructor.name == "Microphone$prime$prime"
+                    : predicates.isMicrophone(c.value1)
                     ? context.createMediaStreamSource(
                         audioInfo.microphones[
                           Object.keys(audioInfo.microphones)[0]
                         ]
                       )
-                    : c.value1.constructor.name == "Play$prime$prime"
+                    : predicates.isPlay(c.value1)
                     ? context.createMediaElementSource(
                         audioInfo.tracks[c.value3.value0]
                       )
-                    : c.value1.constructor.name == "PlayBuf$prime$prime"
+                    : predicates.isPlayBuf(c.value1)
                     ? context.createBufferSource()
-                    : c.value1.constructor.name == "LoopBuf$prime$prime"
+                    : predicates.isLoopBuf(c.value1)
                     ? context.createBufferSource()
-                    : c.value1.constructor.name == "Lowpass$prime$prime"
+                    : predicates.isLowpass(c.value1)
                     ? context.createBiquadFilter()
-                    : c.value1.constructor.name == "Bandpass$prime$prime"
+                    : predicates.isBandpass(c.value1)
                     ? context.createBiquadFilter()
-                    : c.value1.constructor.name == "Lowshelf$prime$prime"
+                    : predicates.isLowshelf(c.value1)
                     ? context.createBiquadFilter()
-                    : c.value1.constructor.name == "Highshelf$prime$prime"
+                    : predicates.isHighshelf(c.value1)
                     ? context.createBiquadFilter()
-                    : c.value1.constructor.name == "Notch$prime$prime"
+                    : predicates.isNotch(c.value1)
                     ? context.createBiquadFilter()
-                    : c.value1.constructor.name == "Allpass$prime$prime"
+                    : predicates.isAllpass(c.value1)
                     ? context.createBiquadFilter()
-                    : c.value1.constructor.name == "Peaking$prime$prime"
+                    : predicates.isPeaking(c.value1)
                     ? context.createBiquadFilter()
-                    : c.value1.constructor.name == "Highpass$prime$prime"
+                    : predicates.isHighpass(c.value1)
                     ? context.createBiquadFilter()
-                    : c.value1.constructor.name == "Convolver$prime$prime"
+                    : predicates.isConvolver(c.value1)
                     ? context.createConvolver()
-                    : c.value1.constructor.name ==
-                      "DynamicsCompressor$prime$prime"
+                    : predicates.isDynamicsCompressor(c.value1)
                     ? context.createDynamicsCompressor()
-                    : c.value1.constructor.name == "SawtoothOsc$prime$prime"
+                    : predicates.isSawtoothOsc(c.value1)
                     ? context.createOscillator()
-                    : c.value1.constructor.name == "TriangleOsc$prime$prime"
+                    : predicates.isTriangleOsc(c.value1)
                     ? context.createOscillator()
-                    : c.value1.constructor.name == "PeriodicOsc$prime$prime"
+                    : predicates.isPeriodicOsc(c.value1)
                     ? context.createOscillator()
-                    : c.value1.constructor.name == "WaveShaper$prime$prime"
+                    : predicates.isWaveShaper(c.value1)
                     ? context.createWaveShaper()
-                    : c.value1.constructor.name == "Dup$prime$prime"
+                    : predicates.isDup(c.value1)
                     ? context.createGain()
-                    : c.value1.constructor.name == "StereoPanner$prime$prime"
+                    : predicates.isStereoPanner(c.value1)
                     ? context.createStereoPanner()
-                    : c.value1.constructor.name == "SinOsc$prime$prime"
+                    : predicates.isSinOsc(c.value1)
                     ? context.createOscillator()
-                    : c.value1.constructor.name == "SquareOsc$prime$prime"
+                    : predicates.isSquareOsc(c.value1)
                     ? context.createOscillator()
-                    : c.value1.constructor.name == "Mul$prime$prime"
+                    : predicates.isMul(c.value1)
                     ? (function () {
                         var nConnections = 0;
                         for (var j = 0; j < instructions.length; j++) {
@@ -367,11 +350,10 @@ exports.touchAudio = function (timeToSet) {
                           // channel assignments. maybe make explicit everywhere?
                           var d = instructions[j];
                           if (
-                            d.constructor.name == "ConnectTo" &&
+                            predicates.isConnectTo(d) &&
                             d.value1 == c.value0
                           ) {
                             d.value2 = {
-                              constructor: { name: "Just" },
                               value0: {
                                 value0: 0,
                                 value1: nConnections,
@@ -385,218 +367,185 @@ exports.touchAudio = function (timeToSet) {
                           numberOfOutputs: 1,
                         });
                       })()
-                    : c.value1.constructor.name == "Add$prime$prime"
+                    : predicates.isAdd(c.value1)
                     ? context.createGain()
-                    : c.value1.constructor.name == "Delay$prime$prime"
+                    : predicates.isDelay(c.value1)
                     ? context.createDelay(10.0) // magic number for 10 seconds...make tweakable?
-                    : c.value1.constructor.name == "Constant$prime$prime"
+                    : predicates.isConstant(c.value1)
                     ? context.createConstantSource()
-                    : c.value1.constructor.name == "Gain$prime$prime"
+                    : predicates.isGain(c.value1)
                     ? context.createGain()
-                    : c.value1.constructor.name == "SplitRes$prime$prime"
+                    : predicates.isSplitRes(c.value1)
                     ? context.createGain()
-                    : c.value1.constructor.name == "DupRes$prime$prime"
+                    : predicates.isDupRes(c.value1)
                     ? context.createGain()
-                    : c.value1.constructor.name == "Splitter$prime$prime"
+                    : predicates.isSplitter(c.value1)
                     ? context.createChannelSplitter(c.value2.value0)
-                    : c.value1.constructor.name == "Merger$prime$prime"
+                    : predicates.isMerger(c.value1)
                     ? context.createChannelMerger(c.value2.value0)
                     : null;
-                if (c.value1.constructor.name == "SinOsc$prime$prime") {
-                  generators[c.value0].type = "sine";
-                  generators[c.value0].start(timeToSet + c.value4.value0);
-                } else if (c.value1.constructor.name == "LoopBuf$prime$prime") {
-                  generators[c.value0].loop = true;
-                  generators[c.value0].buffer =
-                    audioInfo.buffers[c.value3.value0];
-                  generators[c.value0].start(timeToSet + c.value4.value0);
-                } else if (
-                  c.value1.constructor.name == "WaveShaper$prime$prime"
-                ) {
-                  generators[c.value0].curve =
-                    audioInfo.floatArrays[c.value3.value0];
-                } else if (
-                  c.value1.constructor.name == "Convolver$prime$prime"
-                ) {
-                  generators[c.value0].buffer =
-                    audioInfo.buffers[c.value3.value0];
-                } else if (c.value1.constructor.name == "PlayBuf$prime$prime") {
-                  generators[c.value0].loop = false;
-                  generators[c.value0].buffer =
-                    audioInfo.buffers[c.value3.value0];
-                  generators[c.value0].start(timeToSet + c.value4.value0);
-                } else if (
-                  c.value1.constructor.name == "LoopDynamicBuf$prime$prime"
-                ) {
-                  generators[c.value0].loop = true;
-                  generators[c.value0].start(timeToSet + c.value4.value0);
-                } else if (
-                  c.value1.constructor.name == "PlayDynamicBuf$prime$prime"
-                ) {
-                  generators[c.value0].loop = false;
-                  generators[c.value0].start(timeToSet + c.value4.value0);
-                } else if (c.value1.constructor.name == "Play$prime$prime") {
-                  // todo - add delay somehow...
-                  audioInfo.tracks[c.value3.value0].play();
-                } else if (
-                  c.value1.constructor.name == "Constant$prime$prime"
-                ) {
-                  generators[c.value0].start(timeToSet + c.value4.value0);
-                } else if (c.value1.constructor.name == "Lowpass$prime$prime") {
-                  generators[c.value0].type = "lowpass";
-                } else if (
-                  c.value1.constructor.name == "Bandpass$prime$prime"
-                ) {
-                  generators[c.value0].type = "bandpass";
-                } else if (
-                  c.value1.constructor.name == "Lowshelf$prime$prime"
-                ) {
-                  generators[c.value0].type = "lowshelf";
-                } else if (
-                  c.value1.constructor.name == "Highshelf$prime$prime"
-                ) {
-                  generators[c.value0].type = "highshelf";
-                } else if (c.value1.constructor.name == "Notch$prime$prime") {
-                  generators[c.value0].type = "notch";
-                } else if (c.value1.constructor.name == "Allpass$prime$prime") {
-                  generators[c.value0].type = "allpass";
-                } else if (c.value1.constructor.name == "Peaking$prime$prime") {
-                  generators[c.value0].type = "peaking";
-                } else if (
-                  c.value1.constructor.name == "Highpass$prime$prime"
-                ) {
-                  generators[c.value0].type = "highpass";
-                } else if (
-                  c.value1.constructor.name == "SquareOsc$prime$prime"
-                ) {
-                  generators[c.value0].type = "square";
-                  generators[c.value0].start(timeToSet + c.value4.value0);
-                } else if (
-                  c.value1.constructor.name == "TriangleOsc$prime$prime"
-                ) {
-                  generators[c.value0].type = "triangle";
-                  generators[c.value0].start(timeToSet + c.value4.value0);
-                } else if (
-                  c.value1.constructor.name == "SawtoothOsc$prime$prime"
-                ) {
-                  generators[c.value0].type = "sawtooth";
-                  generators[c.value0].start(timeToSet + c.value4.value0);
-                } else if (
-                  c.value1.constructor.name == "PeriodicOsc$prime$prime"
-                ) {
-                  // generators[c.value0].type = "custom";
-                  generators[c.value0].setPeriodicWave(
-                    audioInfo.periodicWaves[c.value3.value0]
-                  );
-                  generators[c.value0].start(timeToSet + c.value4.value0);
-                } else if (
-                  c.value1.constructor.name == "SplitRes$prime$prime"
-                ) {
-                  generators[c.value0].gain.linearRampToValueAtTime(
-                    1.0,
-                    timeToSet
-                  );
-                } else if (c.value1.constructor.name == "DupRes$prime$prime") {
-                  generators[c.value0].gain.linearRampToValueAtTime(
-                    1.0,
-                    timeToSet
-                  );
-                }
-              } else if (c.constructor.name == "SetFrequency") {
-                generators[c.value0].frequency.linearRampToValueAtTime(
-                  c.value1,
-                  timeToSet + c.value2
-                );
-              } else if (c.constructor.name == "SetPan") {
-                generators[c.value0].pan.linearRampToValueAtTime(
-                  c.value1,
-                  timeToSet + c.value2
-                );
-              } else if (c.constructor.name == "SetGain") {
-                generators[c.value0].gain.linearRampToValueAtTime(
-                  c.value1,
-                  timeToSet + c.value2
-                );
-              } else if (c.constructor.name == "SetQ") {
-                generators[c.value0].Q.linearRampToValueAtTime(
-                  c.value1,
-                  timeToSet + c.value2
-                );
-              } else if (c.constructor.name == "SetBuffer") {
-                var myArrayBuffer = context.createBuffer(
-                  c.value2.length,
-                  c.value2[0].length,
-                  c.value1
-                );
-                for (
-                  var channel = 0;
-                  channel < myArrayBuffer.numberOfChannels;
-                  channel++
-                ) {
-                  var nowBuffering = myArrayBuffer.getChannelData(channel);
-                  for (var i = 0; i < myArrayBuffer.length; i++) {
-                    nowBuffering[i] = c.value2[channel][i];
+                  if (predicates.isSinOsc(c.value1)) {
+                    generators[c.value0].type = "sine";
+                    generators[c.value0].start(timeToSet + c.value4.value0);
+                  } else if (predicates.isLoopBuf(c.value1)) {
+                    generators[c.value0].loop = true;
+                    generators[c.value0].buffer =
+                      audioInfo.buffers[c.value3.value0];
+                    generators[c.value0].start(timeToSet + c.value4.value0);
+                  } else if (predicates.isWaveShaper(c.value1)) {
+                    generators[c.value0].curve =
+                      audioInfo.floatArrays[c.value3.value0];
+                  } else if (predicates.isConvolver(c.value1)) {
+                    generators[c.value0].buffer =
+                      audioInfo.buffers[c.value3.value0];
+                  } else if (predicates.isPlayBuf(c.value1)) {
+                    generators[c.value0].loop = false;
+                    generators[c.value0].buffer =
+                      audioInfo.buffers[c.value3.value0];
+                    generators[c.value0].start(timeToSet + c.value4.value0);
+                  } else if (predicates.isPlay(c.value1)) {
+                    // todo - add delay somehow...
+                    audioInfo.tracks[c.value3.value0].play();
+                  } else if (predicates.isConstant(c.value1)) {
+                    generators[c.value0].start(timeToSet + c.value4.value0);
+                  } else if (predicates.isLowpass(c.value1)) {
+                    generators[c.value0].type = "lowpass";
+                  } else if (predicates.isBandpass(c.value1)) {
+                    generators[c.value0].type = "bandpass";
+                  } else if (predicates.isLowshelf(c.value1)) {
+                    generators[c.value0].type = "lowshelf";
+                  } else if (predicates.isHighshelf(c.value1)) {
+                    generators[c.value0].type = "highshelf";
+                  } else if (predicates.isNotch(c.value1)) {
+                    generators[c.value0].type = "notch";
+                  } else if (predicates.isAllpass(c.value1)) {
+                    generators[c.value0].type = "allpass";
+                  } else if (predicates.isPeaking(c.value1)) {
+                    generators[c.value0].type = "peaking";
+                  } else if (predicates.isHighpass(c.value1)) {
+                    generators[c.value0].type = "highpass";
+                  } else if (predicates.isSquareOsc(c.value1)) {
+                    generators[c.value0].type = "square";
+                    generators[c.value0].start(timeToSet + c.value4.value0);
+                  } else if (predicates.isTriangleOsc(c.value1)) {
+                    generators[c.value0].type = "triangle";
+                    generators[c.value0].start(timeToSet + c.value4.value0);
+                  } else if (predicates.isSawtoothOsc(c.value1)) {
+                    generators[c.value0].type = "sawtooth";
+                    generators[c.value0].start(timeToSet + c.value4.value0);
+                  } else if (predicates.isPeriodicOsc(c.value1)) {
+                    // generators[c.value0].type = "custom";
+                    generators[c.value0].setPeriodicWave(
+                      audioInfo.periodicWaves[c.value3.value0]
+                    );
+                    generators[c.value0].start(timeToSet + c.value4.value0);
+                  } else if (predicates.isSplitRes(c.value1)) {
+                    generators[c.value0].gain.linearRampToValueAtTime(
+                      1.0,
+                      timeToSet
+                    );
+                  } else if (predicates.isDupRes(c.value1)) {
+                    generators[c.value0].gain.linearRampToValueAtTime(
+                      1.0,
+                      timeToSet
+                    );
                   }
-                }
-                generators[c.value0].buffer = myArrayBuffer;
-              } else if (c.constructor.name == "SetDelay") {
-                generators[c.value0].delayTime.linearRampToValueAtTime(
-                  c.value1,
-                  timeToSet + c.value2
-                );
-              } else if (c.constructor.name == "SetOffset") {
-                generators[c.value0].offset.linearRampToValueAtTime(
-                  c.value1,
-                  timeToSet + c.value2
-                );
-              } else if (c.constructor.name == "SetLoopStart") {
-                generators[c.value0].loopStart = c.value1;
-              } else if (c.constructor.name == "SetLoopEnd") {
-                generators[c.value0].loopEnd = c.value1;
-              } else if (c.constructor.name == "SetOversample") {
-                generators[c.value0].oversample = c.value1;
-              } else if (c.constructor.name == "SetCurve") {
-                var curve = new Float32Array(c.value1.length);
-                for (var i = 0; i < c.value1.length; i++) {
-                  curve[i] = c.value1[i];
-                }
+                } else if (predicates.isSetFrequency(c)) {
+                  generators[c.value0].frequency.linearRampToValueAtTime(
+                    c.value1,
+                    timeToSet + c.value2
+                  );
+                } else if (predicates.isSetPan(c)) {
+                  generators[c.value0].pan.linearRampToValueAtTime(
+                    c.value1,
+                    timeToSet + c.value2
+                  );
+                } else if (predicates.isSetGain(c)) {
+                  generators[c.value0].gain.linearRampToValueAtTime(
+                    c.value1,
+                    timeToSet + c.value2
+                  );
+                } else if (predicates.isSetQ(c)) {
+                  generators[c.value0].Q.linearRampToValueAtTime(
+                    c.value1,
+                    timeToSet + c.value2
+                  );
+                } else if (predicates.isSetBuffer(c)) {
+                  var myArrayBuffer = context.createBuffer(
+                    c.value2.length,
+                    c.value2[0].length,
+                    c.value1
+                  );
+                  for (
+                    var channel = 0;
+                    channel < myArrayBuffer.numberOfChannels;
+                    channel++
+                  ) {
+                    var nowBuffering = myArrayBuffer.getChannelData(channel);
+                    for (var i = 0; i < myArrayBuffer.length; i++) {
+                      nowBuffering[i] = c.value2[channel][i];
+                    }
+                  }
+                  generators[c.value0].buffer = myArrayBuffer;
+                } else if (predicates.isSetDelay(c)) {
+                  generators[c.value0].delayTime.linearRampToValueAtTime(
+                    c.value1,
+                    timeToSet + c.value2
+                  );
+                } else if (predicates.isSetOffset(c)) {
+                  generators[c.value0].offset.linearRampToValueAtTime(
+                    c.value1,
+                    timeToSet + c.value2
+                  );
+                } else if (predicates.isSetLoopStart(c)) {
+                  generators[c.value0].loopStart = c.value1;
+                } else if (predicates.isSetLoopEnd(c)) {
+                  generators[c.value0].loopEnd = c.value1;
+                } else if (predicates.isSetOversample(c)) {
+                  generators[c.value0].oversample = c.value1;
+                } else if (predicates.isSetCurve(c)) {
+                  var curve = new Float32Array(c.value1.length);
+                  for (var i = 0; i < c.value1.length; i++) {
+                    curve[i] = c.value1[i];
+                  }
 
-                generators[c.value0].curve = curve;
-              } else if (c.constructor.name == "SetPlaybackRate") {
-                generators[c.value0].playbackRate.linearRampToValueAtTime(
-                  c.value1,
-                  timeToSet + c.value2
-                );
-              } else if (c.constructor.name == "SetThreshold") {
-                generators[c.value0].threshold.linearRampToValueAtTime(
-                  c.value1,
-                  timeToSet + c.value2
-                );
-              } else if (c.constructor.name == "SetKnee") {
-                generators[c.value0].knee.linearRampToValueAtTime(
-                  c.value1,
-                  timeToSet + c.value2
-                );
-              } else if (c.constructor.name == "SetRatio") {
-                generators[c.value0].ratio.linearRampToValueAtTime(
-                  c.value1,
-                  timeToSet + c.value2
-                );
-              } else if (c.constructor.name == "SetAttack") {
-                generators[c.value0].attack.linearRampToValueAtTime(
-                  c.value1,
-                  timeToSet + c.value2
-                );
-              } else if (c.constructor.name == "SetRelease") {
-                generators[c.value0].release.linearRampToValueAtTime(
-                  c.value1,
-                  timeToSet + c.value2
-                );
-              } else if (c.constructor.name == "Stop") {
-                generators[c.value0].stop();
+                  generators[c.value0].curve = curve;
+                } else if (predicates.isSetPlaybackRate(c)) {
+                  generators[c.value0].playbackRate.linearRampToValueAtTime(
+                    c.value1,
+                    timeToSet + c.value2
+                  );
+                } else if (predicates.isSetThreshold(c)) {
+                  generators[c.value0].threshold.linearRampToValueAtTime(
+                    c.value1,
+                    timeToSet + c.value2
+                  );
+                } else if (predicates.isSetKnee(c)) {
+                  generators[c.value0].knee.linearRampToValueAtTime(
+                    c.value1,
+                    timeToSet + c.value2
+                  );
+                } else if (predicates.isSetRatio(c)) {
+                  generators[c.value0].ratio.linearRampToValueAtTime(
+                    c.value1,
+                    timeToSet + c.value2
+                  );
+                } else if (predicates.isSetAttack(c)) {
+                  generators[c.value0].attack.linearRampToValueAtTime(
+                    c.value1,
+                    timeToSet + c.value2
+                  );
+                } else if (predicates.isSetRelease(c)) {
+                  generators[c.value0].release.linearRampToValueAtTime(
+                    c.value1,
+                    timeToSet + c.value2
+                  );
+                } else if (predicates.isStop(c)) {
+                  generators[c.value0].stop();
+                }
               }
-            }
-            return generators;
+              return generators;
+            };
           };
         };
       };
