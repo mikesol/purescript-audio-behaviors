@@ -453,9 +453,6 @@ decodeAudioDataFromUri :: AudioContext -> String -> Effect (Promise BrowserAudio
 -- decode audio data from a base 64 encoded string, passed directly as an argument
 decodeAudioDataFromBase64EncodedString :: AudioContext -> String -> Effect (Promise BrowserAudioBuffer)
 
--- make a periodic wave for the periodic osc
-makePeriodicWave :: AudioContext -> Array Number -> Array Number -> Effect BrowserPeriodicWave
-
 -- make an audio track
 -- the advantage of audio tracks over audio buffers is that
 -- they are streamed, so you don't need to wait for them to be downloaded
