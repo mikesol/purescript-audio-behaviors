@@ -127,26 +127,23 @@ scene6 mouse time = f time <$> click
   gn s =
     let
       ht = split s
+
+      left = fromMaybe (Tuple 0.0 0.0) $ last ht.init
+
+      right = fromMaybe (Tuple 201.0 0.0) $ head ht.rest
     in
-      let
-        left = fromMaybe (Tuple 0.0 0.0) $ last ht.init
-      in
+      -- if we are in a control cycle with a peak or trough
+      -- we lock to that
+      -- otherwise, we interpolate
+      if (fst right - s) < kr then
+        AudioParameter { param: (snd right), timeOffset: (fst right - s) }
+      else
         let
-          right = fromMaybe (Tuple 201.0 0.0) $ head ht.rest
+          m = (snd right - snd left) / (fst right - fst left)
+
+          b = (snd right - (m * fst right))
         in
-          -- if we are in a control cycle with a peak or trough
-          -- we lock to that
-          -- otherwise, we interpolate
-          if (fst right - s) < kr then
-            AudioParameter { param: (snd right), timeOffset: (fst right - s) }
-          else
-            let
-              m = (snd right - snd left) / (fst right - fst left)
-            in
-              let
-                b = (snd right - (m * fst right))
-              in
-                AudioParameter { param: (m * s + b), timeOffset: 0.0 }
+          AudioParameter { param: (m * s + b), timeOffset: 0.0 }
 
   f s cl =
     let
@@ -182,26 +179,23 @@ scene7 mouse acc@{ onset } time = f time <$> click
   gn s =
     let
       ht = split s
+
+      left = fromMaybe (Tuple 0.0 0.0) $ last ht.init
+
+      right = fromMaybe (Tuple 201.0 0.0) $ head ht.rest
     in
-      let
-        left = fromMaybe (Tuple 0.0 0.0) $ last ht.init
-      in
+      -- if we are in a control cycle with a peak or trough
+      -- we lock to that
+      -- otherwise, we interpolate
+      if (fst right - s) < kr then
+        AudioParameter { param: (snd right), timeOffset: (fst right - s) }
+      else
         let
-          right = fromMaybe (Tuple 201.0 0.0) $ head ht.rest
+          m = (snd right - snd left) / (fst right - fst left)
+
+          b = (snd right - (m * fst right))
         in
-          -- if we are in a control cycle with a peak or trough
-          -- we lock to that
-          -- otherwise, we interpolate
-          if (fst right - s) < kr then
-            AudioParameter { param: (snd right), timeOffset: (fst right - s) }
-          else
-            let
-              m = (snd right - snd left) / (fst right - fst left)
-            in
-              let
-                b = (snd right - (m * fst right))
-              in
-                AudioParameter { param: (m * s + b), timeOffset: 0.0 }
+          AudioParameter { param: (m * s + b), timeOffset: 0.0 }
 
   f s cl =
     IAudioUnit
@@ -243,26 +237,23 @@ scene8 mouse acc@{ onset } (CanvasInfo { w, h }) time = f time <$> click
   gn s =
     let
       ht = split s
+
+      left = fromMaybe (Tuple 0.0 0.0) $ last ht.init
+
+      right = fromMaybe (Tuple 201.0 0.0) $ head ht.rest
     in
-      let
-        left = fromMaybe (Tuple 0.0 0.0) $ last ht.init
-      in
+      -- if we are in a control cycle with a peak or trough
+      -- we lock to that
+      -- otherwise, we interpolate
+      if (fst right - s) < kr then
+        AudioParameter { param: (snd right), timeOffset: (fst right - s) }
+      else
         let
-          right = fromMaybe (Tuple 201.0 0.0) $ head ht.rest
+          m = (snd right - snd left) / (fst right - fst left)
+
+          b = (snd right - (m * fst right))
         in
-          -- if we are in a control cycle with a peak or trough
-          -- we lock to that
-          -- otherwise, we interpolate
-          if (fst right - s) < kr then
-            AudioParameter { param: (snd right), timeOffset: (fst right - s) }
-          else
-            let
-              m = (snd right - snd left) / (fst right - fst left)
-            in
-              let
-                b = (snd right - (m * fst right))
-              in
-                AudioParameter { param: (m * s + b), timeOffset: 0.0 }
+          AudioParameter { param: (m * s + b), timeOffset: 0.0 }
 
   f s cl =
     AV
