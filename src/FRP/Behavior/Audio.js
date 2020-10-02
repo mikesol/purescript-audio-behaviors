@@ -162,7 +162,9 @@ exports.makeAudioContext = function () {
 
 exports.makeAudioTrack = function (s) {
   return function () {
-    return new Audio(s);
+    var o = new Audio(s);
+    o.crossOrigin = "anonymous";
+    return o;
   };
 };
 exports.decodeAudioDataFromBase64EncodedString = function (ctx) {
