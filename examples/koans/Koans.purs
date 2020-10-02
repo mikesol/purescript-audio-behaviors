@@ -114,7 +114,7 @@ pb _ = pure $ speaker' (gain' 0.3 (playBuf "moo" 1.0))
 lb :: Number -> Behavior (AudioUnit D1)
 lb _ = pure $ speaker' (gain' 0.3 (loopBuf "moo" 1.0 0.0 0.5))
 
-run = runInBrowser lb
+run = runInBrowser ringMod
 
 main :: Effect Unit
 main = pure unit

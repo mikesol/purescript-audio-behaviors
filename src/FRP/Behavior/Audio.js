@@ -355,12 +355,9 @@ exports.touchAudio = function (predicates) {
                             predicates.isConnectTo(d) &&
                             d.value1 == c.value0
                           ) {
-                            d.value2 = {
-                              value0: {
-                                value0: 0,
-                                value1: nConnections,
-                              },
-                            };
+                            d.value2 = predicates.justly(
+                              predicates.tupply(0)(nConnections)
+                            );
                             nConnections += 1;
                           }
                         }

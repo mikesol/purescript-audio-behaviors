@@ -2849,7 +2849,9 @@ isSetOffset_ (SetOffset _ _ _) = true
 isSetOffset_ _ = false
 
 type FFIPredicates
-  = { isNothing :: forall a. Maybe a -> Boolean
+  = { justly :: forall a. a -> Maybe a
+    , tupply :: forall a b. a -> b -> Tuple a b
+    , isNothing :: forall a. Maybe a -> Boolean
     , isMicrophone :: (AudioUnit'' -> Boolean)
     , isPlay :: (AudioUnit'' -> Boolean)
     , isPlayBuf :: (AudioUnit'' -> Boolean)
@@ -2910,7 +2912,9 @@ type FFIPredicates
     }
 
 toFFI =
-  { isNothing: isNothing
+  { justly: Just
+  , tupply: Tuple
+  , isNothing: isNothing
   , isMicrophone: isMicrophone_
   , isPlay: isPlay_
   , isPlayBuf: isPlayBuf_
