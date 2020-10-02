@@ -2,9 +2,7 @@ module FRP.Behavior.Audio.Example.Stress0 where
 
 -- with four oscillators and several gains, we start to hear pretty bad jank
 -- named units clears it up completely!
-
 import Prelude
-
 import Data.Array (head, last, range, span)
 import Data.Int (toNumber)
 import Data.List (List(..), (:))
@@ -14,9 +12,7 @@ import Data.Tuple (Tuple(..), fst, snd)
 import Data.Typelevel.Num (D1)
 import Effect (Effect)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AudioParameter(..), AudioUnit, Instruction, CanvasInfo, gain', gainT', gainT_', gain_', runInBrowser, sinOsc, sinOsc_, speaker, speaker', speaker_)
-import FRP.Behavior.Audio as Aud
-import Foreign (Foreign)
+import FRP.Behavior.Audio (AudioParameter(..), AudioUnit, gain', gainT', gainT_', gain_', runInBrowser, sinOsc, sinOsc_, speaker, speaker_)
 
 pwf0 :: Array (Tuple Number Number)
 pwf0 =
@@ -109,34 +105,40 @@ sceneThatHitsDeadline time = f <$> time
           :| Nil
       )
 
-scene :: forall a. a -> CanvasInfo -> Number -> Behavior (AudioUnit D1)
-scene _ _ s = pure $ speaker
-      ( (gain' 0.1 (gainT' (gn s pwf0) $ sinOsc 440.0))
-          :| (gain' 0.1 (gainT' (gn s pwf1) $ sinOsc 660.0))
-          : (gain' 0.1 (gainT' (gn s pwf2) $ sinOsc 990.0))
-          : (gain' 0.1 (gainT' (gn s pwf3) $ sinOsc 220.0))
-          : Nil
-      )
+scene :: Number -> Behavior (AudioUnit D1)
+scene s =
+  pure
+    $ speaker
+        ( (gain' 0.1 (gainT' (gn s pwf0) $ sinOsc 440.0))
+            :| (gain' 0.1 (gainT' (gn s pwf1) $ sinOsc 660.0))
+            : (gain' 0.1 (gainT' (gn s pwf2) $ sinOsc 990.0))
+            : (gain' 0.1 (gainT' (gn s pwf3) $ sinOsc 220.0))
+            : Nil
+        )
 
-sceneN :: forall a. a -> CanvasInfo -> Number -> Behavior (AudioUnit D1)
-sceneN _ _ s = pure $ speaker_ "speaker"
-      ( (gain_' "g0" 0.1 (gainT_' "gt0" (gn s pwf0) $ sinOsc_ "s0" 440.0))
-          :| (gain_' "g1" 0.1 (gainT_' "gt1" (gn s pwf1) $ sinOsc_ "s1" 660.0))
-          : (gain_' "g2" 0.1 (gainT_' "gt2" (gn s pwf2) $ sinOsc_ "s2" 990.0))
-          : (gain_' "g3" 0.1 (gainT_' "gt3" (gn s pwf3) $ sinOsc_ "s3" 220.0))
-          : Nil
-      )
+sceneN :: Number -> Behavior (AudioUnit D1)
+sceneN s =
+  pure
+    $ speaker_ "speaker"
+        ( (gain_' "g0" 0.1 (gainT_' "gt0" (gn s pwf0) $ sinOsc_ "s0" 440.0))
+            :| (gain_' "g1" 0.1 (gainT_' "gt1" (gn s pwf1) $ sinOsc_ "s1" 660.0))
+            : (gain_' "g2" 0.1 (gainT_' "gt2" (gn s pwf2) $ sinOsc_ "s2" 990.0))
+            : (gain_' "g3" 0.1 (gainT_' "gt3" (gn s pwf3) $ sinOsc_ "s3" 220.0))
+            : Nil
+        )
 
-sceneNN :: forall a. a -> CanvasInfo -> Number -> Behavior (AudioUnit D1)
-sceneNN _ _ s = pure $ speaker_ "speaker"
-      ( (gain_' "g0" 0.1 (gainT_' "gt0" (gn s pwf0) $ sinOsc_ "s0" 440.0))
-          :| (gain_' "g1" 0.1 (gainT_' "gt1" (gn s pwf1) $ sinOsc_ "s1" 660.0))
-          : (gain_' "g2" 0.1 (gainT_' "gt2" (gn s pwf2) $ sinOsc_ "s2" 990.0))
-          : (gain_' "g3" 0.1 (gainT_' "gt3" (gn s pwf3) $ sinOsc_ "s3" 220.0))
-          : (gain_' "g4" 0.05 (gainT_' "gt4" (gn s pwf1) $ sinOsc_ "s4" 1210.0))
-          : (gain_' "g5" 0.025 (gainT_' "gt5" (gn s pwf0) $ sinOsc_ "s5" 1580.0))
-          : Nil
-      )
+sceneNN :: Number -> Behavior (AudioUnit D1)
+sceneNN s =
+  pure
+    $ speaker_ "speaker"
+        ( (gain_' "g0" 0.1 (gainT_' "gt0" (gn s pwf0) $ sinOsc_ "s0" 440.0))
+            :| (gain_' "g1" 0.1 (gainT_' "gt1" (gn s pwf1) $ sinOsc_ "s1" 660.0))
+            : (gain_' "g2" 0.1 (gainT_' "gt2" (gn s pwf2) $ sinOsc_ "s2" 990.0))
+            : (gain_' "g3" 0.1 (gainT_' "gt3" (gn s pwf3) $ sinOsc_ "s3" 220.0))
+            : (gain_' "g4" 0.05 (gainT_' "gt4" (gn s pwf1) $ sinOsc_ "s4" 1210.0))
+            : (gain_' "g5" 0.025 (gainT_' "gt5" (gn s pwf0) $ sinOsc_ "s5" 1580.0))
+            : Nil
+        )
 
 run = runInBrowser sceneNN
 

@@ -7,65 +7,65 @@ import Data.Array (span, last, head, range)
 import Data.Int (toNumber)
 import Data.List ((:), List(..))
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
-import Data.Newtype (unwrap)
 import Data.NonEmpty ((:|))
 import Data.Set (isEmpty)
 import Data.Tuple (Tuple(..), fst, snd)
 import Data.Typelevel.Num (D1, D2)
 import Data.Vec ((+>), empty)
 import Effect (Effect)
-import FRP.Behavior (Behavior, integral', fixB, switcher)
-import FRP.Behavior.Audio (AV(..), AudioParameter(..), AudioUnit, IAudioUnit(..), Instruction, CanvasInfo, dup1, gain', gainT', merger, microphone, panner, play, runInBrowser, runInBrowser_, sinOsc, speaker, speaker')
-import FRP.Behavior.Audio as Aud
+import FRP.Behavior (Behavior)
+import FRP.Behavior.Audio (AV(..), AudioParameter(..), AudioUnit, CanvasInfo(..), IAudioUnit(..), RunInBrowser, RunInBrowserIAudioUnit_, RunInBrowser_, RunInBrowserAV_, dup1, gain', gainT', merger, microphone, panner, play, runInBrowser, runInBrowser_, sinOsc, speaker, speaker')
 import FRP.Behavior.Mouse (buttons)
-import FRP.Behavior.Time as Time
-import FRP.Event.Mouse (Mouse, getMouse, down)
-import Foreign (Foreign)
+import FRP.Event.Mouse (Mouse, getMouse)
 import Graphics.Drawing (circle, fillColor, filled)
 import Math (pi, sin)
 
-scene0 :: forall a. a -> CanvasInfo -> Number -> Behavior (AudioUnit D1)
-scene0 _ _ _ = pure (speaker' $ (gain' 0.5 $ sinOsc 440.0))
+scene0 :: Number -> Behavior (AudioUnit D1)
+scene0 = const $ pure (speaker' $ (gain' 0.5 $ sinOsc 440.0))
 
-scene1 :: forall a. a -> CanvasInfo -> Number -> Behavior (AudioUnit D1)
-scene1 _ _ _ =
-  pure
-    ( speaker
-        $ ( (gain' 0.2 $ sinOsc 110.0)
-              :| (gain' 0.1 $ sinOsc 220.0)
-              : microphone
-              : Nil
-          )
-    )
+scene1 :: Number -> Behavior (AudioUnit D1)
+scene1 =
+  const
+    $ pure
+        ( speaker
+            $ ( (gain' 0.2 $ sinOsc 110.0)
+                  :| (gain' 0.1 $ sinOsc 220.0)
+                  : microphone
+                  : Nil
+              )
+        )
 
-scene2 :: forall a. a -> CanvasInfo -> Number -> Behavior (AudioUnit D1)
-scene2 _ _ _ =
-  pure
-    ( speaker
-        $ ( (gain' 0.2 $ sinOsc 110.0)
-              :| (gain' 0.1 $ sinOsc 220.0)
-              : (gain' 0.5 $ (play "forest"))
-              : microphone
-              : Nil
-          )
-    )
+scene2 :: Number -> Behavior (AudioUnit D1)
+scene2 =
+  const
+    $ pure
+        ( speaker
+            $ ( (gain' 0.2 $ sinOsc 110.0)
+                  :| (gain' 0.1 $ sinOsc 220.0)
+                  : (gain' 0.5 $ (play "forest"))
+                  : microphone
+                  : Nil
+              )
+        )
 
-scene3 :: forall a. a -> CanvasInfo -> Number -> Behavior (AudioUnit D2)
-scene3 _ _ _ =
-  pure
-    $ dup1
-        ( (gain' 0.2 $ sinOsc 110.0)
-            + (gain' 0.1 $ sinOsc 220.0)
-            + microphone
-        ) \mono ->
-        speaker
-          $ ( (panner (-0.5) (merger (mono +> mono +> empty)))
-                :| (gain' 0.5 $ (play "forest"))
-                : Nil
-            )
+scene3 :: Number -> Behavior (AudioUnit D2)
+scene3 =
+  const
+    $ pure
+        ( dup1
+            ( (gain' 0.2 $ sinOsc 110.0)
+                + (gain' 0.1 $ sinOsc 220.0)
+                + microphone
+            ) \mono ->
+            speaker
+              $ ( (panner (-0.5) (merger (mono +> mono +> empty)))
+                    :| (gain' 0.5 $ (play "forest"))
+                    : Nil
+                )
+        )
 
-scene4 :: forall a. a -> CanvasInfo -> Number -> Behavior (AudioUnit D2)
-scene4 _ _ time =
+scene4 :: Number -> Behavior (AudioUnit D2)
+scene4 time =
   let
     rad = pi * time
   in
@@ -81,8 +81,8 @@ scene4 _ _ time =
                   : Nil
               )
 
-scene5 :: forall a. Mouse -> a -> CanvasInfo -> Number -> Behavior (AudioUnit D2)
-scene5 mouse _ _ time = f time <$> click
+scene5 :: Mouse -> Number -> Behavior (AudioUnit D2)
+scene5 mouse time = f time <$> click
   where
   f s cl =
     let
@@ -119,8 +119,8 @@ pwf =
 
 kr = 20.0 / 1000.0 :: Number -- the control rate in seconds, or 66.66667 Hz
 
-scene6 :: forall a. Mouse -> a -> CanvasInfo -> Number -> Behavior (AudioUnit D2)
-scene6 mouse _ _ time = f time <$> click
+scene6 :: Mouse -> Number -> Behavior (AudioUnit D2)
+scene6 mouse time = f time <$> click
   where
   split s = span ((s >= _) <<< fst) pwf
 
@@ -173,10 +173,9 @@ scene7 ::
   forall a.
   Mouse ->
   { onset :: Maybe Number | a } ->
-  CanvasInfo ->
   Number ->
   Behavior (IAudioUnit D2 { onset :: Maybe Number | a })
-scene7 mouse acc@{ onset } _ time = f time <$> click
+scene7 mouse acc@{ onset } time = f time <$> click
   where
   split s = span ((s >= _) <<< fst) pwf
 
@@ -237,7 +236,7 @@ scene8 ::
   CanvasInfo ->
   Number ->
   Behavior (AV D2 { onset :: Maybe Number | a })
-scene8 mouse acc@{ onset } { w, h } time = f time <$> click
+scene8 mouse acc@{ onset } (CanvasInfo { w, h }) time = f time <$> click
   where
   split s = span ((s >= _) <<< fst) pwf
 
@@ -298,7 +297,10 @@ scene8 mouse acc@{ onset } { w, h } time = f time <$> click
   click = map (not <<< isEmpty) $ buttons mouse
 
 run =
-  runInBrowser_
+  ( runInBrowser_ ::
+      forall a.
+      RunInBrowserAV_ { onset :: Maybe Number | a } D2
+  )
     ( do
         mouse <- getMouse
         pure (scene8 mouse)

@@ -25,8 +25,8 @@ This library uses the [behaviors pattern](https://wiki.haskell.org/Functional_Re
 For example, consider the following behavior, taken from [`HelloWorld.purs`](./examples/hello-world/HelloWorld.purs):
 
 ```haskell
-scene :: forall a. a -> CanvasInfo -> Number -> Behavior (AudioUnit D1)
-scene _ _ time = let
+scene ::  Number -> Behavior (AudioUnit D1)
+scene time = let
       rad = pi * time
     in
       pure $ speaker
@@ -63,8 +63,8 @@ Let's start with a sine wave at A440 playing at a volume of `0.5` (where `1.0` i
 [Listen on klank.dev](https://klank.dev/?gist=1d5345f85a05b84644941843709f6d6a)
 
 ```haskell
-scene :: forall a. a -> CanvasInfo -> Number -> Behavior (AudioUnit D1)
-scene _ _ _ = pure (speaker' $ (gain' 0.5 $ sinOsc 440.0))
+scene :: Number -> Behavior (AudioUnit D1)
+scene = const $ pure (speaker' $ (gain' 0.5 $ sinOsc 440.0))
 ```
 
 Note that, because this function does not depend on time, we can ignore the input.
@@ -74,16 +74,17 @@ Note that, because this function does not depend on time, we can ignore the inpu
 Let's add our voice to the mix! We'll put it above a nice low drone.
 
 ```haskell
-scene :: forall a. a -> CanvasInfo -> Number -> Behavior (AudioUnit D1)
-scene _ _ _ =
-  pure
-    ( speaker
-        $ ( (gain' 0.2 $ sinOsc 110.0)
-              :| (gain' 0.1 $ sinOsc 220.0)
-              : microphone
-              : Nil
-          )
-    )
+scene :: Number -> Behavior (AudioUnit D1)
+scene =
+  const
+    $ pure
+        ( speaker
+            $ ( (gain' 0.2 $ sinOsc 110.0)
+                  :| (gain' 0.1 $ sinOsc 220.0)
+                  : microphone
+                  : Nil
+              )
+        )
 ```
 
 Make sure to wear headphones to avoid feedback!
@@ -98,17 +99,18 @@ Let's add some soothing jungle sounds to the mix. We use the function `play` to 
 -- assuming we have passed in an object
 -- with { forest: new Audio("my-recording.mp3") }
 -- to `runInBrowser`
-scene :: forall a. a -> CanvasInfo -> Number -> Behavior (AudioUnit D1)
-scene _ _ _ =
-  pure
-    ( speaker
-        $ ( (gain' 0.2 $ sinOsc 110.0)
-              :| (gain' 0.1 $ sinOsc 220.0)
-              : (gain' 0.5 $ (play "forest"))
-              : microphone
-              : Nil
-          )
-    )
+scene :: Number -> Behavior (AudioUnit D1)
+scene =
+  const
+    $ pure
+        ( speaker
+            $ ( (gain' 0.2 $ sinOsc 110.0)
+                  :| (gain' 0.1 $ sinOsc 220.0)
+                  : (gain' 0.5 $ (play "forest"))
+                  : microphone
+                  : Nil
+              )
+        )
 ```
 
 ### Going from mono to stereo
@@ -118,19 +120,21 @@ To go from mono to stereo, there is a class of functions called `dupX`, `splitX`
 If you want to make two separate audio units, then you can use a normal let block. If, on the other hand, you want to use the same underlying unit, use `dupX`. When in doubt, use `dupX`, as you'll rarely need to duplicate an identical audio source.
 
 ```haskell
-scene :: forall a. a -> CanvasInfo -> Number -> Behavior (AudioUnit D2)
-scene _ _ _ =
-  pure
-    $ dup1
-        ( (gain' 0.2 $ sinOsc 110.0)
-            + (gain' 0.1 $ sinOsc 220.0)
-            + microphone
-        ) \mono ->
-        speaker
-          $ ( (panner (-0.5) (merger (mono +> mono +> empty)))
-                :| (gain' 0.5 $ (play "forest"))
-                : Nil
-            )
+scene :: Number -> Behavior (AudioUnit D2)
+scene =
+  const
+    $ pure
+        ( dup1
+            ( (gain' 0.2 $ sinOsc 110.0)
+                + (gain' 0.1 $ sinOsc 220.0)
+                + microphone
+            ) \mono ->
+            speaker
+              $ ( (panner (-0.5) (merger (mono +> mono +> empty)))
+                    :| (gain' 0.5 $ (play "forest"))
+                    : Nil
+                )
+        )
 ```
 
 ### Getting the sound to change as a function of time
@@ -138,8 +142,8 @@ scene _ _ _ =
 Up until this point, our audio hasn't reacted to many behaviors. Let's fix that! One behavior to react to is the passage of time. Let's add a slow undulation to the lowest pitch in the drone that is based on the passage of time
 
 ```haskell
-scene :: forall a. a -> CanvasInfo -> Number -> Behavior (AudioUnit D2)
-scene _ _ time =
+scene :: Number -> Behavior (AudioUnit D2)
+scene time =
   let
     rad = pi * time
   in
@@ -161,8 +165,8 @@ scene _ _ time =
 The next snippet of code uses the mouse to modulate the pitch of the higher note by roughly a major third.
 
 ```haskell
-scene :: forall a. Mouse -> a -> CanvasInfo -> Number -> Behavior (AudioUnit D2)
-scene mouse _ _ time = f time <$> click
+scene :: Mouse -> Number -> Behavior (AudioUnit D2)
+scene mouse time = f time <$> click
   where
   f s cl =
     let
@@ -211,8 +215,8 @@ pwf =
 
 kr = 20.0 / 1000.0 :: Number -- the control rate in seconds, or 66.66667 Hz
 
-scene :: forall a. Mouse -> a -> CanvasInfo -> Number -> Behavior (AudioUnit D2)
-scene mouse _ _ time = f time <$> click
+scene :: Mouse -> Number -> Behavior (AudioUnit D2)
+scene mouse time = f time <$> click
   where
   split s = span ((s >= _) <<< fst) pwf
 
@@ -290,10 +294,9 @@ scene ::
   forall a.
   Mouse ->
   { onset :: Maybe Number | a } ->
-  CanvasInfo ->
   Number ->
   Behavior (IAudioUnit D2 { onset :: Maybe Number | a })
-scene mouse acc@{ onset } _ time = f time <$> click
+scene mouse acc@{ onset } time = f time <$> click
   where
   split s = span ((s >= _) <<< fst) pwf
 
@@ -379,7 +382,7 @@ scene ::
   CanvasInfo ->
   Number ->
   Behavior (AV D2 { onset :: Maybe Number | a })
-scene mouse acc@{ onset } { w, h } time = f time <$> click
+scene mouse acc@{ onset } (CanvasInfo { w, h }) time = f time <$> click
   where
   split s = span ((s >= _) <<< fst) pwf
 
@@ -448,6 +451,55 @@ From here, the only thing left is to make some noise! There are many more audio 
 
 To see a list of exported audio units, you can check out [`Audio.purs`](./src/FRP/Behavior/Audio.purs). In a future version of this, we will refactor things so that all of the audio units are in one package.
 
+## Interacting with the browser
+
+In simple setups, you'll interact with the browser in a `<script>` tag to create resources like buffers and float arrays. This is how it is done in most of the [./examples](./examples) directory. However, sometimes you'll be creating a webpage using PureScript, in which case you may need to create a browser-specific resource like an audio buffer for a `playBuf` in PureScript.
+
+To this end, there are several helper functions that allow you to interact directly with the browser. The advantage of these functions is that they link into the `purescript-audio-behaviors` type system. However, as they are just assigning types to opaque blobs from the browser, you can also use your own FFI functions and cast the results to types understood by this library.
+
+```haskell
+-- creates a new audio context
+-- necessary for some of the functions below and for `runInBrowser`
+makeAudioContext :: Effect AudioContext
+
+-- decode audio data from a Uri, ie a link to a wav file
+decodeAudioDataFromUri :: AudioContext -> String -> Effect (Promise BrowserAudioBuffer)
+
+-- decode audio data from a base 64 encoded string, passed directly as an argument
+decodeAudioDataFromBase64EncodedString :: AudioContext -> String -> Effect (Promise BrowserAudioBuffer)
+
+-- make a periodic wave for the periodic osc
+makePeriodicWave :: AudioContext -> Array Number -> Array Number -> Effect BrowserPeriodicWave
+
+-- make an audio track
+-- the advantage of audio tracks over audio buffers is that
+-- they are streamed, so you don't need to wait for them to be downloaded
+-- to start playing
+makeAudioTrack :: String -> Effect BrowserAudioTrack
+
+-- make an audio buffer
+-- best for things like creating drum machines, impulse responses, granular synthesis etc
+-- basically anything short
+-- for anything that resembles streaming, use makeAudioTrack
+makeAudioBuffer :: AudioContext -> AudioBuffer -> Effect BrowserAudioBuffer
+
+-- makes a 32-bit float array
+-- useful when creating wave shapers (this is what adds the distortion)
+makeFloatArray :: Array Number -> Effect BrowserFloatArray
+
+-- makes a periodic wave
+-- this is what is used for the periodicOsc unit
+makePeriodicWave ::
+  forall len.
+  Pos len =>
+  AudioContext ->
+  Vec len Number ->
+  Vec len Number ->
+  Effect BrowserPeriodicWave
+```
+
+### AudioContext
+
 ## Advanced usage
 
 Here are some tips for advanced usage of `purescript-audio-behaviors`.
@@ -457,6 +509,19 @@ Here are some tips for advanced usage of `purescript-audio-behaviors`.
 `purescript-audio-behaviors` translates scenes to a sort of "assembly" language that is passed to an audio rendering function. This language has primitives like `NewUnit` for a new audio unit, `ConnectTo`, to connect one unit to another one, etc. When debugging, the recommendation is to print these instructions to the console using `console.log`. Then, you will see exactly how the audio graph is updating in realtime.
 
 Another useful way to debug is unit tests. Most behaviors can be refactored as pure functions with the `Behavior` as a top-level applicative control structure, and you can sample them at various times to make sure the audio graph is consistent with your expectations.
+
+### Function signatures
+
+Depending on how you set up your scene, you may need to give a hint to the PureScript compiler about its type when passing it to `runInBrowser` or `runInBrowser_`. There are several type hints shipped with the library:
+
+- `RunInBrowserIAudioUnit`
+- `RunInBrowserIAudioUnit_`
+- `RunInBrowserIAnimation`
+- `RunInBrowserIAnimation_`
+- `RunInBrowserAV`
+- `RunInBrowserAV_`
+
+Examples of how these are used can be found in [README.purs](./examples/readme/Readme.purs).
 
 ### Named units
 
@@ -485,21 +550,17 @@ Under the hood, `purescript-audio-behaviors` tries _really hard_ to guarantee th
 All of the parameters are passed to the function `runInBrowser` in the class `RunnableMedia`, which has the following signature:
 
 ```haskell
-class RunnableMedia a accumulator where
+class RunnableMedia callback accumulator where
   runInBrowser ::
-    forall (microphones :: # Type) (tracks :: # Type) (buffers :: # Type) (floatArrays :: # Type) microphoneT tracksT buffersT floatArraysT.
-    Homogeneous microphones microphoneT =>
-    Homogeneous tracks tracksT =>
-    Homogeneous buffers buffersT =>
-    Homogeneous floatArrays floatArraysT =>
-    (accumulator -> CanvasInfo -> Number -> Behavior a) -> -- scene
+    forall microphone track buffer floatArray periodicWave.
+    callback -> -- scene
     accumulator -> -- initial accumulator
     Int -> -- audio clock rate
     Int -> -- driver rate
     AudioContext -> -- audioContext
-    AudioInfo (Record microphones) (Record tracks) (Record buffers) (Record floatArrays) -> -- audio info
+    AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) -> -- audio info
     VisualInfo -> -- visual info
-    Effect (Effect Unit) -- an unsubscribe function
+    Effect (Effect Unit)
 ```
 
 A lot of this is boilerplate, and you can see examples of how to hook this up in the [examples](./examples) directory. The two bits to understand here are:

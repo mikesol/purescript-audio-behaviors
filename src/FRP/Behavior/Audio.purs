@@ -5,19 +5,27 @@ module FRP.Behavior.Audio
   , AudioBuffer
   , AudioUnit
   , AudioContext
-  , CanvasInfo
+  , CanvasInfo(..)
   , AudioInfo
   , VisualInfo
   , BrowserPeriodicWave
   , BrowserAudioTrack
   , BrowserAudioBuffer
   , BrowserFloatArray
+  , RunInBrowser
+  , RunInBrowser_
+  , RunInBrowserIAudioUnit
+  , RunInBrowserIAudioUnit_
+  , RunInBrowserIAnimation
+  , RunInBrowserIAnimation_
+  , RunInBrowserAV
+  , RunInBrowserAV_
   , AV(..)
   , Animation(..)
   , IAudioUnit(..)
   , IAnimation(..)
   , class RunnableMedia
-  , periodicWave
+  , makePeriodicWave
   , reconciliationToInstructionSet
   , touchAudio
   , objectToMapping
@@ -207,7 +215,7 @@ import Effect (Effect, whileE)
 import Effect.Class.Console (log)
 import Effect.Exception (try)
 import Effect.Ref (modify_, new, read, write)
-import FRP.Behavior (Behavior, behavior, sample_)
+import FRP.Behavior (ABehavior, Behavior, behavior, sample_)
 import FRP.Event (Event, EventIO, create, makeEvent, subscribe)
 import FRP.Event.Time (interval)
 import Foreign (Foreign)
@@ -237,7 +245,7 @@ foreign import decodeAudioDataFromBase64EncodedString :: AudioContext -> String 
 
 foreign import makeAudioContext :: Effect AudioContext
 
-foreign import makePeriodicWave :: AudioContext -> Array Number -> Array Number -> Effect BrowserPeriodicWave
+foreign import makePeriodicWaveImpl :: AudioContext -> Array Number -> Array Number -> Effect BrowserPeriodicWave
 
 foreign import makeAudioTrack :: String -> Effect BrowserAudioTrack
 
@@ -1412,14 +1420,14 @@ loopBufT_ ::
   AudioUnit ch
 loopBufT_ s handle a b c = LoopBuf (Just s) handle a b c
 
-periodicWave ::
+makePeriodicWave ::
   forall len.
   Pos len =>
   AudioContext ->
   Vec len Number ->
   Vec len Number ->
   Effect BrowserPeriodicWave
-periodicWave ctx a b = makePeriodicWave ctx (V.toArray a) (V.toArray b)
+makePeriodicWave ctx a b = makePeriodicWaveImpl ctx (V.toArray a) (V.toArray b)
 
 audioBuffer ::
   forall bch blen.
@@ -2880,13 +2888,53 @@ type VisualInfo
 
 foreign import getAudioClockTime :: AudioContext -> Effect Number
 
-type CanvasInfo
-  = { w :: Number, h :: Number }
+newtype CanvasInfo
+  = CanvasInfo { w :: Number, h :: Number }
 
-class RunnableMedia a accumulator where
+type RunInBrowserIAudioUnit accumulator ch
+  = RunInBrowser (accumulator -> Number -> Behavior (IAudioUnit ch accumulator)) accumulator
+
+type RunInBrowserIAudioUnit_ accumulator ch
+  = RunInBrowser_ (accumulator -> Number -> Behavior (IAudioUnit ch accumulator)) accumulator
+
+type RunInBrowserAV accumulator ch
+  = RunInBrowser (accumulator -> CanvasInfo -> Number -> Behavior (AV ch accumulator)) accumulator
+
+type RunInBrowserAV_ accumulator ch
+  = RunInBrowser_ (accumulator -> CanvasInfo -> Number -> Behavior (AV ch accumulator)) accumulator
+
+type RunInBrowserIAnimation accumulator ch
+  = RunInBrowser (accumulator -> CanvasInfo -> Number -> Behavior (AV ch accumulator)) accumulator
+
+type RunInBrowserIAnimation_ accumulator ch
+  = RunInBrowser_ (accumulator -> CanvasInfo -> Number -> Behavior (AV ch accumulator)) accumulator
+
+type RunInBrowser callback accumulator
+  = forall microphone track buffer floatArray periodicWave.
+    callback ->
+    accumulator ->
+    Int ->
+    Int ->
+    AudioContext ->
+    AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
+    VisualInfo ->
+    Effect (Effect Unit)
+
+type RunInBrowser_ callback accumulator
+  = forall microphone track buffer floatArray periodicWave.
+    Effect callback ->
+    accumulator ->
+    Int ->
+    Int ->
+    AudioContext ->
+    AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
+    VisualInfo ->
+    Effect (Effect Unit)
+
+class RunnableMedia callback accumulator where
   runInBrowser ::
     forall microphone track buffer floatArray periodicWave.
-    (accumulator -> CanvasInfo -> Number -> Behavior a) ->
+    callback ->
     accumulator ->
     Int ->
     Int ->
@@ -2910,19 +2958,19 @@ data IAudioUnit ch accumulator
 getFirstCanvas :: Object (Effect CanvasElement) -> Maybe (Effect CanvasElement)
 getFirstCanvas = map snd <<< A.head <<< O.toUnfoldable
 
-instance soundscapeRunnableMedia :: Pos ch => RunnableMedia (AudioUnit ch) accumulator where
-  runInBrowser f = runInBrowser (\z wh s -> map (\x -> AV (Just x) Nothing z) (f z wh s))
+instance soundscapeRunnableMedia :: Pos ch => RunnableMedia (Number -> ABehavior Event (AudioUnit ch)) accumulator where
+  runInBrowser f a i0 i1 ac ai vi = runInBrowser ((\z wh s -> map (\x -> AV (Just x) Nothing unit) (f s)) :: (Unit -> CanvasInfo -> Number -> ABehavior Event (AV ch Unit))) unit i0 i1 ac ai vi
 
-instance iSoundscapeRunnableMedia :: Pos ch => RunnableMedia (IAudioUnit ch accumulator) accumulator where
-  runInBrowser f = runInBrowser (\z wh s -> map (\(IAudioUnit xa xz) -> AV (Just xa) Nothing xz) (f z wh s))
+instance iSoundscapeRunnableMedia :: Pos ch => RunnableMedia (accumulator -> Number -> ABehavior Event (IAudioUnit ch accumulator)) accumulator where
+  runInBrowser f a i0 i1 ac ai vi = runInBrowser ((\z wh s -> map (\(IAudioUnit xa xz) -> AV (Just xa) Nothing xz) (f z s)) :: (accumulator -> CanvasInfo -> Number -> ABehavior Event (AV ch accumulator))) a i0 i1 ac ai vi
 
-instance animationRunnable :: RunnableMedia Animation accumulator where
-  runInBrowser f = runInBrowser (\z wh s -> map (\(Animation x) -> (AV (Nothing :: Maybe (AudioUnit D1)) (Just x) z)) (f z wh s))
+instance animationRunnable :: RunnableMedia (CanvasInfo -> Number -> ABehavior Event Animation) accumulator where
+  runInBrowser f a i0 i1 ac ai vi = runInBrowser ((\z wh s -> map (\(Animation x) -> (AV (Nothing :: Maybe (AudioUnit D1)) (Just x) z)) (f wh s)) :: (Unit -> CanvasInfo -> Number -> ABehavior Event (AV D1 Unit))) unit i0 i1 ac ai vi
 
-instance iAnimationRunnable :: RunnableMedia (IAnimation accumulator) accumulator where
+instance iAnimationRunnable :: RunnableMedia (accumulator -> CanvasInfo -> Number -> ABehavior Event (IAnimation accumulator)) accumulator where
   runInBrowser f = runInBrowser (\z wh s -> map (\(IAnimation xv xz) -> (AV (Nothing :: Maybe (AudioUnit D1)) (Just xv) xz)) (f z wh s))
 
-instance avRunnableMedia :: Pos ch => RunnableMedia (AV ch accumulator) accumulator where
+instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -> Number -> ABehavior Event (AV ch accumulator)) accumulator where
   runInBrowser scene accumulator pingEvery actualSpeed ctx audioInfo visualInfo = do
     let
       __contract = toNumber $ pingEvery
@@ -3000,7 +3048,7 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (AV ch accumulator) accumula
                   )
                   __cvsNow
               let
-                behavior = scene _accNow { w: __w, h: __h } (toNumber ct / 1000.0)
+                behavior = scene _accNow (CanvasInfo { w: __w, h: __h }) (toNumber ct / 1000.0)
               bang <- create :: Effect (EventIO Unit)
               let
                 behaviorSampled = sample_ behavior bang.event
@@ -3077,9 +3125,9 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (AV ch accumulator) accumula
 -- | The main executor loop in the browser
 -- | Accepts an effectful scene
 runInBrowser_ ::
-  forall accumulator microphone track buffer floatArray periodicWave a.
-  RunnableMedia a accumulator =>
-  Effect (accumulator -> CanvasInfo -> Number -> Behavior a) ->
+  forall accumulator microphone track buffer floatArray periodicWave callback.
+  RunnableMedia callback accumulator =>
+  Effect callback ->
   accumulator ->
   Int ->
   Int ->

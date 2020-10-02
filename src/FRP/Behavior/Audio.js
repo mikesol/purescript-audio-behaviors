@@ -237,7 +237,7 @@ exports.makeAudioBuffer = function (ctx) {
   };
 };
 
-exports.makePeriodicWave = function (ctx) {
+exports.makePeriodicWaveImpl = function (ctx) {
   return function (real_) {
     return function (imag_) {
       return function () {

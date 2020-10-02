@@ -9,12 +9,14 @@ import FRP.Behavior (Behavior)
 import FRP.Behavior.Audio (AudioUnit, gain', runInBrowser, sinOsc, speaker, CanvasInfo)
 import Math (pi, sin)
 
-scene :: forall a. a -> CanvasInfo -> Number -> Behavior (AudioUnit D1)
-scene _ _ time = let
-      rad = pi * time
-    in
-      pure $ speaker
-         ( (gain' 0.1 $ sinOsc (440.0 + (10.0 * sin (2.3 * rad))))
+scene :: Number -> Behavior (AudioUnit D1)
+scene time =
+  let
+    rad = pi * time
+  in
+    pure
+      $ speaker
+          ( (gain' 0.1 $ sinOsc (440.0 + (10.0 * sin (2.3 * rad))))
               :| (gain' 0.25 $ sinOsc (235.0 + (10.0 * sin (1.7 * rad))))
               : (gain' 0.2 $ sinOsc (337.0 + (10.0 * sin rad)))
               : (gain' 0.1 $ sinOsc (530.0 + (19.0 * (5.0 * sin rad))))
