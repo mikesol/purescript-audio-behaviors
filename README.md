@@ -324,7 +324,20 @@ scene mouse acc@{ onset } time = f time <$> click
       ( dup1
           ( (gain' 0.2 $ sinOsc (110.0 + (3.0 * sin (0.5 * rad))))
               + (gain' 0.1 (gainT' (gn s) $ sinOsc 440.0))
-              + (gain' 0.1 $ sinOsc (220.0 + (if cl then (50.0 + maybe 0.0 (\t -> 10.0 * (s - t)) stTime) else 0.0)))
+              + ( gain' 0.1
+                    $ sinOsc
+                        ( 220.0
+                            + ( if cl then
+                                  ( 50.0
+                                      + maybe 0.0
+                                          (\t -> 10.0 * (s - t))
+                                          stTime
+                                  )
+                                else
+                                  0.0
+                              )
+                        )
+                )
               + microphone
           ) \mono ->
           speaker
