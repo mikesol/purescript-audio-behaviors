@@ -295,6 +295,7 @@ scene ::
   Behavior (IAudioUnit D2 { onset :: Maybe Number | a })
 scene mouse acc@{ onset } time = f time <$> click
   where
+  where
   split s = span ((s >= _) <<< fst) pwf
 
   gn s =
@@ -305,6 +306,9 @@ scene mouse acc@{ onset } time = f time <$> click
 
       right = fromMaybe (Tuple 201.0 0.0) $ head ht.rest
     in
+      -- if we are in a control cycle with a peak or trough
+      -- we lock to that
+      -- otherwise, we interpolate
       if (fst right - s) < kr then
         AudioParameter { param: (snd right), timeOffset: (fst right - s) }
       else
@@ -385,6 +389,9 @@ scene mouse acc@{ onset } (CanvasInfo { w, h }) time = f time <$> click
 
       right = fromMaybe (Tuple 201.0 0.0) $ head ht.rest
     in
+      -- if we are in a control cycle with a peak or trough
+      -- we lock to that
+      -- otherwise, we interpolate
       if (fst right - s) < kr then
         AudioParameter { param: (snd right), timeOffset: (fst right - s) }
       else
@@ -401,7 +408,20 @@ scene mouse acc@{ onset } (CanvasInfo { w, h }) time = f time <$> click
           $ dup1
               ( (gain' 0.2 $ sinOsc (110.0 + (3.0 * sin (0.5 * rad))))
                   + (gain' 0.1 (gainT' (gn s) $ sinOsc 440.0))
-                  + (gain' 0.1 $ sinOsc (220.0 + (if cl then (50.0 + maybe 0.0 (\t -> 10.0 * (s - t)) stTime) else 0.0)))
+                  + ( gain' 0.1
+                        $ sinOsc
+                            ( 220.0
+                                + ( if cl then
+                                      ( 50.0
+                                          + maybe 0.0
+                                              (\t -> 10.0 * (s - t))
+                                              stTime
+                                      )
+                                    else
+                                      0.0
+                                  )
+                            )
+                    )
                   + microphone
               ) \mono ->
               speaker
