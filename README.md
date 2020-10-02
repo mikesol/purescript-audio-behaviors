@@ -189,7 +189,7 @@ scene mouse time = f time <$> click
 
 ### Making sure that certain sounds occur at a precise time
 
-Great audio is all about timing, but so far, we have been locked to scheduling events at multiples of the control rate. The _de facto_ control rate for this library is ~66Hz, which is way too slow to quantize complex rhythmic events.
+Great audio is all about timing, but so far, we have been locked to scheduling events at multiples of the control rate. The most commonly used control rate for this library is 50Hz, which is way too slow to quantize complex rhythmic events.
 
 To fix the control rate problem, parameters that can change in time like _frequency_ or _gain_ have an optional second parameter that specifies the offset, in seconds, from the current quantized value in the control rate.
 
