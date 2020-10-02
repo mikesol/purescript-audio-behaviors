@@ -195,7 +195,7 @@ To fix the control rate problem, parameters that can change in time like _freque
 
 For example, let's say the control rate is `66Hz` and you want a sound to trigger at _exactly_ `0.25` seconds. At this rate, the closest quantized value to `0.25` is `0.2424242424`, or `16/66`. That means that, when `time` is `0.24242424`, we will add an offset of `0.00757576` to the value to make sure that it happens "exactly" at `0.25` seconds. "Exactly" is in quoation marks because floating point arrithmentic will provoke a rounding error of around `0.000000000001`, but this is far smaller than the audio sample rate, so we will not hear it.
 
-To finish our tutorial, let's add a small metronome on the inside of our sound. We will have it beat every `0.9` seconds, and we use the function `gainT'` instead of `gain` to accept an `AudioParameter`.
+Let's add a small metronome on the inside of our sound. We will have it beat every `0.9` seconds, and we use the function `gainT'` instead of `gain` to accept an `AudioParameter`.
 
 ```haskell
 -- a piecewise function that creates an attack/release/sustain envelope
@@ -213,7 +213,7 @@ pwf =
         )
         (range 0 400)
 
-kr = 20.0 / 1000.0 :: Number -- the control rate in seconds, or 66.66667 Hz
+kr = 20.0 / 1000.0 :: Number -- the control rate in seconds, or 50 Hz
 
 scene :: Mouse -> Number -> Behavior (AudioUnit D2)
 scene mouse time = f time <$> click
@@ -286,7 +286,7 @@ pwf =
         )
         (range 0 400)
 
-kr = 20.0 / 1000.0 :: Number -- the control rate in seconds, or 66.66667 Hz
+kr = 20.0 / 1000.0 :: Number -- the control rate in seconds, or 50 Hz
 
 initialOnset = { onset: Nothing } :: { onset :: Maybe Number }
 
@@ -371,7 +371,7 @@ pwf =
         )
         (range 0 400)
 
-kr = 20.0 / 1000.0 :: Number -- the control rate in seconds, or 66.66667 Hz
+kr = 20.0 / 1000.0 :: Number -- the control rate in seconds, or 50 Hz
 
 initialOnset = { onset: Nothing } :: { onset :: Maybe Number }
 
