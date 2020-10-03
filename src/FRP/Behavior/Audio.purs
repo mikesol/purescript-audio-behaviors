@@ -8,7 +8,6 @@ module FRP.Behavior.Audio
   , CanvasInfo(..)
   , AudioInfo
   , VisualInfo
-  , BrowserMicrophone
   , BrowserPeriodicWave
   , BrowserAudioTrack
   , BrowserAudioBuffer
@@ -230,8 +229,6 @@ import Math as Math
 import Record (merge)
 import Type.Proxy (Proxy(..))
 import Type.Row.Homogeneous (class Homogeneous)
-
-foreign import data BrowserMicrophone :: Type
 
 foreign import data BrowserPeriodicWave :: Type
 
