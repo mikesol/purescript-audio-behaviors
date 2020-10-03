@@ -12,10 +12,13 @@
           return audioCtx.audioWorklet.addModule("white-noise-processor.js");
         })
         .then(function () {
+          return audioCtx.audioWorklet.addModule("gain-processor.js");
+        })
+        .then(function () {
           var now = new Date().getTime();
           var ctr = 0;
           // null for the microphone
-          offCb = PS["FRP.Behavior.Audio.Example.HelloWorld"].run()(20)(15)(
+          offCb = PS["FRP.Behavior.Audio.Example.AudioWorklet"].run()(20)(15)(
             audioCtx
           )({})({})();
         });

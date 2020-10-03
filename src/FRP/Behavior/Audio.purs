@@ -59,6 +59,8 @@ module FRP.Behavior.Audio
   , audioToPtr
   , AudioUnit'(..)
   , microphone
+  , audioWorkletGenerator
+  , audioWorkletProcessor
   , play
   , playBuf
   , loopBuf
@@ -99,6 +101,8 @@ module FRP.Behavior.Audio
   , speaker
   , speaker_
   , microphone_
+  , audioWorkletGenerator_
+  , audioWorkletProcessor_
   , play_
   , playBuf_
   , loopBuf_
@@ -135,6 +139,8 @@ module FRP.Behavior.Audio
   , constant_
   , delay_
   , gain_
+  , audioWorkletGeneratorT
+  , audioWorkletProcessorT
   , playBufT
   , loopBufT
   , lowpassT
@@ -155,6 +161,8 @@ module FRP.Behavior.Audio
   , constantT
   , delayT
   , gainT
+  , audioWorkletGeneratorT_
+  , audioWorkletProcessorT_
   , playBufT_
   , loopBufT_
   , lowpassT_
@@ -1546,6 +1554,78 @@ playT_ ::
   Number ->
   AudioUnit ch
 playT_ s handle n = Play (Just s) handle n
+
+audioWorkletGenerator ::
+  forall ch.
+  Pos ch =>
+  String ->
+  Object Number ->
+  AudioUnit ch
+audioWorkletGenerator handle n = AudioWorkletGenerator Nothing handle (map ap_ n)
+
+audioWorkletGenerator_ ::
+  forall ch.
+  Pos ch =>
+  String ->
+  String ->
+  Object Number ->
+  AudioUnit ch
+audioWorkletGenerator_ s handle n = AudioWorkletGenerator (Just s) handle (map ap_ n)
+
+audioWorkletGeneratorT ::
+  forall ch.
+  Pos ch =>
+  String ->
+  Object (AudioParameter Number) ->
+  AudioUnit ch
+audioWorkletGeneratorT handle n = AudioWorkletGenerator Nothing handle n
+
+audioWorkletGeneratorT_ ::
+  forall ch.
+  Pos ch =>
+  String ->
+  String ->
+  Object (AudioParameter Number) ->
+  AudioUnit ch
+audioWorkletGeneratorT_ s handle n = AudioWorkletGenerator (Just s) handle n
+
+audioWorkletProcessor ::
+  forall ch.
+  Pos ch =>
+  String ->
+  Object Number ->
+  AudioUnit ch ->
+  AudioUnit ch
+audioWorkletProcessor handle n = AudioWorkletProcessor Nothing handle (map ap_ n)
+
+audioWorkletProcessor_ ::
+  forall ch.
+  Pos ch =>
+  String ->
+  String ->
+  Object Number ->
+  AudioUnit ch ->
+  AudioUnit ch
+audioWorkletProcessor_ s handle n = AudioWorkletProcessor (Just s) handle (map ap_ n)
+
+audioWorkletProcessorT ::
+  forall ch.
+  Pos ch =>
+  String ->
+  Object (AudioParameter Number) ->
+  AudioUnit ch ->
+  AudioUnit ch
+audioWorkletProcessorT handle n = AudioWorkletProcessor Nothing handle n
+
+audioWorkletProcessorT_ ::
+  forall ch.
+  Pos ch =>
+  String ->
+  String ->
+  Object (AudioParameter Number) ->
+  AudioUnit ch ->
+  AudioUnit ch
+audioWorkletProcessorT_ s handle n = AudioWorkletProcessor (Just s) handle n
 
 playBuf ::
   forall ch.
@@ -3262,9 +3342,21 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
   set' i (AudioWorkletGenerator' _ n) (AudioWorkletGenerator' _ nx) =
     map
       ( \(Tuple k0 v0) ->
-          if map (napeq v0)
-            (O.lookup k0 nx)
-            == Just true then
+          if ( fromMaybe true
+              $ map (napeq v0) (O.lookup k0 nx)
+          ) then
+            Just $ SetCustomParam i k0 (apP v0) (apT v0)
+          else
+            Nothing
+      )
+      (O.toUnfoldable n)
+
+  set' i (AudioWorkletProcessor' _ n) (AudioWorkletProcessor' _ nx) =
+    map
+      ( \(Tuple k0 v0) ->
+          if ( fromMaybe true
+              $ map (napeq v0) (O.lookup k0 nx)
+          ) then
             Just $ SetCustomParam i k0 (apP v0) (apT v0)
           else
             Nothing
