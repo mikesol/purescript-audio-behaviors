@@ -59,6 +59,8 @@ module FRP.Behavior.Audio
   , audioToPtr
   , AudioUnit'(..)
   , microphone
+  , audioWorkletGenerator
+  , audioWorkletProcessor
   , play
   , playBuf
   , loopBuf
@@ -99,6 +101,8 @@ module FRP.Behavior.Audio
   , speaker
   , speaker_
   , microphone_
+  , audioWorkletGenerator_
+  , audioWorkletProcessor_
   , play_
   , playBuf_
   , loopBuf_
@@ -135,6 +139,8 @@ module FRP.Behavior.Audio
   , constant_
   , delay_
   , gain_
+  , audioWorkletGeneratorT
+  , audioWorkletProcessorT
   , playBufT
   , loopBufT
   , lowpassT
@@ -155,6 +161,8 @@ module FRP.Behavior.Audio
   , constantT
   , delayT
   , gainT
+  , audioWorkletGeneratorT_
+  , audioWorkletProcessorT_
   , playBufT_
   , loopBufT_
   , lowpassT_
@@ -648,6 +656,8 @@ instance audioParameterFunctor :: Functor AudioParameter where
 
 data AudioUnit ch
   = Microphone MString
+  | AudioWorkletGenerator MString String (Object (AudioParameter Number))
+  | AudioWorkletProcessor MString String (Object (AudioParameter Number)) (AudioUnit ch)
   | Play MString String Number
   | PlayBuf MString String (AudioParameter Number)
   | LoopBuf MString String (AudioParameter Number) Number Number
@@ -691,6 +701,8 @@ data AudioUnit ch
 
 data AudioUnit'
   = Microphone'
+  | AudioWorkletGenerator' String (Object (AudioParameter Number))
+  | AudioWorkletProcessor' String (Object (AudioParameter Number))
   | Play' String Number
   | PlayBuf' String (AudioParameter Number)
   | LoopBuf' String (AudioParameter Number) Number Number
@@ -736,6 +748,16 @@ isMicrophone_ :: AudioUnit'' -> Boolean
 isMicrophone_ Microphone'' = true
 
 isMicrophone_ _ = false
+
+isAudioWorkletGenerator_ :: AudioUnit'' -> Boolean
+isAudioWorkletGenerator_ AudioWorkletGenerator'' = true
+
+isAudioWorkletGenerator_ _ = false
+
+isAudioWorkletProcessor_ :: AudioUnit'' -> Boolean
+isAudioWorkletProcessor_ AudioWorkletProcessor'' = true
+
+isAudioWorkletProcessor_ _ = false
 
 isPlay_ :: AudioUnit'' -> Boolean
 isPlay_ Play'' = true
@@ -904,6 +926,8 @@ isDupRes_ _ = false
 
 data AudioUnit''
   = Microphone''
+  | AudioWorkletGenerator''
+  | AudioWorkletProcessor''
   | Play''
   | PlayBuf''
   | LoopBuf''
@@ -950,6 +974,10 @@ instance ordAudioUnit'' :: Ord AudioUnit'' where
 
 au' :: forall ch. Pos ch => AudioUnit ch -> { au :: AudioUnit', name :: MString }
 au' (Microphone name) = { au: Microphone', name }
+
+au' (AudioWorkletGenerator name unit params) = { au: AudioWorkletGenerator' unit params, name }
+
+au' (AudioWorkletProcessor name unit params _) = { au: AudioWorkletProcessor' unit params, name }
 
 au' (Play name file timingHack) = { au: Play' file timingHack, name }
 
@@ -1039,6 +1067,10 @@ au' DupRes = { au: DupRes', name: Nothing }
 au'' :: AudioUnit' -> AudioUnit''
 au'' Microphone' = Microphone''
 
+au'' (AudioWorkletGenerator' _ _) = AudioWorkletGenerator''
+
+au'' (AudioWorkletProcessor' _ _) = AudioWorkletProcessor''
+
 au'' (Play' _ _) = Play''
 
 au'' (PlayBuf' _ _) = PlayBuf''
@@ -1109,6 +1141,10 @@ tagToAU :: AudioUnit'' -> AudioUnit'
 tagToAU Microphone'' = Microphone'
 
 tagToAU Play'' = Play' "" 0.0
+
+tagToAU AudioWorkletGenerator'' = AudioWorkletGenerator' "" O.empty
+
+tagToAU AudioWorkletProcessor'' = AudioWorkletProcessor' "" O.empty
 
 tagToAU PlayBuf'' = PlayBuf' "" (ap_ (-1.0))
 
@@ -1391,6 +1427,10 @@ audioToPtr = go (-1) M.empty
   go' :: forall ch. Pos ch => PtrInfo' -> AudioUnit ch -> AlgStep
   go' ptr v@(Microphone name) = terminus ptr v
 
+  go' ptr v@(AudioWorkletGenerator _ _ _) = terminus ptr v
+
+  go' ptr v@(AudioWorkletProcessor _ _ _ a) = passthrough ptr v a
+
   go' ptr v@(Play _ _ _) = terminus ptr v
 
   go' ptr v@(PlayBuf _ _ _) = terminus ptr v
@@ -1514,6 +1554,78 @@ playT_ ::
   Number ->
   AudioUnit ch
 playT_ s handle n = Play (Just s) handle n
+
+audioWorkletGenerator ::
+  forall ch.
+  Pos ch =>
+  String ->
+  Object Number ->
+  AudioUnit ch
+audioWorkletGenerator handle n = AudioWorkletGenerator Nothing handle (map ap_ n)
+
+audioWorkletGenerator_ ::
+  forall ch.
+  Pos ch =>
+  String ->
+  String ->
+  Object Number ->
+  AudioUnit ch
+audioWorkletGenerator_ s handle n = AudioWorkletGenerator (Just s) handle (map ap_ n)
+
+audioWorkletGeneratorT ::
+  forall ch.
+  Pos ch =>
+  String ->
+  Object (AudioParameter Number) ->
+  AudioUnit ch
+audioWorkletGeneratorT handle n = AudioWorkletGenerator Nothing handle n
+
+audioWorkletGeneratorT_ ::
+  forall ch.
+  Pos ch =>
+  String ->
+  String ->
+  Object (AudioParameter Number) ->
+  AudioUnit ch
+audioWorkletGeneratorT_ s handle n = AudioWorkletGenerator (Just s) handle n
+
+audioWorkletProcessor ::
+  forall ch.
+  Pos ch =>
+  String ->
+  Object Number ->
+  AudioUnit ch ->
+  AudioUnit ch
+audioWorkletProcessor handle n = AudioWorkletProcessor Nothing handle (map ap_ n)
+
+audioWorkletProcessor_ ::
+  forall ch.
+  Pos ch =>
+  String ->
+  String ->
+  Object Number ->
+  AudioUnit ch ->
+  AudioUnit ch
+audioWorkletProcessor_ s handle n = AudioWorkletProcessor (Just s) handle (map ap_ n)
+
+audioWorkletProcessorT ::
+  forall ch.
+  Pos ch =>
+  String ->
+  Object (AudioParameter Number) ->
+  AudioUnit ch ->
+  AudioUnit ch
+audioWorkletProcessorT handle n = AudioWorkletProcessor Nothing handle n
+
+audioWorkletProcessorT_ ::
+  forall ch.
+  Pos ch =>
+  String ->
+  String ->
+  Object (AudioParameter Number) ->
+  AudioUnit ch ->
+  AudioUnit ch
+audioWorkletProcessorT_ s handle n = AudioWorkletProcessor (Just s) handle n
 
 playBuf ::
   forall ch.
@@ -2083,6 +2195,10 @@ type Reconcilable
 
 ucomp :: AudioUnit' -> AudioUnit' -> Boolean
 ucomp Microphone' Microphone' = true
+
+ucomp (AudioWorkletGenerator' n0 _) (AudioWorkletGenerator' n1 _) = n0 == n1
+
+ucomp (AudioWorkletProcessor' n0 _) (AudioWorkletProcessor' n1 _) = n0 == n1
 
 ucomp (Play' s0 _) (Play' s1 _) = s0 == s1
 
@@ -2732,6 +2848,7 @@ data Instruction
   | SetGain Int Number Number -- gain for gain node
   | SetDelay Int Number Number -- delay for delay node
   | SetOffset Int Number Number -- offset for const node
+  | SetCustomParam Int String Number Number -- for audio worklet nodes
 
 isStop_ :: Instruction -> Boolean
 isStop_ (Stop _) = true
@@ -2848,11 +2965,18 @@ isSetOffset_ (SetOffset _ _ _) = true
 
 isSetOffset_ _ = false
 
+isSetCustomParam_ :: Instruction -> Boolean
+isSetCustomParam_ (SetCustomParam _ _ _ _) = true
+
+isSetCustomParam_ _ = false
+
 type FFIPredicates
   = { justly :: forall a. a -> Maybe a
     , tupply :: forall a b. a -> b -> Tuple a b
     , isNothing :: forall a. Maybe a -> Boolean
     , isMicrophone :: (AudioUnit'' -> Boolean)
+    , isAudioWorkletGenerator :: (AudioUnit'' -> Boolean)
+    , isAudioWorkletProcessor :: (AudioUnit'' -> Boolean)
     , isPlay :: (AudioUnit'' -> Boolean)
     , isPlayBuf :: (AudioUnit'' -> Boolean)
     , isLoopBuf :: (AudioUnit'' -> Boolean)
@@ -2909,6 +3033,7 @@ type FFIPredicates
     , isSetGain :: (Instruction -> Boolean)
     , isSetDelay :: (Instruction -> Boolean)
     , isSetOffset :: (Instruction -> Boolean)
+    , isSetCustomParam :: (Instruction -> Boolean)
     }
 
 toFFI =
@@ -2916,6 +3041,8 @@ toFFI =
   , tupply: Tuple
   , isNothing: isNothing
   , isMicrophone: isMicrophone_
+  , isAudioWorkletGenerator: isAudioWorkletGenerator_
+  , isAudioWorkletProcessor: isAudioWorkletProcessor_
   , isPlay: isPlay_
   , isPlayBuf: isPlayBuf_
   , isLoopBuf: isLoopBuf_
@@ -2972,6 +3099,7 @@ toFFI =
   , isSetGain: isSetGain_
   , isSetDelay: isSetDelay_
   , isSetOffset: isSetOffset_
+  , isSetCustomParam: isSetCustomParam_
   } ::
     FFIPredicates
 
@@ -2991,6 +3119,10 @@ channelConstructor _ = Nothing
 
 sourceConstructor :: AudioUnit' -> Maybe String
 sourceConstructor (Play' s _) = Just s
+
+sourceConstructor (AudioWorkletGenerator' s _) = Just s
+
+sourceConstructor (AudioWorkletProcessor' s _) = Just s
 
 sourceConstructor (PlayBuf' s _) = Just s
 
@@ -3206,6 +3338,30 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
     [ if napeq a x then Just $ SetFrequency i (apP a) (apT a) else Nothing
     , if napeq c z then Just $ SetGain i (apP c) (apT c) else Nothing
     ]
+
+  set' i (AudioWorkletGenerator' _ n) (AudioWorkletGenerator' _ nx) =
+    map
+      ( \(Tuple k0 v0) ->
+          if ( fromMaybe true
+              $ map (napeq v0) (O.lookup k0 nx)
+          ) then
+            Just $ SetCustomParam i k0 (apP v0) (apT v0)
+          else
+            Nothing
+      )
+      (O.toUnfoldable n)
+
+  set' i (AudioWorkletProcessor' _ n) (AudioWorkletProcessor' _ nx) =
+    map
+      ( \(Tuple k0 v0) ->
+          if ( fromMaybe true
+              $ map (napeq v0) (O.lookup k0 nx)
+          ) then
+            Just $ SetCustomParam i k0 (apP v0) (apT v0)
+          else
+            Nothing
+      )
+      (O.toUnfoldable n)
 
   set' i (PlayBuf' _ n) (PlayBuf' _ nx) = pure $ if napeq n nx then Just $ SetPlaybackRate i (apP n) (apT n) else Nothing
 

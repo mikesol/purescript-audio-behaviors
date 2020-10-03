@@ -366,6 +366,42 @@ exports.touchAudio = function (predicates) {
                           numberOfOutputs: 1,
                         });
                       })()
+                    : predicates.isAudioWorkletGenerator(c.value1)
+                    ? (function () {
+                        var initialParams = {};
+                        for (var j = 0; j < instructions.length; j++) {
+                          var d = instructions[j];
+                          if (
+                            predicates.isSetCustomParam(d) &&
+                            d.value0 == c.value0
+                          ) {
+                            initialParams[d.value1] = d.value2;
+                          }
+                        }
+                        return new AudioWorkletNode(context, c.value3.value0, {
+                          numberOfInputs: 0,
+                          numberOfOutputs: 1,
+                          parameterData: initialParams,
+                        });
+                      })()
+                    : predicates.isAudioWorkletProcessor(c.value1)
+                    ? (function () {
+                        var initialParams = {};
+                        for (var j = 0; j < instructions.length; j++) {
+                          var d = instructions[j];
+                          if (
+                            predicates.isSetCustomParam(d) &&
+                            d.value0 == c.value0
+                          ) {
+                            initialParams[d.value1] = d.value2;
+                          }
+                        }
+                        return new AudioWorkletNode(context, c.value3.value0, {
+                          numberOfInputs: 1,
+                          numberOfOutputs: 1,
+                          parameterData: initialParams,
+                        });
+                      })()
                     : predicates.isAdd(c.value1)
                     ? context.createGain()
                     : predicates.isDelay(c.value1)
@@ -539,6 +575,10 @@ exports.touchAudio = function (predicates) {
                     c.value1,
                     timeToSet + c.value2
                   );
+                } else if (predicates.isSetCustomParam(c)) {
+                  generators[c.value0].parameters
+                    .get(c.value1)
+                    .linearRampToValueAtTime(c.value2, timeToSet + c.value3);
                 } else if (predicates.isStop(c)) {
                   generators[c.value0].stop();
                 }
