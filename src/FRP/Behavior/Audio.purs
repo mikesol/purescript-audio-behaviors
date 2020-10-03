@@ -186,7 +186,7 @@ module FRP.Behavior.Audio
 
 import Prelude
 import Control.Bind (bindFlipped)
-import Control.Promise (Promise)
+import Effect.Promise (Promise)
 import Data.Array (catMaybes, filter, foldl, groupBy, head, index, length, mapWithIndex, range, replicate, snoc, sortWith, takeEnd, zipWith, (!!))
 import Data.Array as A
 import Data.Array.NonEmpty (toArray)

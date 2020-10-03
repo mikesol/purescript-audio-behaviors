@@ -1,7 +1,6 @@
 { name = "purescript-audio-behaviors"
 , dependencies =
-  [ "aff-promise"
-  , "behaviors"
+  [ "behaviors"
   , "canvas"
   , "console"
   , "debug"
@@ -10,6 +9,7 @@
   , "foreign-object"
   , "heterogeneous"
   , "parseint"
+  , "promises"
   , "psci-support"
   , "sized-vectors"
   , "typelevel-prelude"
