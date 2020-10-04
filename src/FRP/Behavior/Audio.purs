@@ -38,6 +38,7 @@ module FRP.Behavior.Audio
   , LPConstraint
   , LPVar
   , FFIPredicates
+  , audioWorkletAddModule
   , makeAudioContext
   , makeFloatArray
   , makeAudioBuffer
