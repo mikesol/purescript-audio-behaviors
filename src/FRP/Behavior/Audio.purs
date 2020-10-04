@@ -252,6 +252,8 @@ foreign import decodeAudioDataFromUri :: AudioContext -> String -> Effect (Promi
 
 foreign import decodeAudioDataFromBase64EncodedString :: AudioContext -> String -> Effect (Promise BrowserAudioBuffer)
 
+foreign import audioWorkletAddModule :: AudioContext -> String -> Effect (Promise Unit)
+
 foreign import makeAudioContext :: Effect AudioContext
 
 foreign import makePeriodicWaveImpl :: AudioContext -> Array Number -> Array Number -> Effect BrowserPeriodicWave

@@ -200,6 +200,15 @@ exports.decodeAudioDataFromUri = function (ctx) {
     };
   };
 };
+exports.audioWorkletAddModule = function (ctx) {
+  return function (s) {
+    return function () {
+      {
+        return ctx.audioWorklet.addModule(s);
+      }
+    };
+  };
+};
 exports.makeAudioBuffer = function (ctx) {
   return function (b) {
     return function () {
