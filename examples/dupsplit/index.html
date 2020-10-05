@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+  <script src="index.js"></script>
+  <script>
+    var offCb = null;
+    var audioCtx = null;
+    function turnOnAudio() {
+      const myCanvas = document.getElementById("frp");
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(function (mic) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        audioCtx.audioWorklet.addModule("ps-aud-mul.js").then(function () {
+          var now = new Date().getTime();
+          var ctr = 0;
+          // null for the microphone
+          offCb = PS["FRP.Behavior.Audio.Example.DupSplit"].run(
+            PS["FRP.Behavior.Audio.Example.DupSplit"].initialOnset
+          )(20)(15)(audioCtx)({
+            microphones: { mic },
+          })({
+            canvases: {
+              myCanvas: function () {
+                return myCanvas;
+              },
+            },
+          })();
+        });
+      });
+    }
+    function turnOffAudio() {
+      offCb ? offCb() : null;
+      offCB = null;
+      audioCtx ? audioCtx.close() : null;
+      audioCtx = null;
+    }
+  </script>
+  <body>
+    <button onclick="turnOnAudio();">turn on</button>
+    <button onclick="turnOffAudio();">turn off</button>
+    <canvas id="frp" width="150" height="150"></canvas>
+  </body>
+</html>
