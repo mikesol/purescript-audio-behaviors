@@ -1,64 +1,14 @@
+-- | This documents the audio units exported by FRP.Behavior.Audio.
+-- | The convention for audio units is the following:
+-- |
+-- | - highpass :: A highpass filter
+-- | - highpassT :: A highpass filter using an AudioParameter, which has a temporal offset. 
+-- | - highpass_ :: A named highpass filter.  Naming audio units speeds up computation a bit and may get rid of some artifacts.
+-- | - highpassT_ :: A named highpass filter with a AudioParameters.
+-- |
+-- | All audio units have these four varieties.  Any audio unit that is not a generator takes one or many audio units as inputs.  In addition, some audio units (like `speaker` and `gain`) have a variety with an apostrophe (`speaker'` and `gain'`) that accept a single audio unit instead of a list.
 module FRP.Behavior.Audio
-  ( SampleFrame
-  , AudioProcessor
-  , AudioParameter(..)
-  , AudioBuffer
-  , AudioUnit
-  , AudioContext
-  , CanvasInfo(..)
-  , AudioInfo
-  , VisualInfo
-  , BrowserPeriodicWave
-  , BrowserAudioTrack
-  , BrowserAudioBuffer
-  , BrowserFloatArray
-  , RunInBrowser
-  , RunInBrowser_
-  , RunInBrowserIAudioUnit
-  , RunInBrowserIAudioUnit_
-  , RunInBrowserIAnimation
-  , RunInBrowserIAnimation_
-  , RunInBrowserAV
-  , RunInBrowserAV_
-  , AV(..)
-  , Animation(..)
-  , IAudioUnit(..)
-  , IAnimation(..)
-  , class RunnableMedia
-  , makePeriodicWave
-  , reconciliationToInstructionSet
-  , touchAudio
-  , objectToMapping
-  , LinearProgram
-  , runInBrowser
-  , runInBrowser_
-  , audioBuffer
-  , Oversample(..)
-  , LPObjective
-  , LPConstraint
-  , LPVar
-  , FFIPredicates
-  , audioWorkletAddModule
-  , makeAudioContext
-  , makeFloatArray
-  , makeAudioBuffer
-  , makeAudioTrack
-  , makeAudioWorkletProcessor
-  , audioIO
-  , Instruction(..)
-  , Reconcilable
-  , GroupedAudio
-  , FlatAudio
-  , AudioTag
-  , PtrInfo
-  , MString
-  , Reconciled
-  , audioIOInterleaved
-  , Status(..)
-  , AudioUnit''(..)
-  , IdxContext
-  , audioToPtr
-  , AudioUnit'(..)
+  ( speaker
   , microphone
   , audioWorkletGenerator
   , audioWorkletProcessor
@@ -99,7 +49,6 @@ module FRP.Behavior.Audio
   , constant
   , delay
   , gain
-  , speaker
   , speaker_
   , microphone_
   , audioWorkletGenerator_
@@ -191,6 +140,66 @@ module FRP.Behavior.Audio
   , gainT_'
   , audioGrouper
   , makeProgram
+  , AudioUnit'(..)
+  , SampleFrame
+  , AudioProcessor
+  , AudioParameter(..)
+  , AudioBuffer
+  , AudioUnit
+  , AudioContext
+  , CanvasInfo(..)
+  , AudioInfo
+  , VisualInfo
+  , BrowserPeriodicWave
+  , BrowserAudioTrack
+  , BrowserAudioBuffer
+  , BrowserFloatArray
+  , RunInBrowser
+  , RunInBrowser_
+  , RunInBrowserIAudioUnit
+  , RunInBrowserIAudioUnit_
+  , RunInBrowserIAnimation
+  , RunInBrowserIAnimation_
+  , RunInBrowserAV
+  , RunInBrowserAV_
+  , AV(..)
+  , Animation(..)
+  , IAudioUnit(..)
+  , IAnimation(..)
+  , class RunnableMedia
+  , makePeriodicWave
+  , reconciliationToInstructionSet
+  , touchAudio
+  , objectToMapping
+  , LinearProgram
+  , runInBrowser
+  , runInBrowser_
+  , audioBuffer
+  , Oversample(..)
+  , LPObjective
+  , LPConstraint
+  , LPVar
+  , FFIPredicates
+  , audioWorkletAddModule
+  , makeAudioContext
+  , makeFloatArray
+  , makeAudioBuffer
+  , makeAudioTrack
+  , makeAudioWorkletProcessor
+  , audioIO
+  , Instruction(..)
+  , Reconcilable
+  , GroupedAudio
+  , FlatAudio
+  , AudioTag
+  , PtrInfo
+  , MString
+  , Reconciled
+  , audioIOInterleaved
+  , Status(..)
+  , AudioUnit''(..)
+  , IdxContext
+  , audioToPtr
   ) where
 
 import Prelude
@@ -1514,6 +1523,9 @@ audioToPtr = go (-1) M.empty
 
   go' ptr v@(Split5 name a f) = closurethrough ptr v a $ f (fill SplitRes)
 
+-- | The microphone.
+-- |
+-- | Make sure to enable the microphone before using this.
 microphone :: AudioUnit D1
 microphone = Microphone Nothing
 
@@ -1526,6 +1538,9 @@ apP (AudioParameter { param }) = param
 apT :: forall a. AudioParameter a -> Number
 apT (AudioParameter { timeOffset }) = timeOffset
 
+-- | Play an audio track.
+-- |
+-- | - s: A unique identifier for the audio track to be played. This should match an identifier passed to `runInBrowser`.
 play ::
   forall ch.
   Pos ch =>
@@ -1558,6 +1573,10 @@ playT_ ::
   AudioUnit ch
 playT_ s handle n = Play (Just s) handle n
 
+-- | A custom audio worklet generator.
+-- |
+-- | - s: A unique identifier for the audio worklet to be used. The worklet should be preloaded before using this.
+-- | - params: The custom params passed to the audio worklet.
 audioWorkletGenerator ::
   forall ch.
   Pos ch =>
@@ -1592,6 +1611,10 @@ audioWorkletGeneratorT_ ::
   AudioUnit ch
 audioWorkletGeneratorT_ s handle n = AudioWorkletGenerator (Just s) handle n
 
+-- | A custom audio worklet processor
+-- |
+-- | - s: A unique identifier for the audio worklet to be used. The worklet should be preloaded before using this.
+-- | - params: The custom params passed to the audio worklet
 audioWorkletProcessor ::
   forall ch.
   Pos ch =>
@@ -1630,6 +1653,10 @@ audioWorkletProcessorT_ ::
   AudioUnit ch
 audioWorkletProcessorT_ s handle n = AudioWorkletProcessor (Just s) handle n
 
+-- | Play a sound from a buffer
+-- |
+-- | - s: A unique identifier for the audio buffer to be played. This should match an identifier passed to `runInBrowser`
+-- | - n: The playback rate. 1.0 is unit, 0.5 is twice as slow, 2.0 is twice as fast.
 playBuf ::
   forall ch.
   Pos ch =>
@@ -1664,6 +1691,12 @@ playBufT_ ::
   AudioUnit ch
 playBufT_ s handle n = PlayBuf (Just s) handle n
 
+-- | Loop a sound from a buffer
+-- |
+-- | - s: A unique identifier for the audio buffer to be played. This should match an identifier passed to `runInBrowser`
+-- | - n: The playback rate. 1.0 is unit, 0.5 is twice as slow, 2.0 is twice as fast.
+-- | - st: Where in the sound the loop should start (in seconds)
+-- | - st: Where in the sound the loop should end (in seconds). Set to 0.0 to go to the end of the sound.
 loopBuf ::
   forall ch.
   Pos ch =>
@@ -1724,6 +1757,10 @@ audioBuffer ::
   AudioBuffer
 audioBuffer i v = AudioBuffer i (map V.toArray $ V.toArray v)
 
+-- | A lowpass filter.
+-- |
+-- | - f:  The cutoff frequency.
+-- | - q:  The Q value in positive decibels. See [BiquadFilterNode](https://developer.mozilla.org/en-US/docs/Web/API/BiquadFilterNode) in the WebAudio documentation for more information on Q values.
 lowpass :: forall ch. Pos ch => Number -> Number -> AudioUnit ch -> AudioUnit ch
 lowpass a b = Lowpass Nothing (ap_ a) (ap_ b)
 
@@ -1736,6 +1773,10 @@ lowpassT a b = Lowpass Nothing a b
 lowpassT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
 lowpassT_ s a b = Lowpass (Just s) a b
 
+-- | A lowpass filter.
+-- |
+-- | - f:  The cutoff frequency.
+-- | - q:  The Q value in positive decibels. See [BiquadFilterNode](https://developer.mozilla.org/en-US/docs/Web/API/BiquadFilterNode) in the WebAudio documentation for more information on Q values.
 highpass :: forall ch. Pos ch => Number -> Number -> AudioUnit ch -> AudioUnit ch
 highpass a b = Highpass Nothing (ap_ a) (ap_ b)
 
@@ -1748,6 +1789,10 @@ highpassT a b = Highpass Nothing a b
 highpassT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
 highpassT_ s a b = Highpass (Just s) a b
 
+-- | A bandpass filter.
+-- |
+-- | - f:  The frequency to allow to pass.
+-- | - q:  The Q value in positive decibels. See [BiquadFilterNode](https://developer.mozilla.org/en-US/docs/Web/API/BiquadFilterNode) in the WebAudio documentation for more information on Q values.
 bandpass :: forall ch. Pos ch => Number -> Number -> AudioUnit ch -> AudioUnit ch
 bandpass a b = Bandpass Nothing (ap_ a) (ap_ b)
 
@@ -1760,6 +1805,10 @@ bandpassT a b = Bandpass Nothing a b
 bandpassT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
 bandpassT_ s a b = Bandpass (Just s) a b
 
+-- | A lowshelf filter.
+-- |
+-- | - f:  The frequency.
+-- | - g:  The rolloff gain in decibels. See [BiquadFilterNode](https://developer.mozilla.org/en-US/docs/Web/API/BiquadFilterNode) in the WebAudio documentation for more information on how gain effects rolloff.
 lowshelf :: forall ch. Pos ch => Number -> Number -> AudioUnit ch -> AudioUnit ch
 lowshelf a b = Lowshelf Nothing (ap_ a) (ap_ b)
 
@@ -1772,6 +1821,10 @@ lowshelfT a b = Lowshelf Nothing a b
 lowshelfT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
 lowshelfT_ s a b = Lowshelf (Just s) a b
 
+-- | A highshelf filter.
+-- |
+-- | - f:  The frequency.
+-- | - g:  The rolloff gain in decibels. See [BiquadFilterNode](https://developer.mozilla.org/en-US/docs/Web/API/BiquadFilterNode) in the WebAudio documentation for more information on how gain effects rolloff.
 highshelf :: forall ch. Pos ch => Number -> Number -> AudioUnit ch -> AudioUnit ch
 highshelf a b = Highshelf Nothing (ap_ a) (ap_ b)
 
@@ -1784,6 +1837,12 @@ highshelfT a b = Highshelf Nothing a b
 highshelfT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
 highshelfT_ s a b = Highshelf (Just s) a b
 
+-- | A peaking filter.
+-- | This is like a bandpass filter with an extra vector of control
+-- |
+-- | - f:  The frequency.
+-- | - q:  The Q value in positive decibels. See [BiquadFilterNode](https://developer.mozilla.org/en-US/docs/Web/API/BiquadFilterNode) in the WebAudio documentation for more information on Q values.
+-- | - g:  The rolloff gain in decibels. See [BiquadFilterNode](https://developer.mozilla.org/en-US/docs/Web/API/BiquadFilterNode) in the WebAudio documentation for more information on how gain effects rolloff.
 peaking :: forall ch. Pos ch => Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
 peaking a b c = Peaking Nothing (ap_ a) (ap_ b) (ap_ c)
 
@@ -1796,6 +1855,11 @@ peakingT a b c = Peaking Nothing a b c
 peakingT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
 peakingT_ s a b c = Peaking (Just s) a b c
 
+-- | A notch filter.
+-- | The opposite of bandpass.
+-- |
+-- | - f:  The frequency.
+-- | - q:  The Q value in positive decibels. See [BiquadFilterNode](https://developer.mozilla.org/en-US/docs/Web/API/BiquadFilterNode) in the WebAudio documentation for more information on Q values.
 notch :: forall ch. Pos ch => Number -> Number -> AudioUnit ch -> AudioUnit ch
 notch a b = Notch Nothing (ap_ a) (ap_ b)
 
@@ -1808,6 +1872,11 @@ notchT a b = Notch Nothing a b
 notchT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
 notchT_ s a b = Notch (Just s) a b
 
+-- | An allpass filter.
+-- | Lets all frequencies through, but alters the phase relationship.
+-- |
+-- | - f:  The frequency.
+-- | - q:  The Q value in positive decibels. See [BiquadFilterNode](https://developer.mozilla.org/en-US/docs/Web/API/BiquadFilterNode) in the WebAudio documentation for more information on Q values.
 allpass :: forall ch. Pos ch => Number -> Number -> AudioUnit ch -> AudioUnit ch
 allpass a b = Allpass Nothing (ap_ a) (ap_ b)
 
@@ -1820,6 +1889,9 @@ allpassT a b = Allpass Nothing a b
 allpassT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
 allpassT_ s a b = Allpass (Just s) a b
 
+-- | A convolver (reverb)
+-- |
+-- | - s: A unique identifier for the audio buffer to be used as the impulse response. This should match an identifier passed to `runInBrowser`.
 convolver ::
   forall ch.
   Pos ch =>
@@ -1837,6 +1909,13 @@ convolver_ ::
   AudioUnit ch
 convolver_ s handle = Convolver (Just s) handle
 
+-- | A compressor
+-- |
+-- | - threshold: the decibel value above which the compression will start taking effect.
+-- | - knee: a decibel value representing the range above the threshold where the curve smoothly transitions to the compressed portion.
+-- | - ratio: the amount of change, in dB, needed in the input for a 1 dB change in the output.
+-- | - attack: the amount of time, in seconds, required to reduce the gain by 10 dB.
+-- | - release: the amount of time, in seconds, required to increase the gain by 10 dB.
 dynamicsCompressor ::
   forall ch.
   Pos ch =>
@@ -1862,6 +1941,9 @@ dynamicsCompressorT_ ::
   AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
 dynamicsCompressorT_ s a b c d e = DynamicsCompressor (Just s) a b c d e
 
+-- | Duplicate a mono sound.
+-- |
+-- | Equivalent to creating a sound twice, but more memory efficient in that it avoids duplication.
 dup1 :: forall ch. Pos ch => AudioUnit D1 -> (AudioUnit D1 -> AudioUnit ch) -> AudioUnit ch
 dup1 DupRes f = f DupRes
 
@@ -1872,6 +1954,9 @@ dup1_ s DupRes f = f DupRes
 
 dup1_ s x f = Dup1 (Just s) x f
 
+-- | Duplicate a stereo sound.
+-- |
+-- | Equivalent to creating a sound twice, but more memory efficient in that it avoids duplication.
 dup2 :: forall ch. Pos ch => AudioUnit D2 -> (AudioUnit D2 -> AudioUnit ch) -> AudioUnit ch
 dup2 DupRes f = f DupRes
 
@@ -1882,6 +1967,7 @@ dup2_ s DupRes f = f DupRes
 
 dup2_ s x f = Dup2 (Just s) x f
 
+-- | Duplicate a three-channel sound
 dup3 :: forall ch. Pos ch => AudioUnit D3 -> (AudioUnit D3 -> AudioUnit ch) -> AudioUnit ch
 dup3 DupRes f = f DupRes
 
@@ -1892,6 +1978,7 @@ dup3_ s DupRes f = f DupRes
 
 dup3_ s x f = Dup3 (Just s) x f
 
+-- | Duplicate a four-channel sound
 dup4 :: forall ch. Pos ch => AudioUnit D4 -> (AudioUnit D4 -> AudioUnit ch) -> AudioUnit ch
 dup4 DupRes f = f DupRes
 
@@ -1902,6 +1989,7 @@ dup4_ s DupRes f = f DupRes
 
 dup4_ s x f = Dup4 (Just s) x f
 
+-- | Duplicate a five-channel sound
 dup5 :: forall ch. Pos ch => AudioUnit D5 -> (AudioUnit D5 -> AudioUnit ch) -> AudioUnit ch
 dup5 DupRes f = f DupRes
 
@@ -1943,6 +2031,11 @@ instance eqAPB :: Eq (AudioParameter AudioBuffer) where
 instance eqAPO :: Eq (AudioParameter Oversample) where
   eq (AudioParameter s) (AudioParameter r) = s == r
 
+-- | A wave shaper.
+-- | Used to create distortion/overdrive.
+-- |
+-- | - s: A unique identifier for the float array with the wave shape. This should match an identifier passed to `runInBrowser`.
+-- | - o: An oversampling factor (None TwoX FourX)
 waveShaper ::
   forall ch.
   Pos ch =>
@@ -1962,6 +2055,11 @@ waveShaper_ ::
   AudioUnit ch
 waveShaper_ s handle = WaveShaper (Just s) handle
 
+-- | A periodic oscillator.
+-- | Used to create an oscillator based on complex numbers that describe the overtones. See [PeriodicWave](https://developer.mozilla.org/en-US/docs/Web/API/PeriodicWave) for more information
+-- |
+-- | - s: A unique identifier for the periodic wave to use. This should match an identifier passed to `runInBrowser`.
+-- | - f: The fundamental frequency
 periodicOsc ::
   String ->
   Number ->
@@ -1988,6 +2086,9 @@ periodicOscT_ ::
   AudioUnit D1
 periodicOscT_ s handle n = PeriodicOsc (Just s) n handle
 
+-- | A sine wave oscillator.
+-- |
+-- | - f: The fundamental frequency
 sinOsc :: Number -> AudioUnit D1
 sinOsc n = SinOsc Nothing (ap_ n)
 
@@ -2000,6 +2101,9 @@ sinOscT n = SinOsc Nothing n
 sinOscT_ :: String -> AudioParameter Number -> AudioUnit D1
 sinOscT_ s n = SinOsc (Just s) n
 
+-- | A sawtooth oscillator.
+-- |
+-- | - f: The fundamental frequency
 sawtoothOsc :: Number -> AudioUnit D1
 sawtoothOsc n = SawtoothOsc Nothing (ap_ n)
 
@@ -2012,6 +2116,9 @@ sawtoothOscT n = SawtoothOsc Nothing n
 sawtoothOscT_ :: String -> AudioParameter Number -> AudioUnit D1
 sawtoothOscT_ s n = SawtoothOsc (Just s) n
 
+-- | A triangle oscillator.
+-- |
+-- | - f: The fundamental frequency
 traingleOsc :: Number -> AudioUnit D1
 traingleOsc n = TriangleOsc Nothing (ap_ n)
 
@@ -2024,6 +2131,9 @@ traingleOscT n = TriangleOsc Nothing n
 traingleOscT_ :: String -> AudioParameter Number -> AudioUnit D1
 traingleOscT_ s n = TriangleOsc (Just s) n
 
+-- | A square oscillator.
+-- |
+-- | - f: The fundamental frequency
 squareOsc :: Number -> AudioUnit D1
 squareOsc n = SquareOsc Nothing (ap_ n)
 
@@ -2036,6 +2146,8 @@ squareOscT n = SquareOsc Nothing n
 squareOscT_ :: String -> AudioParameter Number -> AudioUnit D1
 squareOscT_ s n = SquareOsc (Just s) n
 
+-- | A splitter for a mono sound.
+-- | Effectively a no-op, same as dup1.
 split1 :: forall ch. Pos ch => AudioUnit D1 -> (Vec D1 (AudioUnit D1) -> AudioUnit ch) -> AudioUnit ch
 split1 (SplitRes i) f = f (fill $ const (SplitRes i))
 
@@ -2046,6 +2158,7 @@ split1_ s (SplitRes i) f = f (fill $ const (SplitRes i))
 
 split1_ s x f = Split1 (Just s) x f
 
+-- | A splitter for a stereo sound.
 split2 :: forall ch. Pos ch => AudioUnit D2 -> (Vec D2 (AudioUnit D1) -> AudioUnit ch) -> AudioUnit ch
 split2 (SplitRes i) f = f (fill $ const (SplitRes i))
 
@@ -2056,6 +2169,7 @@ split2_ s (SplitRes i) f = f (fill $ const (SplitRes i))
 
 split2_ s x f = Split2 (Just s) x f
 
+-- | A splitter for a three-channel sound.
 split3 :: forall ch. Pos ch => AudioUnit D3 -> (Vec D3 (AudioUnit D1) -> AudioUnit ch) -> AudioUnit ch
 split3 (SplitRes i) f = f (fill $ const (SplitRes i))
 
@@ -2066,6 +2180,7 @@ split3_ s (SplitRes i) f = f (fill $ const (SplitRes i))
 
 split3_ s x f = Split3 (Just s) x f
 
+-- | A splitter for a four-channel sound.
 split4 :: forall ch. Pos ch => AudioUnit D4 -> (Vec D4 (AudioUnit D1) -> AudioUnit ch) -> AudioUnit ch
 split4 (SplitRes i) f = f (fill $ const (SplitRes i))
 
@@ -2076,6 +2191,7 @@ split4_ s (SplitRes i) f = f (fill $ const (SplitRes i))
 
 split4_ s x f = Split4 (Just s) x f
 
+-- | A splitter for a five-channel sound.
 split5 :: forall ch. Pos ch => AudioUnit D5 -> (Vec D5 (AudioUnit D1) -> AudioUnit ch) -> AudioUnit ch
 split5 (SplitRes i) f = f (fill $ const (SplitRes i))
 
@@ -2086,6 +2202,9 @@ split5_ s (SplitRes i) f = f (fill $ const (SplitRes i))
 
 split5_ s x f = Split5 (Just s) x f
 
+-- | A stereo panner.
+-- |
+-- | n: The place in the stero field to place the sound. -1.0 is all the way left, 1.0 is all the way right.
 panner :: Number -> AudioUnit D2 -> AudioUnit D2
 panner n = StereoPanner Nothing (ap_ n)
 
@@ -2098,6 +2217,10 @@ pannerT n = StereoPanner Nothing n
 pannerT_ :: String -> AudioParameter Number -> AudioUnit D2 -> AudioUnit D2
 pannerT_ s n = StereoPanner (Just s) n
 
+-- | Send sound to the speaker.
+-- |
+-- | If you want sound to be played from your speaker, you _must_ use this function
+-- | Otherwise, the audio graph will render but no sound will come out.
 speaker :: forall ch. Pos ch => NonEmpty List (AudioUnit ch) -> AudioUnit ch
 speaker = Speaker Nothing
 
@@ -2107,6 +2230,9 @@ speaker' = Speaker Nothing <<< NE.singleton
 speaker_ :: forall ch. Pos ch => String -> NonEmpty List (AudioUnit ch) -> AudioUnit ch
 speaker_ = Speaker <<< Just
 
+-- | A merger of mono audio channels.
+-- |
+-- | Accepts a vector of mono audio and produces the merged result.
 merger ::
   forall ch.
   Pos ch =>
@@ -2122,18 +2248,23 @@ merger_ ::
   AudioUnit ch
 merger_ s = Merger (Just s)
 
+-- | Multiply signals
 mul :: forall ch. Pos ch => NonEmpty List (AudioUnit ch) -> AudioUnit ch
 mul = Mul Nothing
 
 mul_ :: forall ch. Pos ch => String -> NonEmpty List (AudioUnit ch) -> AudioUnit ch
 mul_ s = Mul (Just s)
 
+-- | Add several signals.
 add :: forall ch. Pos ch => NonEmpty List (AudioUnit ch) -> AudioUnit ch
 add = Add Nothing
 
 add_ :: forall ch. Pos ch => String -> NonEmpty List (AudioUnit ch) -> AudioUnit ch
 add_ s = Add (Just s)
 
+-- | A constant signal.
+-- |
+-- | - n : The constant number.
 constant :: Number -> AudioUnit D1
 constant n = Constant Nothing (ap_ n)
 
@@ -2146,6 +2277,9 @@ constantT n = Constant Nothing n
 constantT_ :: String -> AudioParameter Number -> AudioUnit D1
 constantT_ s n = Constant (Just s) n
 
+-- | A delayed signal.
+-- |
+-- | - n : The number of seconds to delay.
 delay :: forall ch. Pos ch => Number -> AudioUnit ch -> AudioUnit ch
 delay n = Delay Nothing (ap_ n)
 
@@ -2158,6 +2292,9 @@ delayT n = Delay Nothing n
 delayT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
 delayT_ s n = Delay (Just s) n
 
+-- | A volume control.
+-- |
+-- | - n : The amount of volume attenuation or augmentation. 0.0 is off, 1.0 is unit. The same as `mul`.
 gain :: forall ch. Pos ch => Number -> NonEmpty List (AudioUnit ch) -> AudioUnit ch
 gain n = Gain Nothing (ap_ n)
 
@@ -2170,6 +2307,7 @@ gainT n = Gain Nothing n
 gainT_ :: forall ch. Pos ch => String -> AudioParameter Number -> NonEmpty List (AudioUnit ch) -> AudioUnit ch
 gainT_ s n = Gain (Just s) n
 
+-- | A variant of gain that accepts a single audio unit instead of a non-empty list.
 gain' :: forall ch. Pos ch => Number -> AudioUnit ch -> AudioUnit ch
 gain' n = Gain Nothing (ap_ n) <<< NE.singleton
 
