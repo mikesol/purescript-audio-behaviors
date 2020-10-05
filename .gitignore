@@ -14,6 +14,8 @@
 .venv
 examples/hello-world/index.js
 examples/hello-world/ps-aud-mul.js
+examples/dupsplit/index.js
+examples/dupsplit/ps-aud-mul.js
 examples/audio-worklet/index.js
 examples/audio-worklet/ps-aud-mul.js
 examples/metronome/index.js

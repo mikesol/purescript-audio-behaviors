@@ -138,9 +138,8 @@ module FRP.Behavior.Audio
   , gainT'
   , gain_'
   , gainT_'
-  , audioGrouper
-  , makeProgram
   , AudioUnit'(..)
+  , audioGrouper
   , SampleFrame
   , AudioProcessor
   , AudioParameter(..)
@@ -171,14 +170,10 @@ module FRP.Behavior.Audio
   , reconciliationToInstructionSet
   , touchAudio
   , objectToMapping
-  , LinearProgram
   , runInBrowser
   , runInBrowser_
   , audioBuffer
   , Oversample(..)
-  , LPObjective
-  , LPConstraint
-  , LPVar
   , FFIPredicates
   , audioWorkletAddModule
   , makeAudioContext
@@ -205,9 +200,8 @@ module FRP.Behavior.Audio
 import Prelude
 import Control.Bind (bindFlipped)
 import Control.Promise (Promise)
-import Data.Array (catMaybes, filter, foldl, groupBy, head, index, length, mapWithIndex, range, replicate, snoc, sortWith, takeEnd, zipWith, (!!))
+import Data.Array (catMaybes, foldl, head, index, length, mapWithIndex, range, replicate, snoc, takeEnd, zipWith, (!!))
 import Data.Array as A
-import Data.Array.NonEmpty (toArray)
 import Data.Either (either)
 import Data.Generic.Rep (class Generic)
 import Data.Generic.Rep.Show (genericShow)
@@ -1281,27 +1275,24 @@ audioToPtr = go (-1) M.empty
   passthrough ptr v a =
     let
       nxt = map (_ + 1) ptr.next
+
+      r = go ptr.ptr (nxt <> (M.singleton ptr.ptr 0)) a
+
+      au = au' v
+
+      p =
+        merge
+          { next: nxt
+          , prev: M.singleton ptr.ptr 0 <> map (_ + 1) r.p.prev
+          , au: au.au
+          , name: au.name
+          }
+          ptr
     in
-      let
-        r = go ptr.ptr (nxt <> (M.singleton ptr.ptr 0)) a
-      in
-        let
-          au = au' v
-        in
-          let
-            p =
-              merge
-                { next: nxt
-                , prev: M.singleton ptr.ptr 0 <> map (_ + 1) r.p.prev
-                , au: au.au
-                , name: au.name
-                }
-                ptr
-          in
-            { len: r.len + 1
-            , p
-            , flat: r.flat <> (M.singleton ptr.ptr p)
-            }
+      { len: r.len + 1
+      , p
+      , flat: r.flat <> (M.singleton ptr.ptr p)
+      }
 
   listthrough ::
     forall ch ich.
@@ -1314,53 +1305,49 @@ audioToPtr = go (-1) M.empty
   listthrough ptr v l =
     let
       nxt = map (_ + 1) ptr.next
+
+      nxtM = (nxt <> (M.singleton ptr.ptr 0))
+
+      r =
+        foldl
+          ( \b@(h :| tl) a ->
+              ( go (h.p.ptr + h.len - 1) nxtM a
+              )
+                :| (h : tl)
+          )
+          ( NE.singleton
+              (go ptr.ptr nxtM $ NE.head l)
+          )
+          (NE.tail l)
+
+      au =
+        ( \{ au: awd, name } ->
+            { au: mergerHack awd (map _.p.ptr r), name }
+        )
+          (au' v)
+
+      p =
+        merge
+          { next: nxt
+          , prev:
+              ( let
+                  (hd :| tl) =
+                    map
+                      (map (_ + 1) <<< _.p.prev)
+                      r
+                in
+                  (foldl M.union hd tl)
+              )
+                <> M.singleton ptr.ptr 0
+          , au: au.au
+          , name: au.name
+          }
+          ptr
     in
-      let
-        nxtM = (nxt <> (M.singleton ptr.ptr 0))
-      in
-        let
-          r =
-            foldl
-              ( \b@(h :| tl) a ->
-                  ( go (h.p.ptr + h.len - 1) nxtM a
-                  )
-                    :| (h : tl)
-              )
-              ( NE.singleton
-                  (go ptr.ptr nxtM $ NE.head l)
-              )
-              (NE.tail l)
-        in
-          let
-            au =
-              ( \{ au: awd, name } ->
-                  { au: mergerHack awd (map _.p.ptr r), name }
-              )
-                (au' v)
-          in
-            let
-              p =
-                merge
-                  { next: nxt
-                  , prev:
-                      ( let
-                          (hd :| tl) =
-                            map
-                              (map (_ + 1) <<< _.p.prev)
-                              r
-                        in
-                          (foldl M.union hd tl)
-                      )
-                        <> M.singleton ptr.ptr 0
-                  , au: au.au
-                  , name: au.name
-                  }
-                  ptr
-            in
-              { len: (foldl (+) 0 (map _.len r)) + 1
-              , flat: (foldl (<>) M.empty (map _.flat r)) <> M.singleton ptr.ptr p
-              , p
-              }
+      { len: (foldl (+) 0 (map _.len r)) + 1
+      , flat: (foldl (<>) M.empty (map _.flat r)) <> M.singleton ptr.ptr p
+      , p
+      }
 
   closurethrough ::
     forall ch ix.
@@ -1371,7 +1358,7 @@ audioToPtr = go (-1) M.empty
     AudioUnit ix ->
     AudioUnit ch ->
     AlgStep
-  closurethrough ptr v a ic =
+  closurethrough ptr v a evaluatedClosure =
     let
       -- run alg on the inner chain
       -- to get the inner result
@@ -1381,60 +1368,64 @@ audioToPtr = go (-1) M.empty
       -----------
       -----
       -- go needs to have the result of this appended
-      ir = go (ptr.ptr - 1) ptr.next ic
+      closureResult = go (ptr.ptr - 1) ptr.next evaluatedClosure
+
+      maxPrev = foldl max 0 closureResult.p.prev
+
+      -- continuing down, we offset the pointer
+      -- by the number of nodes in the graph
+      -- and point to this one
+      -----------------------------------------------------------------
+      ---------------------------------------------------------
+      ----------------------------------------------
+      ------------------------------------
+      -------------------------
+      -------------
+      continuation =
+        go
+          (ptr.ptr + closureResult.len)
+          ( (map (\i -> maxPrev + 1 - i) closureResult.p.prev)
+              <> (M.singleton (ptr.ptr + closureResult.len) 0)
+          )
+          a
+
+      au = au' v
+
+      -- problem: if continuation is SplitRes
+      -- then prev is nothing
+      -- which leads to subPrev being underfull
+      -- as it just points to itself
+      -- for now, don't deal with this
+      subPrev =
+        M.singleton (ptr.ptr + closureResult.len) 0
+          <> map (_ + 1) continuation.p.prev
+
+      p =
+        merge
+          { ptr: ptr.ptr + closureResult.len
+          , prev: subPrev
+          ----- need to pivot this to work backwards
+          , next: map (\i -> maxPrev - i + 1) closureResult.p.prev
+          , au: au.au
+          , name: au.name
+          }
+          ptr
     in
-      let
-        maxPrev = foldl max 0 ir.p.prev
-      in
-        let
-          -- continuing down, we offset the pointer
-          -- by the number of nodes in the graph
-          -- and point to this one
-          -----------------------------------------------------------------
-          ---------------------------------------------------------
-          ----------------------------------------------
-          ------------------------------------
-          -------------------------
-          -------------
-          fr =
-            go
-              (ptr.ptr + ir.len)
-              ((map (\i -> maxPrev + 1 - i) ir.p.prev) <> (M.singleton (ptr.ptr + ir.len) 0))
-              a
-        in
-          let
-            au = au' v
-          in
-            let
-              -- problem: if fr is SplitRes
-              -- then prev is nothing
-              -- which leads to subPrev being underfull
-              -- as it just points to itself
-              -- for now, don't deal with this
-              subPrev = M.singleton (ptr.ptr + ir.len) 0 <> map (_ + 1) fr.p.prev
-            in
-              let
-                p =
-                  merge
-                    { ptr: ptr.ptr + ir.len
-                    , prev: subPrev
-                    ----- need to pivot this to work backwards
-                    , next: map (\i -> maxPrev - i + 1) ir.p.prev
-                    , au: au.au
-                    , name: au.name
-                    }
-                    ptr
-              in
-                { len: fr.len + ir.len + 1
-                -- correct flat structure
-                , flat:
-                    map
-                      (\rec -> rec { prev = M.union (map (_ + maxPrev + 1) subPrev) rec.prev })
-                      ir.flat
-                      <> fr.flat
-                      <> (M.singleton (ptr.ptr + ir.len) p)
-                , p
-                }
+      { len: continuation.len + closureResult.len + 1
+      -- correct flat structure
+      , flat:
+          map
+            ( \rec ->
+                rec
+                  { prev =
+                    M.union (map (_ + maxPrev + 1) subPrev) rec.prev
+                  }
+            )
+            closureResult.flat
+            <> continuation.flat
+            <> (M.singleton (ptr.ptr + closureResult.len) p)
+      , p
+      }
 
   go' :: forall ch. Pos ch => PtrInfo' -> AudioUnit ch -> AlgStep
   go' ptr v@(Microphone name) = terminus ptr v
@@ -2592,130 +2583,6 @@ normalizeReconcilable target tom = go (M.toUnfoldable target.grouped) tom
 
   go (h : t) toModify = let tm = addContiguousNewUnits h toModify in go t tm
 
-data LPNode
-  = LPNode AudioUnit'' Int Int
-
-data LPEdge
-  = LPEdge AudioUnit'' Int Int AudioUnit'' Int Int
-
-type LPVar
-  = { name :: String, coef :: Number }
-
-type LPNodeVar
-  = { node :: LPNode, coef :: Number }
-
-type LPEdgeVar
-  = { edge :: LPEdge, coef :: Number }
-
-type LPObjective
-  = { direction :: Int
-    , name :: String
-    , vars :: Array LPVar
-    }
-
-getNodeIdx :: Boolean -> LPNode -> Int
-getNodeIdx true (LPNode _ i _) = i
-
-getNodeIdx false (LPNode _ _ i) = i
-
-getEdgeIdx :: Boolean -> LPEdge -> Tuple Int Int
-getEdgeIdx true (LPEdge _ i _ _ i' _) = Tuple i i'
-
-getEdgeIdx false (LPEdge _ _ i _ _ i') = Tuple i i'
-
-makeLPNodeConstraints :: Boolean -> Array LPNodeVar -> Array LPConstraint
-makeLPNodeConstraints cptr a =
-  mapWithIndex
-    ( \i x ->
-        { name: "nodec_" <> show i
-        , vars: toArray $ map (\{ node } -> { name: nodeToString node, coef: 1.0 }) x
-        , bnds: { type: 5, ub: 1.0, lb: 1.0 }
-        }
-    )
-    $ groupBy
-        (\{ node: node0 } { node: node1 } -> getNodeIdx cptr node0 == getNodeIdx cptr node1)
-        (sortWith (\{ node } -> getNodeIdx cptr node) a)
-
-makeLPEdgeConstraints :: Boolean -> Array LPEdgeVar -> Array LPConstraint
-makeLPEdgeConstraints cptr a =
-  mapWithIndex
-    ( \i x ->
-        { name: "edgec_" <> show i
-        , vars:
-            toArray
-              $ map
-                  ( \{ edge } ->
-                      { name: edgeToString edge
-                      , coef: 1.0
-                      }
-                  )
-                  x
-        , bnds: { type: 5, ub: 1.0, lb: 1.0 }
-        }
-    )
-    $ groupBy
-        ( \{ edge: edge1 } { edge: edge2 } ->
-            getEdgeIdx cptr edge1 == getEdgeIdx cptr edge2
-        )
-        (sortWith (\{ edge } -> getEdgeIdx cptr edge) a)
-
-edgeToString :: LPEdge -> String
-edgeToString (LPEdge tag b c d e f) =
-  "e@" <> show tag <> "_"
-    <> show b
-    <> "_"
-    <> show c
-    <> "__"
-    <> show d
-    <> "_"
-    <> show e
-    <> "_"
-    <> show f
-
-nodeToString :: LPNode -> String
-nodeToString (LPNode tag b c) =
-  "n@" <> show tag <> "_"
-    <> show b
-    <> "_"
-    <> show c
-
-makeLPNodeEdgeConstraints :: Array LPEdgeVar -> Array LPConstraint
-makeLPNodeEdgeConstraints a =
-  mapWithIndex
-    ( \i { edge: edge@(LPEdge tag0 a0 b0 tag1 a1 b1) } ->
-        { name: "edgec_" <> show i
-        , vars:
-            [ { name: edgeToString edge
-              , coef: 1.0
-              }
-            , { name: nodeToString (LPNode tag0 a0 b0)
-              , coef: -0.75
-              }
-            , { name: nodeToString (LPNode tag1 a1 b1)
-              , coef: -0.75
-              }
-            ]
-        , bnds: { type: 3, ub: 0.0, lb: 0.0 }
-        }
-    )
-    a
-
-type LPBound
-  = { type :: Int, ub :: Number, lb :: Number }
-
-type LPConstraint
-  = { name :: String
-    , vars :: Array LPVar
-    , bnds :: { type :: Int, ub :: Number, lb :: Number }
-    }
-
-type LinearProgram
-  = { name :: String
-    , objective :: LPObjective
-    , subjectTo :: Array LPConstraint
-    , binaries :: Array String
-    }
-
 nextDegree :: Map Int Int -> Array Int
 nextDegree m = (A.fromFoldable <<< M.keys) $ M.filter (_ == 1) m
 
@@ -2724,124 +2591,6 @@ nextCoef :: Map Int Int -> Int -> Number
 nextCoef m i = maybe 1000.0 ((_ * 1.0) <<< (_ - 1.0) <<< toNumber) (M.lookup i m)
 
 glpMIN = 1 :: Int
-
-nodeVars :: Reconcilable -> Reconcilable -> Array LPNodeVar
-nodeVars r0 r1 =
-  join
-    ( map
-        ( \(Tuple k v0) ->
-            ( maybe []
-                ( \v1 ->
-                    join
-                      ( map
-                          ( \i ->
-                              map
-                                ( \o ->
-                                    { node: LPNode k.tag i.ptr o.ptr
-                                    , coef: toCoef i.au o.au
-                                    }
-                                )
-                                $ A.fromFoldable v1
-                          )
-                          $ A.fromFoldable v0
-                      )
-                )
-                $ M.lookup k r1.grouped
-            )
-        )
-        $ M.toUnfoldable r0.grouped
-    )
-
-edgeVars :: Reconcilable -> Reconcilable -> Array LPEdgeVar
-edgeVars r0 r1 =
-  join
-    ( map
-        ( \(Tuple k v0) ->
-            ( maybe []
-                ( \v1 ->
-                    (join <<< join <<< join)
-                      ( map
-                          ( \i ->
-                              map
-                                ( \o ->
-                                    map
-                                      ( \n ->
-                                          map
-                                            ( \m ->
-                                                { edge:
-                                                    LPEdge k.tag
-                                                      i.ptr
-                                                      o.ptr
-                                                      (au'' m.au)
-                                                      n
-                                                      m.ptr
-                                                , coef: nextCoef o.next m.ptr
-                                                }
-                                            )
-                                            ( maybe
-                                                []
-                                                (\res -> A.fromFoldable res)
-                                                $ ( M.lookup n r0.flat
-                                                      >>= \lk ->
-                                                          M.lookup
-                                                            { tag: au'' lk.au
-                                                            , chan: lk.chan
-                                                            , name: lk.name
-                                                            }
-                                                            r1.grouped
-                                                  )
-                                            )
-                                      )
-                                      ( maybe
-                                          []
-                                          (\aud -> nextDegree aud.next)
-                                          $ M.lookup i.ptr r0.flat
-                                      )
-                                )
-                                $ A.fromFoldable v1
-                          )
-                          $ A.fromFoldable v0
-                      )
-                )
-                $ M.lookup k r1.grouped
-            )
-        )
-        $ M.toUnfoldable r0.grouped
-    )
-
--- for now, there are no edge constraints
--- finding edges requires numerous graph traversals in the target,
--- and the complexity gets out of hand quickly
--- we can add as an experiment later
-audioToLP :: Reconcilable -> Reconcilable -> LinearProgram
-audioToLP r0 r1 =
-  let
-    nv = nodeVars r0 r1
-  in
-    let
-      ev = edgeVars r0 r1
-    in
-      let
-        vars =
-          (map (\{ node, coef } -> { name: nodeToString node, coef }) nv)
-            <> (map (\{ edge, coef } -> { name: edgeToString edge, coef }) ev)
-      in
-        { name: "LP"
-        , objective:
-            { direction: glpMIN
-            , name: "obj"
-            , vars: filter (\{ coef } -> coef /= 0.0) vars
-            }
-        , binaries: map (\{ name } -> name) vars
-        -- we do not construct an edge constraint based on the target edges
-        -- not quite sure why, but doing so leads to infeasibility
-        -- whereas levaing it open leads to a solution... 🤷‍♂️
-        , subjectTo:
-            makeLPNodeConstraints true nv
-              <> makeLPNodeConstraints false nv
-              <> makeLPEdgeConstraints true ev
-              <> makeLPNodeEdgeConstraints ev
-        }
 
 makeNaiveReconciliation0 ::
   Reconcilable ->
@@ -2868,49 +2617,32 @@ makeNaiveReconciliation1 ::
 makeNaiveReconciliation1 ipt =
   let
     cur_ = ipt.cur
-  in
-    let
-      prev_ = ipt.prev
-    in
-      { prev: prev_
-      , cur: cur_
-      , reconciliation:
-          M.fromFoldable
-            ( join
-                ( map
-                    ( \(Tuple idx0 (NonEmpty x' x)) ->
-                        ( maybe Nil
-                            ( \(NonEmpty i' i) ->
-                                DL.zipWith
-                                  ( \a b ->
-                                      Tuple a.ptr b.ptr
-                                  )
-                                  (i' : i)
-                                  (x' : x)
-                            )
-                            (M.lookup idx0 prev_.grouped)
-                        )
-                    )
-                    $ M.toUnfoldable cur_.grouped
-                )
-            )
-      }
 
-makeProgram ::
-  Reconcilable ->
-  Reconcilable ->
-  { prev :: Reconcilable
-  , cur :: Reconcilable
-  , prog :: LinearProgram
-  }
-makeProgram prev cur =
-  let
-    cur_ = normalizeReconcilable prev cur
+    prev_ = ipt.prev
   in
-    let
-      prev_ = normalizeReconcilable cur prev
-    in
-      { prev: prev_, cur: cur_, prog: audioToLP prev_ cur_ }
+    { prev: prev_
+    , cur: cur_
+    , reconciliation:
+        M.fromFoldable
+          ( join
+              ( map
+                  ( \(Tuple idx0 (NonEmpty x' x)) ->
+                      ( maybe Nil
+                          ( \(NonEmpty i' i) ->
+                              DL.zipWith
+                                ( \a b ->
+                                    Tuple a.ptr b.ptr
+                                )
+                                (i' : i)
+                                (x' : x)
+                          )
+                          (M.lookup idx0 prev_.grouped)
+                      )
+                  )
+                  $ M.toUnfoldable cur_.grouped
+              )
+          )
+    }
 
 -- | the base time to set at
 -- | instructions
