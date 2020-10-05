@@ -215,7 +215,8 @@ import Data.Map as M
 import Data.Maybe (Maybe(..), fromMaybe, isNothing, maybe)
 import Data.NonEmpty (NonEmpty(..), (:|))
 import Data.NonEmpty as NE
-import Data.Set (member)
+import Data.Set (Set, member)
+import Data.Set as DS
 import Data.String (Pattern(..), split, take)
 import Data.Traversable (sequence)
 import Data.Tuple (Tuple(..), fst, snd, swap, uncurry)
@@ -597,14 +598,15 @@ type PtrInfo'
   = { ptr :: Int
     , chan :: Int
     , status :: Status
-    , next :: Map Int Int
+    , next :: Set Int
     }
 
 type PtrInfo
   = { ptr :: Int
     , chan :: Int
-    , prev :: Map Int Int
-    , next :: Map Int Int
+    , prev :: Set Int
+    , next :: Set Int
+    , head :: Int
     , au :: AudioUnit'
     , status :: Status
     , name :: MString
@@ -1236,13 +1238,38 @@ mergerHack (Merger' _) (h :| t) = Merger' (h : t)
 
 mergerHack a _ = a
 
+dupResGetImpetus :: ∀ t8245 t8248 t8263 t8266 t8267. Ord t8245 ⇒ Ord t8248 ⇒ { flat ∷ Map t8248 { au :: AudioUnit', prev :: Set t8263, ptr :: t8245 | t8267 } | t8266 } → Set t8245
+dupResGetImpetus s =
+  DS.fromFoldable
+    $ M.values
+        ( map _.ptr
+            $ M.filter
+                (\i -> i.au == DupRes' && DS.size i.prev == 0)
+                s.flat
+        )
+
+isSplitRes' :: AudioUnit' -> Boolean
+isSplitRes' (SplitRes' _) = true
+
+isSplitRes' _ = false
+
+splitResGetImpetus :: ∀ t439 t442 t455 t458 t459. Ord t439 ⇒ Ord t442 ⇒ { flat ∷ Map t442 { au :: AudioUnit', prev :: Set t455, ptr :: t439 | t459 } | t458 } → Set t439
+splitResGetImpetus s =
+  DS.fromFoldable
+    $ M.values
+        ( map (_.ptr)
+            $ M.filter
+                (\i -> isSplitRes' i.au && DS.size i.prev == 0)
+                s.flat
+        )
+
 audioToPtr ::
   forall channels.
   Pos channels =>
   AudioUnit channels -> AlgStep
-audioToPtr = go (-1) M.empty
+audioToPtr = go (-1) DS.empty
   where
-  go :: forall ch. Pos ch => Int -> Map Int Int -> AudioUnit ch -> AlgStep
+  go :: forall ch. Pos ch => Int -> Set Int -> AudioUnit ch -> AlgStep
   go i next au =
     go'
       { ptr: i + 1
@@ -1256,14 +1283,21 @@ audioToPtr = go (-1) M.empty
   terminus ptr v =
     let
       au = au' v
+
+      p =
+        merge
+          { head: ptr.ptr
+          , next: ptr.next
+          , prev: DS.empty :: Set Int
+          , au: au.au
+          , name: au.name
+          }
+          ptr
     in
-      let
-        p = merge { next: map (_ + 1) ptr.next, prev: M.singleton ptr.ptr 0, au: au.au, name: au.name } ptr
-      in
-        { len: 1
-        , flat: M.singleton ptr.ptr p
-        , p
-        }
+      { len: 1
+      , flat: M.singleton ptr.ptr p
+      , p
+      }
 
   passthrough ::
     forall ch.
@@ -1274,16 +1308,15 @@ audioToPtr = go (-1) M.empty
     AlgStep
   passthrough ptr v a =
     let
-      nxt = map (_ + 1) ptr.next
-
-      r = go ptr.ptr (nxt <> (M.singleton ptr.ptr 0)) a
+      r = go ptr.ptr (DS.singleton ptr.ptr) a
 
       au = au' v
 
       p =
         merge
-          { next: nxt
-          , prev: M.singleton ptr.ptr 0 <> map (_ + 1) r.p.prev
+          { head: ptr.ptr
+          , next: ptr.next
+          , prev: DS.singleton r.p.head
           , au: au.au
           , name: au.name
           }
@@ -1304,19 +1337,15 @@ audioToPtr = go (-1) M.empty
     AlgStep
   listthrough ptr v l =
     let
-      nxt = map (_ + 1) ptr.next
-
-      nxtM = (nxt <> (M.singleton ptr.ptr 0))
-
       r =
         foldl
           ( \b@(h :| tl) a ->
-              ( go (h.p.ptr + h.len - 1) nxtM a
+              ( go (h.p.ptr + h.len - 1) (DS.singleton ptr.ptr) a
               )
                 :| (h : tl)
           )
           ( NE.singleton
-              (go ptr.ptr nxtM $ NE.head l)
+              (go ptr.ptr (DS.singleton ptr.ptr) $ NE.head l)
           )
           (NE.tail l)
 
@@ -1328,17 +1357,9 @@ audioToPtr = go (-1) M.empty
 
       p =
         merge
-          { next: nxt
-          , prev:
-              ( let
-                  (hd :| tl) =
-                    map
-                      (map (_ + 1) <<< _.p.prev)
-                      r
-                in
-                  (foldl M.union hd tl)
-              )
-                <> M.singleton ptr.ptr 0
+          { head: ptr.ptr
+          , next: ptr.next
+          , prev: DS.fromFoldable $ (map (_.p.head) r)
           , au: au.au
           , name: au.name
           }
@@ -1357,75 +1378,47 @@ audioToPtr = go (-1) M.empty
     AudioUnit ch ->
     AudioUnit ix ->
     AudioUnit ch ->
+    (AlgStep -> Set Int) ->
     AlgStep
-  closurethrough ptr v a evaluatedClosure =
+  closurethrough ptr v a evaluatedClosure getImpeti =
     let
-      -- run alg on the inner chain
-      -- to get the inner result
-      ----------------------------------------------------------
-      ------------------------------------------------
-      ------------------------------
-      -----------
-      -----
-      -- go needs to have the result of this appended
       closureResult = go (ptr.ptr - 1) ptr.next evaluatedClosure
 
-      maxPrev = foldl max 0 closureResult.p.prev
+      myPtr = ptr.ptr + closureResult.len
 
-      -- continuing down, we offset the pointer
-      -- by the number of nodes in the graph
-      -- and point to this one
-      -----------------------------------------------------------------
-      ---------------------------------------------------------
-      ----------------------------------------------
-      ------------------------------------
-      -------------------------
-      -------------
       continuation =
         go
           (ptr.ptr + closureResult.len)
-          ( (map (\i -> maxPrev + 1 - i) closureResult.p.prev)
-              <> (M.singleton (ptr.ptr + closureResult.len) 0)
-          )
+          (DS.singleton myPtr)
           a
 
       au = au' v
 
-      -- problem: if continuation is SplitRes
-      -- then prev is nothing
-      -- which leads to subPrev being underfull
-      -- as it just points to itself
-      -- for now, don't deal with this
-      subPrev =
-        M.singleton (ptr.ptr + closureResult.len) 0
-          <> map (_ + 1) continuation.p.prev
+      impeti = getImpeti closureResult
 
       p =
         merge
-          { ptr: ptr.ptr + closureResult.len
-          , prev: subPrev
-          ----- need to pivot this to work backwards
-          , next: map (\i -> maxPrev - i + 1) closureResult.p.prev
+          { head: closureResult.p.head
+          , ptr: myPtr
+          , prev: DS.singleton continuation.p.head
+          , next: impeti
           , au: au.au
           , name: au.name
           }
           ptr
-    in
-      { len: continuation.len + closureResult.len + 1
-      -- correct flat structure
-      , flat:
-          map
-            ( \rec ->
-                rec
-                  { prev =
-                    M.union (map (_ + maxPrev + 1) subPrev) rec.prev
-                  }
-            )
+
+      out =
+        { len: continuation.len + closureResult.len + 1
+        -- everything that is in closureResult that is an impetus
+        -- needs to have myPtr as its prev
+        , flat:
             closureResult.flat
-            <> continuation.flat
-            <> (M.singleton (ptr.ptr + closureResult.len) p)
-      , p
-      }
+              <> continuation.flat
+              <> (M.singleton myPtr p)
+        , p
+        }
+    in
+      out
 
   go' :: forall ch. Pos ch => PtrInfo' -> AudioUnit ch -> AlgStep
   go' ptr v@(Microphone name) = terminus ptr v
@@ -1468,15 +1461,15 @@ audioToPtr = go (-1) M.empty
 
   go' ptr v@(WaveShaper _ _ _ a) = passthrough ptr v a
 
-  go' ptr v@(Dup1 name a f) = closurethrough ptr v a $ f DupRes
+  go' ptr v@(Dup1 name a f) = closurethrough ptr v a (f DupRes) dupResGetImpetus
 
-  go' ptr v@(Dup2 name a f) = closurethrough ptr v a $ f DupRes
+  go' ptr v@(Dup2 name a f) = closurethrough ptr v a (f DupRes) dupResGetImpetus
 
-  go' ptr v@(Dup3 name a f) = closurethrough ptr v a $ f DupRes
+  go' ptr v@(Dup3 name a f) = closurethrough ptr v a (f DupRes) dupResGetImpetus
 
-  go' ptr v@(Dup4 name a f) = closurethrough ptr v a $ f DupRes
+  go' ptr v@(Dup4 name a f) = closurethrough ptr v a (f DupRes) dupResGetImpetus
 
-  go' ptr v@(Dup5 name a f) = closurethrough ptr v a $ f DupRes
+  go' ptr v@(Dup5 name a f) = closurethrough ptr v a (f DupRes) dupResGetImpetus
 
   go' ptr v@(SinOsc name n) = terminus ptr v
 
@@ -1504,15 +1497,15 @@ audioToPtr = go (-1) M.empty
 
   go' ptr v@(Speaker name l) = listthrough ptr v l
 
-  go' ptr v@(Split1 name a f) = closurethrough ptr v a $ f (fill SplitRes)
+  go' ptr v@(Split1 name a f) = closurethrough ptr v a (f $ fill SplitRes) splitResGetImpetus
 
-  go' ptr v@(Split2 name a f) = closurethrough ptr v a $ f (fill SplitRes)
+  go' ptr v@(Split2 name a f) = closurethrough ptr v a (f $ fill SplitRes) splitResGetImpetus
 
-  go' ptr v@(Split3 name a f) = closurethrough ptr v a $ f (fill SplitRes)
+  go' ptr v@(Split3 name a f) = closurethrough ptr v a (f $ fill SplitRes) splitResGetImpetus
 
-  go' ptr v@(Split4 name a f) = closurethrough ptr v a $ f (fill SplitRes)
+  go' ptr v@(Split4 name a f) = closurethrough ptr v a (f $ fill SplitRes) splitResGetImpetus
 
-  go' ptr v@(Split5 name a f) = closurethrough ptr v a $ f (fill SplitRes)
+  go' ptr v@(Split5 name a f) = closurethrough ptr v a (f $ fill SplitRes) splitResGetImpetus
 
 -- | The microphone.
 -- |
@@ -2537,12 +2530,12 @@ makeContiguousUnits t start n =
   map
     ( \i ->
         { au: tagToAU t.tag
-        -- name should always be nothing
-        , name: t.name
+        , name: Nothing
         , status: Off
-        , next: M.empty
+        , next: DS.empty
         , chan: t.chan
-        , prev: M.empty
+        , head: (-42) -- ugh, hackish
+        , prev: DS.empty
         , ptr: i
         }
     )
@@ -2585,10 +2578,6 @@ normalizeReconcilable target tom = go (M.toUnfoldable target.grouped) tom
 
 nextDegree :: Map Int Int -> Array Int
 nextDegree m = (A.fromFoldable <<< M.keys) $ M.filter (_ == 1) m
-
--- penalize atemporal relationships
-nextCoef :: Map Int Int -> Int -> Number
-nextCoef m i = maybe 1000.0 ((_ * 1.0) <<< (_ - 1.0) <<< toNumber) (M.lookup i m)
 
 glpMIN = 1 :: Int
 
@@ -3045,7 +3034,7 @@ describeConnection start end passage =
     ( M.filter
         ( \(Tuple f s) ->
             fromMaybe false
-              ((not <<< member s <<< M.keys <<< map (_ == 1) <<< _.next) <$> (M.lookup f end.flat))
+              ((not <<< member s <<< _.next) <$> (M.lookup f end.flat))
         )
         ( M.fromFoldable
             ( DL.catMaybes
@@ -3061,11 +3050,7 @@ describeConnection start end passage =
                         ( map
                             ( \au ->
                                 map (Tuple au.ptr)
-                                  $ ( DL.fromFoldable
-                                        <<< M.keys
-                                        <<< M.filter (_ == 1)
-                                    )
-                                      au.next
+                                  $ DL.fromFoldable au.next
                             )
                             (M.values start.flat)
                         )
