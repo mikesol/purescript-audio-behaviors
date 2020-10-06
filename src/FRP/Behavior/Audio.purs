@@ -3062,8 +3062,10 @@ describeConnection start end passage =
 isGen :: AudioUnit' -> Boolean
 isGen (Microphone') = true
 
-isGen (Play' _ _) = true
-
+-- NB: play is not a gen as there is no stop method on the source element
+-- this is a bad, as it will keep playing in the background after
+-- disconnected from the speaker
+-- find a way to disconnect
 isGen (PlayBuf' _ _) = true
 
 isGen (LoopBuf' _ _ _ _) = true
@@ -3087,7 +3089,7 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
   { prev
   , cur
   , reconciliation
-  , instructionSet: disconnect <> stop <> (pure shuffle) <> new <> connect <> set
+  , instructionSet: stop <> disconnect <> (pure shuffle) <> new <> connect <> set
   }
   where
   reversed =
@@ -3294,7 +3296,7 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
                   set' v.ptr v.au
                     (fromMaybe v.au $ (map _.au $ M.lookup v.ptr reversedAsMap >>= flip M.lookup prev.flat))
               )
-              $ (A.fromFoldable $ M.values cur.flat)
+              (A.filter (\{ status } -> status == On) (A.fromFoldable $ M.values cur.flat))
           )
       )
 

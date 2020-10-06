@@ -7,7 +7,7 @@ import Data.Typelevel.Num (D1, D2)
 import Data.Vec ((+>), empty)
 import Effect (Effect)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AudioUnit, Oversample(..), allpass, bandpass, convolver, delay, dup1, dynamicsCompressor, gain', highpass, highshelf, loopBuf, lowpass, lowshelf, merger, notch, panner, peaking, periodicOsc, play, playBuf, runInBrowser, sawtoothOsc, sinOsc, speaker, speaker', squareOsc, traingleOsc, waveShaper)
+import FRP.Behavior.Audio (AudioUnit, Oversample(..), allpass, bandpass, convolver, delay, dup1, dynamicsCompressor, gain', highpass, highshelf, loopBuf, lowpass, lowshelf, merger, notch, panner, peaking, periodicOsc, play, playBuf, playBuf_, play_, runInBrowser, sawtoothOsc, sinOsc, speaker, speaker', squareOsc, traingleOsc, waveShaper)
 import Math (pi, sin)
 
 -- constant
@@ -114,7 +114,27 @@ pb _ = pure $ speaker' (gain' 0.3 (playBuf "moo" 1.0))
 lb :: Number -> Behavior (AudioUnit D1)
 lb _ = pure $ speaker' (gain' 0.3 (loopBuf "moo" 1.0 0.0 0.5))
 
-run = runInBrowser ringMod
+-- on off
+onoff :: Number -> Behavior (AudioUnit D1)
+onoff t =
+  pure
+    $ speaker
+        ( zero
+            :| (if t < 1.0 then (pure $ gain' 0.3 (play_ "f0" "forest")) else Nil <> (if t > 3.0 then (pure $ gain' 0.3 (play_ "f1" "forest")) else Nil))
+            <> Nil
+        )
+
+-- on off
+onoffb :: Number -> Behavior (AudioUnit D1)
+onoffb t =
+  pure
+    $ speaker
+        ( zero
+            :| (if t < 9.0 then (pure $ gain' 0.3 (playBuf_ "f0" "moo" 1.0)) else Nil)
+            <> (if t > 3.0 then (pure $ gain' 0.3 (playBuf_ "f1" "moo" 1.0)) else Nil)
+        )
+
+run = runInBrowser onoffb
 
 main :: Effect Unit
 main = pure unit

@@ -448,6 +448,11 @@ exports.touchAudio = function (predicates) {
                       audioInfo.buffers[c.value3.value0];
                     generators[c.value0].start(timeToSet + c.value4.value0);
                   } else if (predicates.isPlay(c.value1)) {
+                    // todo - if the same element is resumed via play it won't
+                    // work in the current setup
+                    // this is because there is a 1-to-1 relationship between source
+                    // and media element
+                    // the current workaround is to create multiple media elements.
                     // todo - add delay somehow...
                     audioInfo.tracks[c.value3.value0].play();
                   } else if (predicates.isConstant(c.value1)) {
