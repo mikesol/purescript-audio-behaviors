@@ -9,16 +9,19 @@ import Data.List ((:), List(..))
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.NonEmpty ((:|))
 import Data.Set (isEmpty)
+import Data.Symbol (SProxy(..))
 import Data.Tuple (Tuple(..), fst, snd)
 import Data.Typelevel.Num (D1, D2)
 import Data.Vec ((+>), empty)
 import Effect (Effect)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AV(..), AudioParameter(..), AudioUnit, CanvasInfo(..), IAudioUnit(..), RunInBrowser, RunInBrowserIAudioUnit_, RunInBrowser_, RunInBrowserAV_, dup1, gain', gainT', merger, microphone, panner, play, runInBrowser, runInBrowser_, sinOsc, speaker, speaker')
+import FRP.Behavior.Audio (AV(..), AudioParameter(..), AudioUnit, CanvasInfo(..), IAudioUnit(..), RunInBrowser, RunInBrowserAV_, RunInBrowserIAudioUnit_, RunInBrowser_, dup1, g'add, g'bandpass, g'delay, g'gain, gain', gainT', graph, merger, microphone, panner, play, runInBrowser, runInBrowser_, sinOsc, speaker, speaker')
 import FRP.Behavior.Mouse (buttons)
 import FRP.Event.Mouse (Mouse, getMouse)
 import Graphics.Drawing (circle, fillColor, filled)
 import Math (pi, sin)
+import Record.Extra (SLProxy(..), SNil)
+import Type.Data.Graph (type (:/))
 
 scene0 :: Number -> Behavior (AudioUnit D1)
 scene0 = const $ pure (speaker' $ (gain' 0.5 $ sinOsc 440.0))
@@ -223,6 +226,77 @@ scene7 mouse acc@{ onset } time = f time <$> click
   click :: Behavior Boolean
   click = map (not <<< isEmpty) $ buttons mouse
 
+scene7_1 ::
+  forall a.
+  Mouse ->
+  { onset :: Maybe Number | a } ->
+  Number ->
+  Behavior (IAudioUnit D2 { onset :: Maybe Number | a })
+scene7_1 mouse acc@{ onset } time = f time <$> click
+  where
+  split s = span ((s >= _) <<< fst) pwf
+
+  gn s =
+    let
+      ht = split s
+
+      left = fromMaybe (Tuple 0.0 0.0) $ last ht.init
+
+      right = fromMaybe (Tuple 201.0 0.0) $ head ht.rest
+    in
+      -- if we are in a control cycle with a peak or trough
+      -- we lock to that
+      -- otherwise, we interpolate
+      if (fst right - s) < kr then
+        AudioParameter { param: (snd right), timeOffset: (fst right - s) }
+      else
+        let
+          m = (snd right - snd left) / (fst right - fst left)
+
+          b = (snd right - (m * fst right))
+        in
+          AudioParameter { param: (m * s + b), timeOffset: 0.0 }
+
+  f s cl =
+    IAudioUnit
+      ( dup1
+          ( (gain' 0.2 $ sinOsc (110.0 + (3.0 * sin (0.5 * rad))))
+              + (gain' 0.1 (gainT' (gn s) $ sinOsc 440.0))
+              + (gain' 0.1 $ sinOsc (220.0 + (if cl then (50.0 + maybe 0.0 (\t -> 10.0 * (s - t)) stTime) else 0.0)))
+              + ( graph
+                    { aggregators:
+                        { out: Tuple g'add (SLProxy :: SLProxy ("combine" :/ SNil))
+                        , combine: Tuple g'add (SLProxy :: SLProxy ("gain" :/ "mic" :/ SNil))
+                        , gain: Tuple (g'gain 0.9) (SLProxy :: SLProxy ("del" :/ SNil))
+                        }
+                    , processors:
+                        { del: Tuple (g'delay 0.2) (SProxy :: SProxy "filt")
+                        , filt: Tuple (g'bandpass 440.0 1.0) (SProxy :: SProxy "combine")
+                        }
+                    , generators:
+                        { mic: microphone
+                        }
+                    }
+                )
+          ) \mono ->
+          speaker
+            $ ( (panner (-0.5) (merger (mono +> mono +> empty)))
+                  :| (gain' 0.5 $ (play "forest"))
+                  : Nil
+              )
+      )
+      (acc { onset = stTime })
+    where
+    rad = pi * s
+
+    stTime = case Tuple onset cl of
+      (Tuple Nothing true) -> Just s
+      (Tuple (Just y) true) -> Just y
+      (Tuple _ false) -> Nothing
+
+  click :: Behavior Boolean
+  click = map (not <<< isEmpty) $ buttons mouse
+
 scene8 ::
   forall a.
   Mouse ->
@@ -262,7 +336,21 @@ scene8 mouse acc@{ onset } (CanvasInfo { w, h }) time = f time <$> click
               ( (gain' 0.2 $ sinOsc (110.0 + (3.0 * sin (0.5 * rad))))
                   + (gain' 0.1 (gainT' (gn s) $ sinOsc 440.0))
                   + (gain' 0.1 $ sinOsc (220.0 + (if cl then (50.0 + maybe 0.0 (\t -> 10.0 * (s - t)) stTime) else 0.0)))
-                  + microphone
+                  + ( graph
+                        { aggregators:
+                            { out: Tuple g'add (SLProxy :: SLProxy ("combine" :/ SNil))
+                            , combine: Tuple g'add (SLProxy :: SLProxy ("gain" :/ "mic" :/ SNil))
+                            , gain: Tuple (g'gain 0.9) (SLProxy :: SLProxy ("del" :/ SNil))
+                            }
+                        , processors:
+                            { del: Tuple (g'delay 0.2) (SProxy :: SProxy "filt")
+                            , filt: Tuple (g'bandpass 440.0 1.0) (SProxy :: SProxy "combine")
+                            }
+                        , generators:
+                            { mic: microphone
+                            }
+                        }
+                    )
               ) \mono ->
               speaker
                 $ ( (panner (-0.5) (merger (mono +> mono +> empty)))

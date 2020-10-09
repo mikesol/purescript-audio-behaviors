@@ -28,48 +28,53 @@
     );
 
     function turnOnAudio() {
-      const myAudio = new Audio("forest.mp3");
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(function (mic) {
+        const myAudio = new Audio("forest.mp3");
 
-      audioCtx.audioWorklet.addModule("ps-aud-mul.js").then(function () {
-        var now = new Date().getTime();
-        var ctr = 0;
-        function makeDistortionCurve(amount) {
-          var k = typeof amount === "number" ? amount : 50,
-            n_samples = 44100,
-            curve = new Float32Array(n_samples),
-            deg = Math.PI / 180,
-            i = 0,
-            x;
-          for (; i < n_samples; ++i) {
-            x = (i * 2) / n_samples - 1;
-            curve[i] = ((3 + k) * x * 20 * deg) / (Math.PI + k * Math.abs(x));
+        audioCtx.audioWorklet.addModule("ps-aud-mul.js").then(function () {
+          var now = new Date().getTime();
+          var ctr = 0;
+          function makeDistortionCurve(amount) {
+            var k = typeof amount === "number" ? amount : 50,
+              n_samples = 44100,
+              curve = new Float32Array(n_samples),
+              deg = Math.PI / 180,
+              i = 0,
+              x;
+            for (; i < n_samples; ++i) {
+              x = (i * 2) / n_samples - 1;
+              curve[i] = ((3 + k) * x * 20 * deg) / (Math.PI + k * Math.abs(x));
+            }
+            return curve;
           }
-          return curve;
-        }
 
-        var waveshaperCurve = makeDistortionCurve(400);
-        var real = new Float32Array(3);
-        var imag = new Float32Array(3);
-        real[0] = 0.25;
-        real[1] = 0.1;
-        real[2] = 0.055;
-        imag[0] = 0.25;
-        imag[1] = 0.1;
-        imag[2] = 0.055;
-        offCb = PS["FRP.Behavior.Audio.Example.Koans"].run()(20)(15)(audioCtx)({
-          periodicWaves: {
-            funtimes: audioCtx.createPeriodicWave(real, imag),
-          },
-          buffers: {
-            moo: moo,
-          },
-          tracks: {
-            forest: myAudio,
-          },
-          floatArrays: {
-            waveshaperCurve: waveshaperCurve,
-          },
-        })({})();
+          var waveshaperCurve = makeDistortionCurve(400);
+          var real = new Float32Array(3);
+          var imag = new Float32Array(3);
+          real[0] = 0.25;
+          real[1] = 0.1;
+          real[2] = 0.055;
+          imag[0] = 0.25;
+          imag[1] = 0.1;
+          imag[2] = 0.055;
+          offCb = PS["FRP.Behavior.Audio.Example.Koans"].run()(20)(15)(
+            audioCtx
+          )({
+            periodicWaves: {
+              funtimes: audioCtx.createPeriodicWave(real, imag),
+            },
+            microphones: { mic },
+            buffers: {
+              moo: moo,
+            },
+            tracks: {
+              forest: myAudio,
+            },
+            floatArrays: {
+              waveshaperCurve: waveshaperCurve,
+            },
+          })({})();
+        });
       });
     }
     function turnOffAudio() {

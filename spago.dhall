@@ -12,6 +12,7 @@
   , "parseint"
   , "psci-support"
   , "sized-vectors"
+  , "typelevel-graph"
   , "typelevel-prelude"
   ]
 , packages = ./packages.dhall

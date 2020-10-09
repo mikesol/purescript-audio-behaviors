@@ -54,6 +54,7 @@ In this section, we'll build a scene from the ground up. In doing so, we'll acco
 1. Getting the sound to change as a function of a mouse input event.
 1. Making sure that certain sounds occur at a precise time.
 1. Remembering when events happened.
+1. Working with feedback.
 1. Adding visuals.
 
 ### Getting a static sound to play
@@ -340,6 +341,107 @@ scene mouse acc@{ onset } time = f time <$> click
 
 Because the accumulator object is global for an entire audio graph, it's a good idea to use row polymorphism in the accumulator object. While using keys like `onset` is fine for small projects, if you're a library developer, you'll want to make sure to use keys more like namespaces. That is, you'll want to make sure that they do not conflict with other vendors' keys and with users' keys. A good practice is to use something like `{ myLibrary :: { param1 :: Number } | a }`.
 
+#### Working with feedback
+
+Our microphone has been pretty boring up until now. Let's create a feedback loop to spice things up.
+
+A feedback loop is created when one uses the processed output of an audio node as an input to itself. One classic physical feedback loop is echo between two walls: the delayed audio bounces back and forth, causing really interesting and surprising effects.
+
+Because audio functions like `gain` consume other audio functions like `sinOsc`, there is no way to create a loop by composing these functions. Instead, to create a feedback loop, we need to use the `graph` function to create an audio graph.
+
+An audio graph is a row with three keys: `accumulators`, `processors` and `generators`. `generators` can be any function that creates audio (including `graph` itself). `processors` are unary audio operators like filters and convolution. All of the audio functions that do this, like `highpass` and `waveShaper`, have graph analogues with `g'` prepended, ie `g'highpass` and `g'waveShaper`. `aggregators` are _n_-ary audio operators like `g'add`, `g'mul` and `g'gain` (gain is just addition composed with multiplication of a constant, and the special `gain` function does this in an efficient way).
+
+The audio graph must respect certain rules: it must be fully connected, it must have a unique terminal node, it must have at least one generator, it must have no orphan nodes, it must not have duplicate edges between nodes, etc. Violating any of these rules will result in a type error at compile-time.
+
+The graph structure is represented using _incoming_ edges, so processors have only one incoming edge whereas accumulators have an arbitrary number of incoming edges, as we see below. Play it and you'll hear an echo effect!
+
+```haskell
+pwf :: Array (Tuple Number Number)
+pwf =
+  join
+    $ map
+        ( \i ->
+            map
+              ( \(Tuple f s) ->
+                  Tuple (f + 0.11 * toNumber i) s
+              )
+              [ Tuple 0.0 0.0, Tuple 0.02 0.7, Tuple 0.06 0.2 ]
+        )
+        (range 0 400)
+
+kr = 20.0 / 1000.0 :: Number -- the control rate in seconds, or 50 Hz
+
+initialOnset = { onset: Nothing } :: { onset :: Maybe Number }
+
+scene ::
+  forall a.
+  Mouse ->
+  { onset :: Maybe Number | a } ->
+  Number ->
+  Behavior (IAudioUnit D2 { onset :: Maybe Number | a })
+scene mouse acc@{ onset } time = f time <$> click
+  where
+  split s = span ((s >= _) <<< fst) pwf
+
+  gn s =
+    let
+      ht = split s
+
+      left = fromMaybe (Tuple 0.0 0.0) $ last ht.init
+
+      right = fromMaybe (Tuple 201.0 0.0) $ head ht.rest
+    in
+      if (fst right - s) < kr then
+        AudioParameter { param: (snd right), timeOffset: (fst right - s) }
+      else
+        let
+          m = (snd right - snd left) / (fst right - fst left)
+
+          b = (snd right - (m * fst right))
+        in
+          AudioParameter { param: (m * s + b), timeOffset: 0.0 }
+
+  f s cl =
+    IAudioUnit
+      ( dup1
+          ( (gain' 0.2 $ sinOsc (110.0 + (3.0 * sin (0.5 * rad))))
+              + (gain' 0.1 (gainT' (gn s) $ sinOsc 440.0))
+              + (gain' 0.1 $ sinOsc (220.0 + (if cl then (50.0 + maybe 0.0 (\t -> 10.0 * (s - t)) stTime) else 0.0)))
+              + ( graph
+                    { aggregators:
+                        { out: Tuple g'add (SLProxy :: SLProxy ("combine" :/ SNil))
+                        , combine: Tuple g'add (SLProxy :: SLProxy ("gain" :/ "mic" :/ SNil))
+                        , gain: Tuple (g'gain 0.9) (SLProxy :: SLProxy ("del" :/ SNil))
+                        }
+                    , processors:
+                        { del: Tuple (g'delay 0.2) (SProxy :: SProxy "filt")
+                        , filt: Tuple (g'bandpass 440.0 1.0) (SProxy :: SProxy "combine")
+                        }
+                    , generators:
+                        { mic: microphone
+                        }
+                    }
+                )
+          ) \mono ->
+          speaker
+            $ ( (panner (-0.5) (merger (mono +> mono +> empty)))
+                  :| (gain' 0.5 $ (play "forest"))
+                  : Nil
+              )
+      )
+      (acc { onset = stTime })
+    where
+    rad = pi * s
+
+    stTime = case Tuple onset cl of
+      (Tuple Nothing true) -> Just s
+      (Tuple (Just y) true) -> Just y
+      (Tuple _ false) -> Nothing
+
+  click :: Behavior Boolean
+  click = map (not <<< isEmpty) $ buttons mouse
+```
+
 #### Adding visuals
 
 Let's add a little dot that gets bigger when we click. We'll do that using the `AV` constructor that accepts a [Drawing](https://pursuit.purescript.org/packages/purescript-drawing/4.0.0/docs/Graphics.Drawing#t:Drawing).
@@ -398,7 +500,21 @@ scene mouse acc@{ onset } (CanvasInfo { w, h }) time = f time <$> click
               ( (gain' 0.2 $ sinOsc (110.0 + (3.0 * sin (0.5 * rad))))
                   + (gain' 0.1 (gainT' (gn s) $ sinOsc 440.0))
                   + (gain' 0.1 $ sinOsc (220.0 + (if cl then (50.0 + maybe 0.0 (\t -> 10.0 * (s - t)) stTime) else 0.0)))
-                  + microphone
+                  + ( graph
+                    { aggregators:
+                        { out: Tuple g'add (SLProxy :: SLProxy ("combine" :/ SNil))
+                        , combine: Tuple g'add (SLProxy :: SLProxy ("gain" :/ "mic" :/ SNil))
+                        , gain: Tuple (g'gain 0.9) (SLProxy :: SLProxy ("del" :/ SNil))
+                        }
+                    , processors:
+                        { del: Tuple (g'delay 0.2) (SProxy :: SProxy "filt")
+                        , filt: Tuple (g'bandpass 440.0 1.0) (SProxy :: SProxy "combine")
+                        }
+                    , generators:
+                        { mic: microphone
+                        }
+                    }
+                )
               ) \mono ->
               speaker
                 $ ( (panner (-0.5) (merger (mono +> mono +> empty)))
@@ -426,7 +542,7 @@ scene mouse acc@{ onset } (CanvasInfo { w, h }) time = f time <$> click
 
 ### Conclusion
 
-We started with a simple sound and built all the way up to a complex, precisely-timed stereo structure that responds to mouse events both visually and sonically. These examples also exist in [Readme.purs](./examples/readme/Readme.purs).
+We started with a simple sound and built all the way up to a complex, precisely-timed stereo structure with feedback that responds to mouse events both visually and sonically. These examples also exist in [Readme.purs](./examples/readme/Readme.purs).
 
 From here, the only thing left is to make some noise! There are many more audio units in the library, such as filters, compressors and convolvers. Almost the whole [Web Audio API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API) is exposed.
 
