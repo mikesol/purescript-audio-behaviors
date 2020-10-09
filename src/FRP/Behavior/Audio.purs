@@ -162,7 +162,6 @@ module FRP.Behavior.Audio
   , class IsValidAudioGraph
   , class ValidAudioGraph
   , class HasOneGeneratorInternal
-  , class AsGeneratorObject
   , class AudioGraphToObject
   , class GeneratorsToGraph
   , class ReflectSymbols
@@ -173,7 +172,6 @@ module FRP.Behavior.Audio
   , asProcessorObject
   , asAggregator
   , asAggregatorObject
-  , asGeneratorObject
   , generators
   , processors
   , aggregators
@@ -2886,35 +2884,6 @@ else instance audioGraphProcessorsGiveUp0 ::
 ---------------------
 ----------------
 -------
-class AsGenerator v ch where
-  asGenerator :: v -> Maybe (AudioUnit ch)
-
-instance asGeneratorJust :: AsGenerator (AudioUnit ch) ch where
-  asGenerator a = Just a
-else instance asGeneratorOther :: AsGenerator x ch where
-  asGenerator _ = Nothing
-
-class AsGeneratorObject (iter :: RowList) (generators :: # Type) ch where
-  asGeneratorObject :: RLProxy iter -> Record generators -> Object (AudioGraph ch)
-
-instance asGeneratorObjectCons ::
-  (IsSymbol k, AsGeneratorObject tail g ch, AsGenerator v ch) =>
-  AsGeneratorObject (Cons k v tail) g ch where
-  asGeneratorObject _ graph =
-    let
-      asStr = reflectSymbol (SProxy :: SProxy k) :: String
-
-      maybeGenObj = asGenerator ((unsafeGet asStr graph) :: v) :: Maybe (AudioUnit ch)
-
-      -- FIX
-      asGen = O.empty -- maybe O.empty (O.singleton asStr) maybeGenObj :: O.Object (AudioUnit ch)
-      -- FIX
-      continuation = O.empty -- (asGeneratorObject (RLProxy :: RLProxy tail) graph) :: (O.Object (AudioUnit ch))
-    in
-      O.union asGen continuation
-else instance asGeneratorObjectNil :: AsGeneratorObject Nil g ch where
-  asGeneratorObject _ g = O.empty
-
 class AudioGraphGenerators (iter :: RowList) (graph :: # Type) ch where
   generators :: RLProxy iter -> Record graph -> O.Object (AudioUnit ch)
 
@@ -2922,12 +2891,9 @@ instance audioGraphGeneratorsNil :: AudioGraphGenerators Nil graph ch where
   generators _ g = O.empty
 else instance audioGraphGeneratorsCons ::
   ( RowToList genrec gl
-  , AsGeneratorObject gl genrec ch
-  , AudioGraphGenerators tail graph ch
   ) =>
-  -- FIX
   AudioGraphGenerators (Cons "generators" (Record genrec) tail) graph ch where
-  generators _ g = O.empty -- asGeneratorObject (RLProxy :: RLProxy gl) ((unsafeGet "generators" g) :: (Record genrec))
+  generators _ g = (unsafeGet "generators" g) :: (Object (AudioUnit ch))
      
 else instance audioGraphGeneratorsGiveUp0 ::
   (IsSymbol k, AudioGraphGenerators tail graph ch) =>
