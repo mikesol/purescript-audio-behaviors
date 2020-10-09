@@ -161,7 +161,7 @@ feedback _ =
         AudioUnit D1
     )
 
-run = runInBrowser onoffb
+run = runInBrowser feedback
 
 main :: Effect Unit
 main = pure unit
