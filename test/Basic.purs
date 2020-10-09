@@ -1,6 +1,7 @@
 module Test.Basic where
 
 import Prelude
+
 import Control.Monad.Error.Class (class MonadThrow)
 import Data.Array (replicate, zipWith)
 import Data.List (List(..), (:))
@@ -10,16 +11,21 @@ import Data.Maybe (Maybe(..))
 import Data.NonEmpty ((:|))
 import Data.Set (fromFoldable)
 import Data.Symbol (SProxy(..))
-import Data.Tuple (Tuple(..))
+import Data.Tuple (Tuple(..), snd)
 import Data.Typelevel.Num (D1, d3)
 import Data.Vec as V
 import Effect.Aff (Error)
 import Effect.Class (class MonadEffect)
-import FRP.Behavior.Audio (class IsValidAudioGraph, AudioGraphProcessor, AudioParameter(..), AudioProcessor, AudioUnit, AudioUnit'(..), SampleFrame, Status(..), audioToPtr, dup1, gain, gain', graph, merger, microphone, sinOsc, speaker', split3)
+import FRP.Behavior.Audio (class AsProcessorObject, class IsValidAudioGraph, class ValidAudioGraph, AudioGraph, AudioGraphProcessor, AudioParameter(..), AudioProcessor, AudioUnit, AudioUnit'(..), SampleFrame, Status(..), aggregators, asProcessor, asProcessorObject, audioToPtr, dup1, g'add, g'bandpass, gain, gain', graph, merger, microphone, sinOsc, speaker', split3, toObject)
+import Foreign.Object as O
 import Prim.Boolean (False, True)
+import Prim.RowList (class RowToList)
+import Record.Extra (SLProxy(..), SNil)
 import Test.Spec (SpecT, describe, it)
 import Test.Spec.Assertions (shouldEqual)
 import Type.Data.Boolean (BProxy(..))
+import Type.Data.Graph (type (:/))
+import Type.Data.RowList (RLProxy(..))
 
 frameZip :: SampleFrame -> SampleFrame -> SampleFrame
 frameZip = zipWith (zipWith (+))
@@ -57,7 +63,7 @@ isValidAudioGraph3 =
   BProxy ::
     forall b ch.
     IsValidAudioGraph
-      ( processors :: Record ( goodbye :: Tuple (AudioGraphProcessor ch) (SProxy "hello") )
+      ( processors :: Record ( goodbye :: Tuple (AudioGraphProcessor) (SProxy "hello") )
       , generators :: Record ( hello :: AudioUnit ch )
       )
       b =>
@@ -68,7 +74,7 @@ isValidAudioGraph4 =
   BProxy ::
     forall b ch.
     IsValidAudioGraph
-      ( processors :: Record ( goodbye :: Tuple (AudioGraphProcessor ch) (SProxy "notThere") )
+      ( processors :: Record ( goodbye :: Tuple (AudioGraphProcessor) (SProxy "notThere") )
       , generators :: Record ( hello :: AudioUnit ch )
       )
       b =>
@@ -397,6 +403,60 @@ basicTestSuite = do
           , len: 6
           , p: { head: 0, au: Speaker', chan: 1, name: Nothing, next: (fromFoldable Nil), prev: (fromFoldable (1 : Nil)), ptr: 0, status: On }
           }
-  describe "Type classes" do
-    it "should correctly get generators" do
-      pure unit
+  describe "To object" do
+    it "should correctly transform a simple object" do
+      let
+        g =
+          ( toObject
+              { generators: { mic: microphone }
+              }
+          ) ::
+            AudioGraph D1
+      O.size g.generators `shouldEqual` 1
+    it "should correctly transform a processor" do
+      (snd <$> (asProcessor $ Tuple (g'bandpass 440.0 1.0) (SProxy :: SProxy "mic"))) `shouldEqual` Just "mic"
+      (snd <$> (asProcessor $ Tuple (g'bandpass 440.0 1.0) "a string")) `shouldEqual` Nothing
+    it "should correctly transform a processors object" do
+      let
+        apo :: forall (t :: # Type) tl. RowToList t tl => AsProcessorObject tl t => (Record t) -> O.Object (Tuple (AudioGraphProcessor) String)
+        apo r = asProcessorObject (RLProxy :: RLProxy tl) r
+
+        g =
+          apo
+            { filt: Tuple (g'bandpass 440.0 1.0) (SProxy :: SProxy "mic")
+            }
+      O.size g `shouldEqual` 1
+
+  it "should correctly transform a complex object" do
+      let
+        g =
+          toObject
+              { processors: {
+                 filt: Tuple (g'bandpass 440.0 1.0 ) (SProxy :: SProxy "mic")
+              },
+              generators: { mic: microphone }
+              }
+           ::
+            AudioGraph D1
+      O.size g.generators `shouldEqual` 1
+      O.size g.processors `shouldEqual` 1
+      (snd <$> O.values g.processors) `shouldEqual` ["mic"]
+  it "should correctly transform a very complex object" do
+      let
+        g =
+          toObject
+              { aggregators: {
+                combine: Tuple g'add (SLProxy :: SLProxy ("filt" :/ "sosc" :/ SNil))
+              },
+                processors: {
+                filt: Tuple (g'bandpass 440.0 1.0 ) (SProxy :: SProxy "mic")
+              },
+              generators: { 
+                mic: microphone,
+                sosc: sinOsc 440.0 }
+              }
+           ::
+            AudioGraph D1
+      O.size g.generators `shouldEqual` 2
+      --O.size g.processors `shouldEqual` 1
+      --(snd <$> O.values g.processors) `shouldEqual` ["mic"]
