@@ -3,81 +3,82 @@
   <script src="index.js"></script>
   <script src="moo.js"></script>
   <script>
-    function base64ToArrayBuffer(base64) {
-      var binaryString = window.atob(base64);
-      var len = binaryString.length;
-      var bytes = new Uint8Array(len);
-      for (var i = 0; i < len; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-      return bytes.buffer;
-    }
-
-    var offCb = null;
-    var moo = null;
-    var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    var reverbSoundArrayBuffer = base64ToArrayBuffer(impulseResponse);
-    audioCtx.decodeAudioData(
-      reverbSoundArrayBuffer,
-      function (buffer) {
-        moo = buffer;
-      },
-      function (e) {
-        alert("Error when decoding audio data" + e.err);
-      }
-    );
-
-    function turnOnAudio() {
-      const myAudio = new Audio("forest.mp3");
-
-      audioCtx.audioWorklet.addModule("ps-aud-mul.js").then(function () {
-        var now = new Date().getTime();
-        var ctr = 0;
-        function makeDistortionCurve(amount) {
-          var k = typeof amount === "number" ? amount : 50,
-            n_samples = 44100,
-            curve = new Float32Array(n_samples),
-            deg = Math.PI / 180,
-            i = 0,
-            x;
-          for (; i < n_samples; ++i) {
-            x = (i * 2) / n_samples - 1;
-            curve[i] = ((3 + k) * x * 20 * deg) / (Math.PI + k * Math.abs(x));
+        function base64ToArrayBuffer(base64) {
+          var binaryString = window.atob(base64);
+          var len = binaryString.length;
+          var bytes = new Uint8Array(len);
+          for (var i = 0; i < len; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
           }
-          return curve;
+          return bytes.buffer;
         }
 
-        var waveshaperCurve = makeDistortionCurve(400);
-        var real = new Float32Array(3);
-        var imag = new Float32Array(3);
-        real[0] = 0.25;
-        real[1] = 0.1;
-        real[2] = 0.055;
-        imag[0] = 0.25;
-        imag[1] = 0.1;
-        imag[2] = 0.055;
-        offCb = PS["FRP.Behavior.Audio.Example.Koans"].run()(20)(15)(audioCtx)({
-          periodicWaves: {
-            funtimes: audioCtx.createPeriodicWave(real, imag),
+        var offCb = null;
+        var moo = null;
+        var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        var reverbSoundArrayBuffer = base64ToArrayBuffer(impulseResponse);
+        audioCtx.decodeAudioData(
+          reverbSoundArrayBuffer,
+          function (buffer) {
+            moo = buffer;
           },
-          buffers: {
-            moo: moo,
-          },
-          tracks: {
-            forest: myAudio,
-          },
-          floatArrays: {
-            waveshaperCurve: waveshaperCurve,
-          },
-        })({})();
-      });
-    }
-    function turnOffAudio() {
-      offCb ? offCb() : null;
-      offCB = null;
-      audioCtx ? audioCtx.close() : null;
-      audioCtx = null;
-    }
+          function (e) {
+            alert("Error when decoding audio data" + e.err);
+          }
+        );
+
+        function turnOnAudio() {
+          const myAudio = new Audio("forest.mp3");
+
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function() {
+          audioCtx.audioWorklet.addModule("ps-aud-mul.js").then(function () {
+            var now = new Date().getTime();
+            var ctr = 0;
+            function makeDistortionCurve(amount) {
+              var k = typeof amount === "number" ? amount : 50,
+                n_samples = 44100,
+                curve = new Float32Array(n_samples),
+                deg = Math.PI / 180,
+                i = 0,
+                x;
+              for (; i < n_samples; ++i) {
+                x = (i * 2) / n_samples - 1;
+                curve[i] = ((3 + k) * x * 20 * deg) / (Math.PI + k * Math.abs(x));
+              }
+              return curve;
+            }
+
+            var waveshaperCurve = makeDistortionCurve(400);
+            var real = new Float32Array(3);
+            var imag = new Float32Array(3);
+            real[0] = 0.25;
+            real[1] = 0.1;
+            real[2] = 0.055;
+            imag[0] = 0.25;
+            imag[1] = 0.1;
+            imag[2] = 0.055;
+            offCb = PS["FRP.Behavior.Audio.Example.Koans"].run()(20)(15)(audioCtx)({
+              periodicWaves: {
+                funtimes: audioCtx.createPeriodicWave(real, imag),
+              },
+              buffers: {
+                moo: moo,
+              },
+              tracks: {
+                forest: myAudio,
+              },
+              floatArrays: {
+                waveshaperCurve: waveshaperCurve,
+              },
+            })({})();
+          });
+        }});
+        function turnOffAudio() {
+          offCb ? offCb() : null;
+          offCB = null;
+          audioCtx ? audioCtx.close() : null;
+          audioCtx = null;
+        }
   </script>
   <body>
     <button onclick="turnOnAudio();">turn on</button>

@@ -299,7 +299,6 @@ module FRP.Behavior.Audio
   ) where
 
 import Prelude
-
 import Control.Bind (bindFlipped)
 import Control.Promise (Promise)
 import Data.Array (catMaybes, fold, foldl, head, index, length, mapWithIndex, range, replicate, snoc, takeEnd, zipWith, (!!))
@@ -1488,7 +1487,7 @@ getNextFromAggregators k pag proc =
     )
 
 getNexts :: forall ch. String -> Map String Int -> AudioGraph ch -> Set Int
-getNexts k pag g = getNextFromProcessors k pag g.processors <>  getNextFromAggregators k pag  g.aggregators
+getNexts k pag g = getNextFromProcessors k pag g.processors <> getNextFromAggregators k pag g.aggregators
 
 chainsForProcessor :: forall ch. Pos ch => Set Int -> Maybe String -> String -> Maybe Int -> Map String Int -> (Tuple (AudioGraphProcessor) String) -> AudioGraph ch -> Maybe PtrInfo
 chainsForProcessor nextIfTerminus toplevelName myName ptr' pag (Tuple proc input) g = do
@@ -1691,6 +1690,7 @@ audioToPtr = go (-1) DS.empty
           pag =
             M.fromFoldable
               $ A.mapWithIndex (\i k -> Tuple k (i + ptr.ptr)) (O.keys g.processors <> O.keys g.aggregators)
+
           -- run processing chains on all generators, giving them the correct next from the graph and offsetting the pointer by the length of all incoming nodes
           r =
             foldl
@@ -1708,6 +1708,7 @@ audioToPtr = go (-1) DS.empty
 
           -- run processing chains on all processors and aggregators, giving them correct prev and next
           pc = chainsForProcessors ptr.next auHack.name pagWithGens g.processors g <> chainsForAggregators ptr.next auHack.name pagWithGens g.aggregators g
+
           -- tack on all processors, aggregators and generators to flat
           flat =
             (M.fromFoldable $ map (\i -> Tuple i.ptr i) pc)

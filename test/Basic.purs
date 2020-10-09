@@ -608,8 +608,18 @@ basicTestSuite = do
                         , status: On
                         }
                     )
-                  , (Tuple 3 { au: Add', chan: 1, head: 3, name: Nothing, next: (fromFoldable (0 : Nil)), prev: 
-                  (fromFoldable (2 : 4 : Nil)), ptr: 3, status: On })
+                  , ( Tuple 3
+                        { au: Add'
+                        , chan: 1
+                        , head: 3
+                        , name: Nothing
+                        , next: (fromFoldable (0 : Nil))
+                        , prev:
+                            (fromFoldable (2 : 4 : Nil))
+                        , ptr: 3
+                        , status: On
+                        }
+                    )
                   , ( Tuple 4
                         { au: Microphone'
                         , chan: 1

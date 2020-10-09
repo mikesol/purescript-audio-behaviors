@@ -3,12 +3,16 @@ module FRP.Behavior.Audio.Example.Koans where
 import Prelude
 import Data.List ((:), List(..))
 import Data.NonEmpty ((:|))
+import Data.Symbol (SProxy(..))
+import Data.Tuple (Tuple(..))
 import Data.Typelevel.Num (D1, D2)
 import Data.Vec ((+>), empty)
 import Effect (Effect)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AudioUnit, Oversample(..), allpass, bandpass, convolver, delay, dup1, dynamicsCompressor, gain', highpass, highshelf, loopBuf, lowpass, lowshelf, merger, notch, panner, peaking, periodicOsc, play, playBuf, playBuf_, play_, runInBrowser, sawtoothOsc, sinOsc, speaker, speaker', squareOsc, traingleOsc, waveShaper)
+import FRP.Behavior.Audio (AudioUnit, Oversample(..), allpass, bandpass, convolver, delay, dup1, dynamicsCompressor, g'add, g'bandpass, g'delay, g'gain, gain', graph, highpass, highshelf, loopBuf, lowpass, lowshelf, merger, microphone, notch, panner, peaking, periodicOsc, play, playBuf, playBuf_, play_, runInBrowser, sawtoothOsc, sinOsc, speaker, speaker', squareOsc, traingleOsc, waveShaper)
 import Math (pi, sin)
+import Record.Extra (SLProxy(..), SNil)
+import Type.Data.Graph (type (:/))
 
 -- constant
 nothing :: Number -> Behavior (AudioUnit D1)
@@ -133,6 +137,28 @@ onoffb t =
             :| (if t < 9.0 then (pure $ gain' 0.3 (playBuf_ "f0" "moo" 1.0)) else Nil)
             <> (if t > 3.0 then (pure $ gain' 0.3 (playBuf_ "f1" "moo" 1.0)) else Nil)
         )
+
+-- feedback
+feedback :: Number -> Behavior (AudioUnit D1)
+feedback _ =
+  pure
+    ( speaker'
+        $ ( graph
+              { aggregators:
+                  { combine: Tuple g'add (SLProxy :: SLProxy ("gain" :/ SNil))
+                  , gain: Tuple (g'gain 0.5) (SLProxy :: SLProxy ("del" :/ "mic" :/ SNil))
+                  }
+              , processors:
+                  { del: Tuple (g'delay 0.2) (SProxy :: SProxy "filt")
+                  , filt: Tuple (g'bandpass 440.0 1.0) (SProxy :: SProxy "mic")
+                  }
+              , generators:
+                  { mic: microphone
+                  }
+              }
+          ) ::
+        AudioUnit D1
+    )
 
 run = runInBrowser onoffb
 
