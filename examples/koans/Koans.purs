@@ -145,12 +145,13 @@ feedback _ =
     ( speaker'
         $ ( graph
               { aggregators:
-                  { combine: Tuple g'add (SLProxy :: SLProxy ("gain" :/ SNil))
-                  , gain: Tuple (g'gain 0.5) (SLProxy :: SLProxy ("del" :/ "mic" :/ SNil))
+                  { out: Tuple g'add (SLProxy :: SLProxy ("combine" :/ SNil))
+                  , combine: Tuple g'add (SLProxy :: SLProxy ("gain" :/ "mic" :/ SNil))
+                  , gain: Tuple (g'gain 0.5) (SLProxy :: SLProxy ("del" :/ SNil))
                   }
               , processors:
                   { del: Tuple (g'delay 0.2) (SProxy :: SProxy "filt")
-                  , filt: Tuple (g'bandpass 440.0 1.0) (SProxy :: SProxy "mic")
+                  , filt: Tuple (g'bandpass 440.0 1.0) (SProxy :: SProxy "combine")
                   }
               , generators:
                   { mic: microphone
