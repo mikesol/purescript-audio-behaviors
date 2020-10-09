@@ -9,13 +9,14 @@ import Data.Map as DM
 import Data.Maybe (Maybe(..))
 import Data.NonEmpty ((:|))
 import Data.Set (fromFoldable)
+import Data.Symbol (SProxy(..))
 import Data.Tuple (Tuple(..))
 import Data.Typelevel.Num (D1, d3)
 import Data.Vec as V
 import Effect.Aff (Error)
 import Effect.Class (class MonadEffect)
-import FRP.Behavior.Audio (class IsValidAudioGraph, AudioParameter(..), AudioProcessor, AudioUnit, AudioUnit'(..), SampleFrame, Status(..), audioToPtr, dup1, gain, gain', graph, merger, microphone, sinOsc, speaker', split3)
-import Prim.Boolean (True)
+import FRP.Behavior.Audio (class IsValidAudioGraph, AudioGraphProcessor, AudioParameter(..), AudioProcessor, AudioUnit, AudioUnit'(..), SampleFrame, Status(..), audioToPtr, dup1, gain, gain', graph, merger, microphone, sinOsc, speaker', split3)
+import Prim.Boolean (False, True)
 import Test.Spec (SpecT, describe, it)
 import Test.Spec.Assertions (shouldEqual)
 import Type.Data.Boolean (BProxy(..))
@@ -38,6 +39,37 @@ isValidAudioGraph1 =
     forall b ch.
     IsValidAudioGraph
       ( generators :: Record ( hello :: AudioUnit ch )
+      )
+      b =>
+    BProxy b
+
+isValidAudioGraph2 :: BProxy False
+isValidAudioGraph2 =
+  BProxy ::
+    forall b.
+    IsValidAudioGraph
+      ()
+      b =>
+    BProxy b
+
+isValidAudioGraph3 :: BProxy True
+isValidAudioGraph3 =
+  BProxy ::
+    forall b ch.
+    IsValidAudioGraph
+      ( processors :: Record ( goodbye :: Tuple (AudioGraphProcessor ch) (SProxy "hello") )
+      , generators :: Record ( hello :: AudioUnit ch )
+      )
+      b =>
+    BProxy b
+
+isValidAudioGraph4 :: BProxy False
+isValidAudioGraph4 =
+  BProxy ::
+    forall b ch.
+    IsValidAudioGraph
+      ( processors :: Record ( goodbye :: Tuple (AudioGraphProcessor ch) (SProxy "notThere") )
+      , generators :: Record ( hello :: AudioUnit ch )
       )
       b =>
     BProxy b
