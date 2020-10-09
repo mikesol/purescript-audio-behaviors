@@ -138,6 +138,101 @@ module FRP.Behavior.Audio
   , gainT'
   , gain_'
   , gainT_'
+  , graph
+  , graph_
+  , class AsProcessorObject
+  , class ProcessorsToGraph
+  , class LookupAggregators
+  , class AudioGraphGenerators
+  , class GeneratorsToGraphInternal
+  , class LookupProcessors
+  , class HasOneGenerator
+  , class LookUpProcessorsInternal
+  , class RecordNotEmptyInternal
+  , class ProcessorsToGraphInternal
+  , class AudioGraphToGraph
+  , class AggregatorsToGraphInternal
+  , class LookUpAggregatorsInternal
+  , class LookUpGeneratorsInternal
+  , class AggregatorsToGraph
+  , class LookupGenerators
+  , class AudioGraphProcessors
+  , class AsAggregatorObject
+  , class AudioGraphAggregators
+  , class ValidAudioGraph
+  , class HasOneGeneratorInternal
+  , class AsGeneratorObject
+  , class AudioGraphToObject
+  , class GeneratorsToGraph
+  , class ReflectSymbols
+  , toObject
+  , asProcessorObject
+  , asAggregatorObject
+  , asGeneratorObject
+  , generators
+  , processors
+  , aggregators
+  , reflectSymbols
+  , g'dynamicsCompressorT_
+  , g'lowpass_
+  , g'lowpassT_
+  , g'peakingT_
+  , g'notchT
+  , g'convolver_
+  , g'delayT
+  , g'highpassT
+  , g'lowshelf
+  , g'notchT_
+  , g'panner
+  , g'gain
+  , g'panner_
+  , g'bandpassT
+  , g'delay_
+  , g'bandpass_
+  , g'dynamicsCompressorT
+  , g'mul_
+  , g'gain_
+  , g'audioWorkletProcessorT
+  , g'audioWorkletProcessorT_
+  , g'peaking
+  , g'pannerT_
+  , g'audioWorkletProcessor_
+  , g'delayT_
+  , g'lowpass
+  , g'bandpass
+  , g'notch_
+  , g'allpass
+  , g'add_
+  , g'dynamicsCompressor
+  , g'gainT
+  , g'highpass_
+  , g'lowshelfT
+  , g'peaking_
+  , g'allpassT_
+  , g'highshelf
+  , g'audioWorkletProcessor
+  , g'mul
+  , g'pannerT
+  , g'lowshelf_
+  , g'bandpassT_
+  , g'lowshelfT_
+  , g'allpassT
+  , g'convolver
+  , g'highshelfT_
+  , g'notch
+  , g'gainT_
+  , g'dynamicsCompressor_
+  , g'waveShaper
+  , g'highpass
+  , g'lowpassT
+  , g'allpass_
+  , g'delay
+  , g'add
+  , g'highshelfT
+  , g'highpassT_
+  , g'peakingT
+  , g'waveShaper_
+  , g'highshelf_
   , AudioUnit'(..)
   , audioGrouper
   , SampleFrame
@@ -165,6 +260,9 @@ module FRP.Behavior.Audio
   , Animation(..)
   , IAudioUnit(..)
   , IAnimation(..)
+  , AudioGraph
+  , AudioGraphProcessor
+  , AudioGraphAggregator
   , class RunnableMedia
   , makePeriodicWave
   , reconciliationToInstructionSet
@@ -200,7 +298,7 @@ module FRP.Behavior.Audio
 import Prelude
 import Control.Bind (bindFlipped)
 import Control.Promise (Promise)
-import Data.Array (catMaybes, foldl, head, index, length, mapWithIndex, range, replicate, snoc, takeEnd, zipWith, (!!))
+import Data.Array (catMaybes, fold, foldl, head, index, length, mapWithIndex, range, replicate, snoc, takeEnd, zipWith, (!!))
 import Data.Array as A
 import Data.Either (either)
 import Data.Generic.Rep (class Generic)
@@ -218,6 +316,7 @@ import Data.NonEmpty as NE
 import Data.Set (Set, member)
 import Data.Set as DS
 import Data.String (Pattern(..), split, take)
+import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
 import Data.Traversable (sequence)
 import Data.Tuple (Tuple(..), fst, snd, swap, uncurry)
 import Data.Typelevel.Num (class Pos, D1, D2, D3, D4, D5, toInt')
@@ -239,9 +338,19 @@ import Graphics.Canvas (CanvasElement, clearRect, getCanvasHeight, getCanvasWidt
 import Graphics.Drawing (Drawing, render)
 import Heterogeneous.Mapping (class HMap, class Mapping, hmap)
 import Math as Math
+import Prim.Boolean (False, True, kind Boolean)
+import Prim.Row (class Union)
+import Prim.RowList (class RowToList, Cons, Nil, kind RowList)
+import Prim.Symbol (class Compare)
 import Record (merge)
+import Record.Extra (SLProxy(..), SNil, kind SList)
+import Record.Unsafe (unsafeGet)
+import Type.Data.Graph (class FlipDirection, class HasDuplicateEdges, class HasDuplicateNodes, class HasOrphanNodes, class HasUniqueTerminus, class IsConnected, class IsEq, type (:/))
+import Type.Data.Row (RProxy(..))
 import Type.Proxy (Proxy(..))
 import Type.Row.Homogeneous (class Homogeneous)
+import Type.RowList (class ListToRow, RLProxy(..))
+import Unsafe.Coerce (unsafeCoerce)
 
 foreign import data BrowserPeriodicWave :: Type
 
@@ -268,6 +377,24 @@ foreign import makeAudioTrack :: String -> Effect BrowserAudioTrack
 foreign import makeAudioBuffer :: AudioContext -> AudioBuffer -> Effect BrowserAudioBuffer
 
 foreign import makeFloatArray :: Array Number -> Effect BrowserFloatArray
+
+makePeriodicWave ::
+  forall len.
+  Pos len =>
+  AudioContext ->
+  Vec len Number ->
+  Vec len Number ->
+  Effect BrowserPeriodicWave
+makePeriodicWave ctx a b = makePeriodicWaveImpl ctx (V.toArray a) (V.toArray b)
+
+audioBuffer ::
+  forall bch blen.
+  Pos bch =>
+  Pos blen =>
+  Int ->
+  Vec bch (Vec blen Number) ->
+  AudioBuffer
+audioBuffer i v = AudioBuffer i (map V.toArray $ V.toArray v)
 
 newtype IdxContext i
   = IdxContext i
@@ -662,6 +789,33 @@ newtype AudioParameter a
 instance audioParameterFunctor :: Functor AudioParameter where
   map f (AudioParameter { param, timeOffset }) = AudioParameter { param: f param, timeOffset }
 
+data AudioGraphProcessor ch
+  = GAudioWorkletProcessor MString String (Object (AudioParameter Number))
+  | GLowpass MString (AudioParameter Number) (AudioParameter Number)
+  | GHighpass MString (AudioParameter Number) (AudioParameter Number)
+  | GBandpass MString (AudioParameter Number) (AudioParameter Number)
+  | GLowshelf MString (AudioParameter Number) (AudioParameter Number)
+  | GHighshelf MString (AudioParameter Number) (AudioParameter Number)
+  | GPeaking MString (AudioParameter Number) (AudioParameter Number) (AudioParameter Number)
+  | GNotch MString (AudioParameter Number) (AudioParameter Number)
+  | GAllpass MString (AudioParameter Number) (AudioParameter Number)
+  | GConvolver MString String
+  | GDynamicsCompressor MString (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioParameter Number)
+  | GWaveShaper MString String Oversample
+  | GStereoPanner MString (AudioParameter Number)
+  | GDelay MString (AudioParameter Number)
+
+data AudioGraphAggregator ch
+  = GMul MString
+  | GAdd MString
+  | GGain MString (AudioParameter Number)
+
+type AudioGraph ch
+  = { generators :: O.Object (AudioUnit ch)
+    , processors :: O.Object (Tuple (AudioGraphProcessor ch) String)
+    , aggregators :: O.Object (Tuple (AudioGraphAggregator ch) (Set String))
+    }
+
 data AudioUnit ch
   = Microphone MString
   | AudioWorkletGenerator MString String (Object (AudioParameter Number))
@@ -704,6 +858,7 @@ data AudioUnit ch
   | Gain MString (AudioParameter Number) (NonEmpty List (AudioUnit ch))
   | Speaker MString (NonEmpty List (AudioUnit ch))
   | NoSound MString
+  | Graph MString (AudioGraph ch)
   | SplitRes Int
   | DupRes
 
@@ -980,6 +1135,45 @@ derive instance eqAudioUnit'' :: Eq AudioUnit''
 instance ordAudioUnit'' :: Ord AudioUnit'' where
   compare a b = compare (show a) (show b)
 
+aga2au' :: forall ch. Pos ch => AudioGraphAggregator ch -> { au :: AudioUnit', name :: MString }
+aga2au' (GMul name) = { au: Mul', name }
+
+aga2au' (GAdd name) = { au: Add', name }
+
+aga2au' (GGain name n) = { au: (Gain' n), name }
+
+agp2au' :: forall ch. Pos ch => AudioGraphProcessor ch -> { au :: AudioUnit', name :: MString }
+agp2au' (GAudioWorkletProcessor name unit params) = { au: AudioWorkletProcessor' unit params, name }
+
+agp2au' (GLowpass name f q) = { au: Lowpass' f q, name }
+
+agp2au' (GHighpass name f q) = { au: Highpass' f q, name }
+
+agp2au' (GBandpass name f q) = { au: Bandpass' f q, name }
+
+agp2au' (GLowshelf name f g) = { au: Lowshelf' f g, name }
+
+agp2au' (GHighshelf name f g) = { au: Highshelf' f g, name }
+
+agp2au' (GPeaking name f q g) = { au: Peaking' f q g, name }
+
+agp2au' (GNotch name f q) = { au: Notch' f q, name }
+
+agp2au' (GDelay name v) = { au: Delay' v, name }
+
+agp2au' (GAllpass name f q) = { au: Allpass' f q, name }
+
+agp2au' (GConvolver name buf) = { au: Convolver' buf, name }
+
+agp2au' (GDynamicsCompressor name thresh knee ratio attack release) =
+  { au: DynamicsCompressor' thresh knee ratio attack release
+  , name
+  }
+
+agp2au' (GWaveShaper name curve os) = { au: (WaveShaper' curve os), name }
+
+agp2au' (GStereoPanner name n) = { au: (StereoPanner' n), name }
+
 au' :: forall ch. Pos ch => AudioUnit ch -> { au :: AudioUnit', name :: MString }
 au' (Microphone name) = { au: Microphone', name }
 
@@ -1067,6 +1261,12 @@ au' (Gain name n _) = { au: (Gain' n), name }
 au' (Speaker name _) = { au: Speaker', name }
 
 au' (NoSound name) = { au: NoSound', name }
+
+------------ we only use this for the name
+----------- a code smell that it even needs to exist
+---------- perhaps the AudioUnit structure & pattern match
+--------- has outgrown its usefulness...
+au' (Graph name _) = { au: NoSound', name: name }
 
 au' (SplitRes n) = { au: (SplitRes' n), name: Nothing }
 
@@ -1263,6 +1463,84 @@ splitResGetImpetus s =
                 s.flat
         )
 
+getNextFromProcessors :: forall ch. String -> Map String Int -> O.Object (Tuple (AudioGraphProcessor ch) String) -> Set Int
+getNextFromProcessors k pag proc =
+  DS.fromFoldable
+    ( catMaybes
+        $ map (flip M.lookup pag <<< fst)
+            ( A.filter (\(Tuple _ (Tuple _ b)) -> b == k)
+                (O.toUnfoldable proc)
+            )
+    )
+
+getNextFromAggregators :: forall ch. String -> Map String Int -> O.Object (Tuple (AudioGraphAggregator ch) (Set String)) -> Set Int
+getNextFromAggregators k pag proc =
+  DS.fromFoldable
+    ( catMaybes
+        $ map (flip M.lookup pag <<< fst)
+            ( A.filter (\(Tuple _ (Tuple _ b)) -> k `member` b)
+                (O.toUnfoldable proc)
+            )
+    )
+
+getNexts :: forall ch. String -> Map String Int -> AudioGraph ch -> Set Int
+getNexts k pag g = getNextFromProcessors k pag g.processors <> getNextFromAggregators k pag g.aggregators
+
+chainsForProcessor :: forall ch. Pos ch => Set Int -> Maybe String -> String -> Maybe Int -> Map String Int -> (Tuple (AudioGraphProcessor ch) String) -> AudioGraph ch -> Maybe PtrInfo
+chainsForProcessor nextIfTerminus toplevelName myName ptr' pag (Tuple proc input) g = do
+  ptr <- ptr'
+  pv <- M.lookup input pag
+  let
+    nexts = getNexts myName pag g
+  pure
+    { ptr: ptr
+    , chan: toInt' (Proxy :: Proxy ch)
+    , prev: DS.singleton pv
+    , next: if DS.isEmpty nexts then nextIfTerminus else nexts
+    , head: ptr
+    , au: (agp2au' proc).au
+    , status: On
+    , name: (myName <> _) <$> toplevelName
+    }
+
+-------------- todo, merge with above?
+chainsForAggregator :: forall ch. Pos ch => Set Int -> Maybe String -> String -> Maybe Int -> Map String Int -> (Tuple (AudioGraphAggregator ch) (Set String)) -> AudioGraph ch -> Maybe PtrInfo
+chainsForAggregator nextIfTerminus toplevelName myName ptr' pag (Tuple proc input) g = do
+  ptr <- ptr'
+  pv <-
+    DS.fromFoldable
+      <$> ( sequence
+            $ map (flip M.lookup pag) (DS.toUnfoldable input :: Array String)
+        )
+  let
+    nexts = getNexts myName pag g
+  pure
+    { ptr: ptr
+    , chan: toInt' (Proxy :: Proxy ch)
+    , prev: pv
+    , next: if DS.isEmpty nexts then nextIfTerminus else nexts
+    , head: ptr
+    , au: (aga2au' proc).au
+    , status: On
+    , name: (myName <> _) <$> toplevelName
+    }
+
+chainer :: ∀ t8471 t8472 t8475 t8476 t8483 t8488. (t8471 → t8472 → String → Maybe t8488 → Map String t8488 → t8483 → t8475 → Maybe t8476) → t8471 → t8472 → Map String t8488 → Object t8483 → t8475 → List t8476
+chainer f nextIfTerminus toplevelName pag vs g =
+  DL.catMaybes
+    ( map
+        ( \(Tuple k v) ->
+            f nextIfTerminus toplevelName k (M.lookup k pag) pag v g
+        )
+        $ O.toUnfoldable vs
+    )
+
+chainsForProcessors :: forall ch. Pos ch => Set Int -> Maybe String -> Map String Int -> Object (Tuple (AudioGraphProcessor ch) String) -> AudioGraph ch -> List PtrInfo
+chainsForProcessors = chainer chainsForProcessor
+
+chainsForAggregators :: forall ch. Pos ch => Set Int -> Maybe String -> Map String Int -> Object (Tuple (AudioGraphAggregator ch) (Set String)) -> AudioGraph ch -> List PtrInfo
+chainsForAggregators = chainer chainsForAggregator
+
 audioToPtr ::
   forall channels.
   Pos channels =>
@@ -1370,6 +1648,105 @@ audioToPtr = go (-1) DS.empty
       , p
       }
 
+  graphthrough ::
+    forall ch ich.
+    Pos ch =>
+    Pos ich =>
+    PtrInfo' ->
+    AudioUnit ch ->
+    AudioGraph ich ->
+    AlgStep
+  -- the constructor below guarantees this will be typesafe
+  -- as a result, this takes a lot of shortcuts, assuming things
+  -- will be correctly set up
+  -- if they are not, the behavior is undefined
+  graphthrough ptr v g =
+    let
+      auHack = au' v
+
+      dummy =
+        merge ptr
+          { head: ptr.ptr
+          , prev: DS.empty :: Set Int
+          , au: (Constant' (AudioParameter { param: 0.0, timeOffset: 0.0 }))
+          , name: auHack.name
+          }
+    in
+      -- this should never happen from the type safety before, but is necessary
+      -- so that we have a sort of "monoid" in case there is nothing here for some
+      -- odd reason
+      if O.size g.aggregators == 0 && O.size g.generators == 0 && O.size g.processors == 0 then
+        { len: 1
+        , flat: M.singleton ptr.ptr dummy
+        , p: dummy
+        }
+      -- real code for graph
+      else
+        let
+          -- attribute pointers to all processors and aggregators
+          pag =
+            M.fromFoldable
+              $ A.mapWithIndex (\i k -> Tuple k (i + ptr.ptr)) (O.keys g.processors <> O.keys g.aggregators)
+
+          -- run processing chains on all generators, giving them the correct next from the graph and offsetting the pointer by the length of all incoming nodes
+          r =
+            foldl
+              ( \{ curP, algSteps } (Tuple k z) ->
+                  let
+                    o = go curP (getNexts k pag g) z
+                  in
+                    { curP: o.len + curP, algSteps: M.singleton k o <> algSteps }
+              )
+              { curP: ptr.ptr + (M.size pag) - 1, algSteps: M.empty }
+              ((O.toUnfoldable g.generators) :: Array (Tuple String (AudioUnit ich)))
+
+          -- add the generators to the pag map so that we can reason about their ids
+          pagWithGens = pag <> M.mapMaybeWithKey (\_ z -> Just z.p.ptr) r.algSteps
+
+          -- run processing chains on all processors and aggregators, giving them correct prev and next
+          pc = chainsForProcessors ptr.next auHack.name pagWithGens g.processors g <> chainsForAggregators ptr.next auHack.name pagWithGens g.aggregators g
+
+          -- tack on all processors, aggregators and generators to flat
+          flat =
+            (M.fromFoldable $ map (\i -> Tuple i.ptr i) pc)
+              <> (fold (map _.flat (M.values r.algSteps)))
+
+          p = DL.head (DL.filter (\i -> i.next == ptr.next) $ M.values flat)
+        -- length is sum of generator lengths plus sum of aggregators plus sum of processors
+        in
+          maybe
+            { len: 1
+            , flat: M.singleton ptr.ptr dummy
+            , p: dummy
+            }
+            { len: M.size flat, flat, p: _ }
+            p
+
+  {-type PtrInfo'
+  = { ptr :: Int
+    , chan :: Int
+    , status :: Status
+    , next :: Set Int
+    }
+
+type PtrInfo
+  = { ptr :: Int
+    , chan :: Int
+    , next :: Set Int
+    , status :: Status
+    , prev :: Set Int
+    , head :: Int
+    , au :: AudioUnit'
+    , name :: MString
+    }
+-}
+  {-merge
+          { head: ptr.ptr
+          , prev: DS.fromFoldable $ (map (_.p.head) r)
+          , au: au.au
+          , name: au.name
+          }
+          ptr-}
   closurethrough ::
     forall ch ix.
     Pos ch =>
@@ -1507,6 +1884,45 @@ audioToPtr = go (-1) DS.empty
 
   go' ptr v@(Split5 name a f) = closurethrough ptr v a (f $ fill SplitRes) splitResGetImpetus
 
+  go' ptr v@(Graph name g) = graphthrough ptr v g
+
+apP :: forall a. AudioParameter a -> a
+apP (AudioParameter { param }) = param
+
+apT :: forall a. AudioParameter a -> Number
+apT (AudioParameter { timeOffset }) = timeOffset
+
+ap_ :: forall a. a -> AudioParameter a
+ap_ a =
+  AudioParameter
+    { param: a
+    , timeOffset: 0.0
+    }
+
+instance showAPNum :: Show (AudioParameter Number) where
+  show (AudioParameter s) = show s
+
+instance showAPANum :: Show (AudioParameter (Array Number)) where
+  show (AudioParameter s) = show s
+
+instance showAPB :: Show (AudioParameter AudioBuffer) where
+  show (AudioParameter s) = show s
+
+instance showAPO :: Show (AudioParameter Oversample) where
+  show (AudioParameter s) = show s
+
+instance eqAPNum :: Eq (AudioParameter Number) where
+  eq (AudioParameter s) (AudioParameter r) = s == r
+
+instance eqAPANum :: Eq (AudioParameter (Array Number)) where
+  eq (AudioParameter s) (AudioParameter r) = s == r
+
+instance eqAPB :: Eq (AudioParameter AudioBuffer) where
+  eq (AudioParameter s) (AudioParameter r) = s == r
+
+instance eqAPO :: Eq (AudioParameter Oversample) where
+  eq (AudioParameter s) (AudioParameter r) = s == r
+
 -- | The microphone.
 -- |
 -- | Make sure to enable the microphone before using this.
@@ -1515,12 +1931,6 @@ microphone = Microphone Nothing
 
 microphone_ :: String -> AudioUnit D1
 microphone_ = Microphone <<< Just
-
-apP :: forall a. AudioParameter a -> a
-apP (AudioParameter { param }) = param
-
-apT :: forall a. AudioParameter a -> Number
-apT (AudioParameter { timeOffset }) = timeOffset
 
 -- | Play an audio track.
 -- |
@@ -1723,24 +2133,6 @@ loopBufT_ ::
   AudioUnit ch
 loopBufT_ s handle a b c = LoopBuf (Just s) handle a b c
 
-makePeriodicWave ::
-  forall len.
-  Pos len =>
-  AudioContext ->
-  Vec len Number ->
-  Vec len Number ->
-  Effect BrowserPeriodicWave
-makePeriodicWave ctx a b = makePeriodicWaveImpl ctx (V.toArray a) (V.toArray b)
-
-audioBuffer ::
-  forall bch blen.
-  Pos bch =>
-  Pos blen =>
-  Int ->
-  Vec bch (Vec blen Number) ->
-  AudioBuffer
-audioBuffer i v = AudioBuffer i (map V.toArray $ V.toArray v)
-
 -- | A lowpass filter.
 -- |
 -- | - f:  The cutoff frequency.
@@ -1757,7 +2149,7 @@ lowpassT a b = Lowpass Nothing a b
 lowpassT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
 lowpassT_ s a b = Lowpass (Just s) a b
 
--- | A lowpass filter.
+-- | A highpass filter.
 -- |
 -- | - f:  The cutoff frequency.
 -- | - q:  The Q value in positive decibels. See [BiquadFilterNode](https://developer.mozilla.org/en-US/docs/Web/API/BiquadFilterNode) in the WebAudio documentation for more information on Q values.
@@ -1983,37 +2375,6 @@ dup5_ :: forall ch. Pos ch => String -> AudioUnit D5 -> (AudioUnit D5 -> AudioUn
 dup5_ s DupRes f = f DupRes
 
 dup5_ s x f = Dup5 (Just s) x f
-
-ap_ :: forall a. a -> AudioParameter a
-ap_ a =
-  AudioParameter
-    { param: a
-    , timeOffset: 0.0
-    }
-
-instance showAPNum :: Show (AudioParameter Number) where
-  show (AudioParameter s) = show s
-
-instance showAPANum :: Show (AudioParameter (Array Number)) where
-  show (AudioParameter s) = show s
-
-instance showAPB :: Show (AudioParameter AudioBuffer) where
-  show (AudioParameter s) = show s
-
-instance showAPO :: Show (AudioParameter Oversample) where
-  show (AudioParameter s) = show s
-
-instance eqAPNum :: Eq (AudioParameter Number) where
-  eq (AudioParameter s) (AudioParameter r) = s == r
-
-instance eqAPANum :: Eq (AudioParameter (Array Number)) where
-  eq (AudioParameter s) (AudioParameter r) = s == r
-
-instance eqAPB :: Eq (AudioParameter AudioBuffer) where
-  eq (AudioParameter s) (AudioParameter r) = s == r
-
-instance eqAPO :: Eq (AudioParameter Oversample) where
-  eq (AudioParameter s) (AudioParameter r) = s == r
 
 -- | A wave shaper.
 -- | Used to create distortion/overdrive.
@@ -2304,6 +2665,519 @@ gain_' s n = Gain (Just s) (ap_ n) <<< NE.singleton
 gainT_' :: forall ch. Pos ch => String -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
 gainT_' s n = Gain (Just s) n <<< NE.singleton
 
+class AggregatorsToGraphInternal (aggregators :: RowList) (graph :: RowList) | aggregators -> graph
+
+instance aggregatorsToGraphInternalNil :: AggregatorsToGraphInternal Nil Nil
+
+instance aggregatorsToGraphInternalCons ::
+  ( AggregatorsToGraphInternal t newT
+    ) =>
+  AggregatorsToGraphInternal (Cons k (Tuple (AudioGraphAggregator ch) (SLProxy v)) t) (Cons k (SLProxy v) newT)
+
+class AggregatorsToGraph (aggregators :: # Type) (graph :: # Type) | aggregators -> graph
+
+class ProcessorsToGraphInternal (processors :: RowList) (graph :: RowList) | processors -> graph
+
+instance processorsToGraphInternalNil :: ProcessorsToGraphInternal Nil Nil
+
+instance processorsToGraphInternalCons ::
+  ( ProcessorsToGraphInternal t newT
+    ) =>
+  ProcessorsToGraphInternal (Cons k (Tuple (AudioGraphProcessor ch) (SProxy v)) t) (Cons k (SLProxy (v :/ SNil)) newT)
+
+class ProcessorsToGraph (processors :: # Type) (graph :: # Type) | processors -> graph
+
+class GeneratorsToGraphInternal (generators :: RowList) (graph :: RowList) | generators -> graph
+
+instance generatorsToGraphInternalNil :: GeneratorsToGraphInternal Nil Nil
+
+instance generatorsToGraphInternalCons ::
+  ( GeneratorsToGraphInternal t newT
+    ) =>
+  GeneratorsToGraphInternal (Cons k (AudioUnit ch) t) (Cons k (SLProxy SNil) newT)
+
+class GeneratorsToGraph (generators :: # Type) (graph :: # Type) | generators -> graph
+
+instance generatorsToGraph ::
+  ( RowToList generators gn
+  , GeneratorsToGraphInternal gn gl
+  , ListToRow gl graph
+  ) =>
+  GeneratorsToGraph generators graph
+
+class LookUpProcessorsInternal (rowList :: RowList) (graph :: RowList) (processors :: # Type) | rowList graph -> processors
+
+class LookupProcessors (audioGraph :: # Type) (processors :: # Type) | audioGraph -> processors
+
+instance lookUpProcessorsInternalNil :: (ListToRow rl r) => LookUpProcessorsInternal rl Nil r
+else instance lookUpProcessorsInternalCons :: (ListToRow (Cons k v t) r) => LookUpProcessorsInternal (Cons k v t) g r
+else instance lookUpProcessorsInternalYes :: LookUpProcessorsInternal x (Cons "processors" (Record v) t) v
+else instance lookUpProcessorsInternalNo ::
+  ( LookUpProcessorsInternal Nil t v
+    ) =>
+  LookUpProcessorsInternal Nil (Cons x y t) v
+
+instance lookupProcessors ::
+  ( RowToList audioGraph ag
+  , LookUpProcessorsInternal Nil ag processors
+  ) =>
+  LookupProcessors audioGraph processors
+
+class LookUpAggregatorsInternal (rowList :: RowList) (graph :: RowList) (aggregators :: # Type) | rowList graph -> aggregators
+
+class LookupAggregators (audioGraph :: # Type) (aggregators :: # Type) | audioGraph -> aggregators
+
+instance lookUpAggregatorsInternalNil :: (ListToRow rl r) => LookUpAggregatorsInternal rl Nil r
+else instance lookUpAggregatorsInternalCons :: (ListToRow (Cons k v t) r) => LookUpAggregatorsInternal (Cons k v t) g r
+else instance lookUpAggregatorsInternalYes :: LookUpAggregatorsInternal x (Cons "aggregators" (Record v) t) v
+else instance lookUpAggregatorsInternalNo ::
+  ( LookUpAggregatorsInternal Nil t v
+    ) =>
+  LookUpAggregatorsInternal Nil (Cons x y t) v
+
+instance lookupAggregators ::
+  ( RowToList audioGraph ag
+  , LookUpAggregatorsInternal Nil ag aggregators
+  ) =>
+  LookupAggregators audioGraph aggregators
+
+class LookUpGeneratorsInternal (rowList :: RowList) (graph :: RowList) (generators :: # Type) | rowList graph -> generators
+
+class LookupGenerators (audioGraph :: # Type) (generators :: # Type) | audioGraph -> generators
+
+instance lookUpGeneratorsInternalNil :: (ListToRow rl r) => LookUpGeneratorsInternal rl Nil r
+else instance lookUpGeneratorsInternalCons :: (ListToRow (Cons k v t) r) => LookUpGeneratorsInternal (Cons k v t) g r
+else instance lookUpGeneratorsInternalYes :: LookUpGeneratorsInternal x (Cons "generators" (Record v) t) v
+else instance lookUpGeneratorsInternalNo ::
+  ( LookUpGeneratorsInternal Nil t v
+    ) =>
+  LookUpGeneratorsInternal Nil (Cons x y t) v
+
+instance lookupGenerators ::
+  ( RowToList audioGraph ag
+  , LookUpGeneratorsInternal Nil ag generators
+  ) =>
+  LookupGenerators audioGraph generators
+
+class AudioGraphToGraph (audioGraph :: # Type) (graph :: # Type) | audioGraph -> graph
+
+instance audioGraphToGraph ::
+  ( LookupGenerators audioGraph generators
+  , LookupProcessors audioGraph processors
+  , LookupAggregators audioGraph aggregators
+  , GeneratorsToGraph generators genGraph
+  , ProcessorsToGraph processors procGraph
+  , AggregatorsToGraph aggregators accGraph
+  , Union genGraph procGraph step0
+  , Union step0 accGraph step1
+  , FlipDirection step1 graph
+  ) =>
+  AudioGraphToGraph audioGraph graph
+
+class RecordNotEmptyInternal (gate :: Boolean) (generators :: Type) (b :: Boolean) | gate generators -> b
+
+instance recordNotEmptyInternalFalse :: RecordNotEmptyInternal False g False
+else instance recordNotEmptyInternalTrue :: (RowToList g (Cons k v t)) => RecordNotEmptyInternal True (Record g) True
+else instance recordNotEmptyInternalF :: RecordNotEmptyInternal True g False
+
+class HasOneGeneratorInternal (gate :: Boolean) (graph :: RowList) (b :: Boolean) | gate graph -> b
+
+instance hasOneGeneratorInternalNil :: HasOneGeneratorInternal b Nil b
+else instance hasOneGeneratorInternalTrue :: HasOneGeneratorInternal True g True
+else instance hasOneGeneratorInternalCons ::
+  ( Compare "generators" k kgen
+  , IsEq kgen isGeneratorRecord
+  , RecordNotEmptyInternal isGeneratorRecord v bx
+  , HasOneGeneratorInternal bx t b
+  ) =>
+  HasOneGeneratorInternal False (Cons k v t) b
+
+class HasOneGenerator (graph :: # Type) (b :: Boolean) | graph -> b
+
+instance hasOneGenerator ::
+  ( RowToList graph gl
+  , HasOneGeneratorInternal False gl b
+  ) =>
+  HasOneGenerator graph b
+
+instance validAudioGraph ::
+  ( HasOneGenerator audioGraph True
+  , AudioGraphToGraph audioGraph graph
+  , HasDuplicateNodes graph False
+  , HasDuplicateEdges graph False
+  , HasUniqueTerminus graph True
+  , IsConnected graph True
+  , HasOrphanNodes graph False
+  ) =>
+  ValidAudioGraph audioGraph
+
+class ValidAudioGraph (graph :: # Type)
+
+class AsProcessorObject (iter :: RowList) (processors :: # Type) ch where
+  asProcessorObject :: RLProxy iter -> Record processors -> Object (Tuple (AudioGraphProcessor ch) String)
+
+instance asProcessorObjectCons ::
+  (IsSymbol k, IsSymbol s, Pos ch) =>
+  AsProcessorObject (Cons k (Tuple (AudioGraphProcessor ch) (SProxy s)) tail) graph ch where
+  asProcessorObject _ g = let asStr = reflectSymbol (SProxy :: SProxy k) in O.union (O.singleton asStr (Tuple (fst (unsafeGet asStr g)) (reflectSymbol (SProxy :: SProxy s)))) (asProcessorObject (RLProxy :: RLProxy tail) g)
+else instance asProcessorObjectOther :: AsProcessorObject bad0 bad1 bad2 where
+  asProcessorObject _ _ = O.empty
+
+class AsGeneratorObject (generators :: # Type) ch where
+  asGeneratorObject :: RProxy generators -> Record generators -> Object (AudioUnit ch)
+
+-- unsafe coerce because we have validated before
+instance asGeneratorObjectAll :: AsGeneratorObject g ch where
+  asGeneratorObject _ g = unsafeCoerce g
+
+class AudioGraphGenerators (iter :: RowList) (graph :: # Type) ch where
+  generators :: RLProxy iter -> Record graph -> O.Object (AudioUnit ch)
+
+instance audioGraphGeneratorsNil :: AudioGraphGenerators Nil graph ch where
+  generators _ _ = O.empty
+else instance audioGraphGeneratorsCons ::
+  (AsGeneratorObject g ch, Pos ch) =>
+  AudioGraphGenerators (Cons "generators" (Record g) tail) graph ch where
+  generators _ g = asGeneratorObject (RProxy :: RProxy g) (unsafeGet "generators" g)
+else instance audioGraphGeneratorsBadCons ::
+  (Pos ch) =>
+  AudioGraphGenerators (Cons k v tail) graph ch where
+  generators _ g = generators (RLProxy :: RLProxy tail) g
+else instance audioGraphGeneratorsGiveUp ::
+  AudioGraphGenerators bad0 bad1 bad2 where
+  generators _ _ = O.empty
+
+class AudioGraphProcessors (iter :: RowList) (graph :: # Type) ch where
+  processors :: RLProxy iter -> Record graph -> O.Object (Tuple (AudioGraphProcessor ch) String)
+
+instance audioGraphProcessorsNil :: AudioGraphProcessors Nil graph ch where
+  processors _ _ = O.empty
+else instance audioGraphProcessorsCons ::
+  (RowToList g gl, AsProcessorObject gl g ch, Pos ch) =>
+  AudioGraphProcessors (Cons "processors" (Record g) tail) graph ch where
+  processors _ g = asProcessorObject (RLProxy :: RLProxy gl) (unsafeGet "processors" g)
+else instance audioGraphProcessorsBadCons ::
+  (Pos ch) =>
+  AudioGraphProcessors (Cons k v tail) graph ch where
+  processors _ g = processors (RLProxy :: RLProxy tail) g
+else instance audioGraphProcessorsGiveUp ::
+  AudioGraphProcessors bad0 bad1 bad2 where
+  processors _ _ = O.empty
+
+class ReflectSymbols (sl :: SList) where
+  reflectSymbols :: SLProxy sl -> List String
+
+instance reflectSymbolsNil :: ReflectSymbols SNil where
+  reflectSymbols _ = Nil
+else instance reflectSymbolsCons :: (IsSymbol h) => ReflectSymbols (h :/ t) where
+  reflectSymbols _ = reflectSymbol (SProxy :: SProxy h) : reflectSymbols (SLProxy :: SLProxy t)
+else instance reflectSymbolsBad :: ReflectSymbols x where
+  reflectSymbols _ = Nil
+
+class AsAggregatorObject (iter :: RowList) (aggregators :: # Type) ch where
+  asAggregatorObject :: RLProxy iter -> Record aggregators -> Object (Tuple (AudioGraphAggregator ch) (Set String))
+
+instance asAggregatorObjectCons ::
+  (IsSymbol k, Pos ch) =>
+  AsAggregatorObject (Cons k (Tuple (AudioGraphAggregator ch) (SLProxy sl)) tail) graph ch where
+  asAggregatorObject _ g = let asStr = reflectSymbol (SProxy :: SProxy k) in O.union (O.singleton asStr (Tuple (fst (unsafeGet asStr g)) (DS.fromFoldable $ reflectSymbols (SLProxy :: SLProxy sl)))) (asAggregatorObject (RLProxy :: RLProxy tail) g)
+else instance asAggregatorObjectOther :: AsAggregatorObject bad0 bad1 bad2 where
+  asAggregatorObject _ _ = O.empty
+
+class AudioGraphAggregators (iter :: RowList) (graph :: # Type) ch where
+  aggregators :: RLProxy iter -> Record graph -> O.Object (Tuple (AudioGraphAggregator ch) (Set String))
+
+instance audioGraphAggregatorsNil :: AudioGraphAggregators Nil graph ch where
+  aggregators _ _ = O.empty
+else instance audioGraphAggregatorsCons ::
+  (RowToList g gl, AsAggregatorObject gl g ch, Pos ch) =>
+  AudioGraphAggregators (Cons "aggregators" (Record g) tail) graph ch where
+  aggregators _ g = asAggregatorObject (RLProxy :: RLProxy gl) (unsafeGet "aggregators" g)
+else instance audioGraphAggregatorsBadCons ::
+  (Pos ch) =>
+  AudioGraphAggregators (Cons k v tail) graph ch where
+  aggregators _ g = aggregators (RLProxy :: RLProxy tail) g
+else instance audioGraphAggregatorsGiveUp ::
+  AudioGraphAggregators bad0 bad1 bad2 where
+  aggregators _ _ = O.empty
+
+class AudioGraphToObject (graph :: # Type) ch where
+  toObject :: Record graph -> AudioGraph ch
+
+instance audioGraphToObject ::
+  ( ValidAudioGraph graph
+  , RowToList graph gl
+  , Pos ch
+  , AudioGraphGenerators gl graph ch
+  , AudioGraphProcessors gl graph ch
+  , AudioGraphAggregators gl graph ch
+  ) =>
+  AudioGraphToObject graph ch where
+  toObject g =
+    { generators: generators (RLProxy :: RLProxy gl) g
+    , processors: processors (RLProxy :: RLProxy gl) g
+    , aggregators: aggregators (RLProxy :: RLProxy gl) g
+    }
+
+graph ::
+  forall (graph :: # Type) ch.
+  Pos ch =>
+  AudioGraphToObject graph ch =>
+  Record graph ->
+  AudioUnit ch
+graph g = Graph Nothing (toObject g)
+
+graph_ ::
+  forall (graph :: # Type) ch.
+  Pos ch =>
+  AudioGraphToObject graph ch =>
+  String ->
+  Record graph ->
+  AudioUnit ch
+graph_ s g = Graph (Just s) (toObject g)
+
+--------------------------------------------
+--------------------------------------------
+--------------------------------------------
+g'audioWorkletProcessor ::
+  forall ch.
+  Pos ch =>
+  String ->
+  Object Number ->
+  AudioGraphProcessor ch
+g'audioWorkletProcessor handle n = GAudioWorkletProcessor Nothing handle (map ap_ n)
+
+g'audioWorkletProcessor_ ::
+  forall ch.
+  Pos ch =>
+  String ->
+  String ->
+  Object Number ->
+  AudioGraphProcessor ch
+g'audioWorkletProcessor_ s handle n = GAudioWorkletProcessor (Just s) handle (map ap_ n)
+
+g'audioWorkletProcessorT ::
+  forall ch.
+  Pos ch =>
+  String ->
+  Object (AudioParameter Number) ->
+  AudioGraphProcessor ch
+g'audioWorkletProcessorT handle n = GAudioWorkletProcessor Nothing handle n
+
+g'audioWorkletProcessorT_ ::
+  forall ch.
+  Pos ch =>
+  String ->
+  String ->
+  Object (AudioParameter Number) ->
+  AudioGraphProcessor ch
+g'audioWorkletProcessorT_ s handle n = GAudioWorkletProcessor (Just s) handle n
+
+g'lowpass :: forall ch. Pos ch => Number -> Number -> AudioGraphProcessor ch
+g'lowpass a b = GLowpass Nothing (ap_ a) (ap_ b)
+
+g'lowpass_ :: forall ch. Pos ch => String -> Number -> Number -> AudioGraphProcessor ch
+g'lowpass_ s a b = GLowpass (Just s) (ap_ a) (ap_ b)
+
+g'lowpassT :: forall ch. Pos ch => AudioParameter Number -> AudioParameter Number -> AudioGraphProcessor ch
+g'lowpassT a b = GLowpass Nothing a b
+
+g'lowpassT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioGraphProcessor ch
+g'lowpassT_ s a b = GLowpass (Just s) a b
+
+g'highpass :: forall ch. Pos ch => Number -> Number -> AudioGraphProcessor ch
+g'highpass a b = GHighpass Nothing (ap_ a) (ap_ b)
+
+g'highpass_ :: forall ch. Pos ch => String -> Number -> Number -> AudioGraphProcessor ch
+g'highpass_ s a b = GHighpass (Just s) (ap_ a) (ap_ b)
+
+g'highpassT :: forall ch. Pos ch => AudioParameter Number -> AudioParameter Number -> AudioGraphProcessor ch
+g'highpassT a b = GHighpass Nothing a b
+
+g'highpassT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioGraphProcessor ch
+g'highpassT_ s a b = GHighpass (Just s) a b
+
+g'bandpass :: forall ch. Pos ch => Number -> Number -> AudioGraphProcessor ch
+g'bandpass a b = GBandpass Nothing (ap_ a) (ap_ b)
+
+g'bandpass_ :: forall ch. Pos ch => String -> Number -> Number -> AudioGraphProcessor ch
+g'bandpass_ s a b = GBandpass (Just s) (ap_ a) (ap_ b)
+
+g'bandpassT :: forall ch. Pos ch => AudioParameter Number -> AudioParameter Number -> AudioGraphProcessor ch
+g'bandpassT a b = GBandpass Nothing a b
+
+g'bandpassT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioGraphProcessor ch
+g'bandpassT_ s a b = GBandpass (Just s) a b
+
+g'lowshelf :: forall ch. Pos ch => Number -> Number -> AudioGraphProcessor ch
+g'lowshelf a b = GLowshelf Nothing (ap_ a) (ap_ b)
+
+g'lowshelf_ :: forall ch. Pos ch => String -> Number -> Number -> AudioGraphProcessor ch
+g'lowshelf_ s a b = GLowshelf (Just s) (ap_ a) (ap_ b)
+
+g'lowshelfT :: forall ch. Pos ch => AudioParameter Number -> AudioParameter Number -> AudioGraphProcessor ch
+g'lowshelfT a b = GLowshelf Nothing a b
+
+g'lowshelfT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioGraphProcessor ch
+g'lowshelfT_ s a b = GLowshelf (Just s) a b
+
+g'highshelf :: forall ch. Pos ch => Number -> Number -> AudioGraphProcessor ch
+g'highshelf a b = GHighshelf Nothing (ap_ a) (ap_ b)
+
+g'highshelf_ :: forall ch. Pos ch => String -> Number -> Number -> AudioGraphProcessor ch
+g'highshelf_ s a b = GHighshelf (Just s) (ap_ a) (ap_ b)
+
+g'highshelfT :: forall ch. Pos ch => AudioParameter Number -> AudioParameter Number -> AudioGraphProcessor ch
+g'highshelfT a b = GHighshelf Nothing a b
+
+g'highshelfT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioGraphProcessor ch
+g'highshelfT_ s a b = GHighshelf (Just s) a b
+
+g'peaking :: forall ch. Pos ch => Number -> Number -> Number -> AudioGraphProcessor ch
+g'peaking a b c = GPeaking Nothing (ap_ a) (ap_ b) (ap_ c)
+
+g'peaking_ :: forall ch. Pos ch => String -> Number -> Number -> Number -> AudioGraphProcessor ch
+g'peaking_ s a b c = GPeaking (Just s) (ap_ a) (ap_ b) (ap_ c)
+
+g'peakingT :: forall ch. Pos ch => AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioGraphProcessor ch
+g'peakingT a b c = GPeaking Nothing a b c
+
+g'peakingT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioGraphProcessor ch
+g'peakingT_ s a b c = GPeaking (Just s) a b c
+
+g'notch :: forall ch. Pos ch => Number -> Number -> AudioGraphProcessor ch
+g'notch a b = GNotch Nothing (ap_ a) (ap_ b)
+
+g'notch_ :: forall ch. Pos ch => String -> Number -> Number -> AudioGraphProcessor ch
+g'notch_ s a b = GNotch (Just s) (ap_ a) (ap_ b)
+
+g'notchT :: forall ch. Pos ch => AudioParameter Number -> AudioParameter Number -> AudioGraphProcessor ch
+g'notchT a b = GNotch Nothing a b
+
+g'notchT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioGraphProcessor ch
+g'notchT_ s a b = GNotch (Just s) a b
+
+g'allpass :: forall ch. Pos ch => Number -> Number -> AudioGraphProcessor ch
+g'allpass a b = GAllpass Nothing (ap_ a) (ap_ b)
+
+g'allpass_ :: forall ch. Pos ch => String -> Number -> Number -> AudioGraphProcessor ch
+g'allpass_ s a b = GAllpass (Just s) (ap_ a) (ap_ b)
+
+g'allpassT :: forall ch. Pos ch => AudioParameter Number -> AudioParameter Number -> AudioGraphProcessor ch
+g'allpassT a b = GAllpass Nothing a b
+
+g'allpassT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioGraphProcessor ch
+g'allpassT_ s a b = GAllpass (Just s) a b
+
+g'convolver ::
+  forall ch.
+  Pos ch =>
+  String ->
+  AudioGraphProcessor ch
+g'convolver handle = GConvolver Nothing handle
+
+g'convolver_ ::
+  forall ch.
+  Pos ch =>
+  String ->
+  String ->
+  AudioGraphProcessor ch
+g'convolver_ s handle = GConvolver (Just s) handle
+
+g'dynamicsCompressor ::
+  forall ch.
+  Pos ch =>
+  Number -> Number -> Number -> Number -> Number -> AudioGraphProcessor ch
+g'dynamicsCompressor a b c d e = GDynamicsCompressor Nothing (ap_ a) (ap_ b) (ap_ c) (ap_ d) (ap_ e)
+
+g'dynamicsCompressor_ ::
+  forall ch.
+  Pos ch =>
+  String -> Number -> Number -> Number -> Number -> Number -> AudioGraphProcessor ch
+g'dynamicsCompressor_ s a b c d e = GDynamicsCompressor (Just s) (ap_ a) (ap_ b) (ap_ c) (ap_ d) (ap_ e)
+
+g'dynamicsCompressorT ::
+  forall ch.
+  Pos ch =>
+  AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioGraphProcessor ch
+g'dynamicsCompressorT a b c d e = GDynamicsCompressor Nothing a b c d e
+
+g'dynamicsCompressorT_ ::
+  forall ch.
+  Pos ch =>
+  String ->
+  AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioGraphProcessor ch
+g'dynamicsCompressorT_ s a b c d e = GDynamicsCompressor (Just s) a b c d e
+
+g'waveShaper ::
+  forall ch.
+  Pos ch =>
+  String ->
+  Oversample ->
+  AudioGraphProcessor ch
+g'waveShaper handle = GWaveShaper Nothing handle
+
+g'waveShaper_ ::
+  forall ch.
+  Pos ch =>
+  String ->
+  String ->
+  Oversample ->
+  AudioGraphProcessor ch
+g'waveShaper_ s handle = GWaveShaper (Just s) handle
+
+g'panner :: Number -> AudioGraphProcessor D2
+g'panner n = GStereoPanner Nothing (ap_ n)
+
+g'panner_ :: String -> Number -> AudioGraphProcessor D2
+g'panner_ s n = GStereoPanner (Just s) (ap_ n)
+
+g'pannerT :: AudioParameter Number -> AudioGraphProcessor D2
+g'pannerT n = GStereoPanner Nothing n
+
+g'pannerT_ :: String -> AudioParameter Number -> AudioGraphProcessor D2
+g'pannerT_ s n = GStereoPanner (Just s) n
+
+g'mul :: forall ch. Pos ch => AudioGraphAggregator ch
+g'mul = GMul Nothing
+
+g'mul_ :: forall ch. Pos ch => String -> AudioGraphAggregator ch
+g'mul_ s = GMul (Just s)
+
+g'add :: forall ch. Pos ch => AudioGraphAggregator ch
+g'add = GAdd Nothing
+
+g'add_ :: forall ch. Pos ch => String -> AudioGraphAggregator ch
+g'add_ s = GAdd (Just s)
+
+g'delay :: forall ch. Pos ch => Number -> AudioGraphProcessor ch
+g'delay n = GDelay Nothing (ap_ n)
+
+g'delay_ :: forall ch. Pos ch => String -> Number -> AudioGraphProcessor ch
+g'delay_ s n = GDelay (Just s) (ap_ n)
+
+g'delayT :: forall ch. Pos ch => AudioParameter Number -> AudioGraphProcessor ch
+g'delayT n = GDelay Nothing n
+
+g'delayT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioGraphProcessor ch
+g'delayT_ s n = GDelay (Just s) n
+
+g'gain :: forall ch. Pos ch => Number -> AudioGraphAggregator ch
+g'gain n = GGain Nothing (ap_ n)
+
+g'gain_ :: forall ch. Pos ch => String -> Number -> AudioGraphAggregator ch
+g'gain_ s n = GGain (Just s) (ap_ n)
+
+g'gainT :: forall ch. Pos ch => AudioParameter Number -> AudioGraphAggregator ch
+g'gainT n = GGain Nothing n
+
+g'gainT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioGraphAggregator ch
+g'gainT_ s n = GGain (Just s) n
+
+--------------------------------------------
+--------------------------------------------
+--------------------------------------------
+--------------------------------------------
 instance semiringAudioUnit :: Semiring (AudioUnit ch) where
   zero = Constant Nothing (ap_ 0.0)
   one = Constant Nothing (ap_ 1.0)

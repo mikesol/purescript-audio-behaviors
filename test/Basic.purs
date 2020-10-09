@@ -10,11 +10,11 @@ import Data.Maybe (Maybe(..))
 import Data.NonEmpty ((:|))
 import Data.Set (fromFoldable)
 import Data.Tuple (Tuple(..))
-import Data.Typelevel.Num (d3)
+import Data.Typelevel.Num (D1, d3)
 import Data.Vec as V
 import Effect.Aff (Error)
 import Effect.Class (class MonadEffect)
-import FRP.Behavior.Audio (AudioParameter(..), AudioProcessor, AudioUnit'(..), SampleFrame, Status(..), audioToPtr, dup1, gain, gain', merger, microphone, sinOsc, speaker', split3)
+import FRP.Behavior.Audio (AudioParameter(..), AudioProcessor, AudioUnit, AudioUnit'(..), SampleFrame, Status(..), audioToPtr, dup1, gain, gain', graph, merger, microphone, sinOsc, speaker', split3)
 import Test.Spec (SpecT, describe, it)
 import Test.Spec.Assertions (shouldEqual)
 
@@ -353,3 +353,6 @@ basicTestSuite = do
           , len: 6
           , p: { head: 0, au: Speaker', chan: 1, name: Nothing, next: (fromFoldable Nil), prev: (fromFoldable (1 : Nil)), ptr: 0, status: On }
           }
+  describe "Type classes" do
+    it "should correctly get generators" do
+      pure unit
