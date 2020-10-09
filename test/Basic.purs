@@ -1,7 +1,6 @@
 module Test.Basic where
 
 import Prelude
-
 import Control.Monad.Error.Class (class MonadThrow)
 import Data.Array (replicate, zipWith)
 import Data.List (List(..), (:))
@@ -10,13 +9,14 @@ import Data.Map as DM
 import Data.Maybe (Maybe(..))
 import Data.NonEmpty ((:|))
 import Data.Set (fromFoldable)
+import Data.Set as DS
 import Data.Symbol (SProxy(..))
 import Data.Tuple (Tuple(..), snd)
 import Data.Typelevel.Num (D1, d3)
 import Data.Vec as V
 import Effect.Aff (Error)
 import Effect.Class (class MonadEffect)
-import FRP.Behavior.Audio (class AsProcessorObject, class IsValidAudioGraph, class ValidAudioGraph, AudioGraph, AudioGraphProcessor, AudioParameter(..), AudioProcessor, AudioUnit, AudioUnit'(..), SampleFrame, Status(..), aggregators, asProcessor, asProcessorObject, audioToPtr, dup1, g'add, g'bandpass, gain, gain', graph, merger, microphone, sinOsc, speaker', split3, toObject)
+import FRP.Behavior.Audio (class AsProcessorObject, class IsValidAudioGraph, AudioGraph, AudioGraphProcessor, AudioParameter(..), AudioProcessor, AudioUnit, AudioUnit'(..), SampleFrame, Status(..), asProcessor, asProcessorObject, audioToPtr, dup1, g'add, g'bandpass, g'delay, gain, gain', graph, merger, microphone, sinOsc, speaker', split3, toObject)
 import Foreign.Object as O
 import Prim.Boolean (False, True)
 import Prim.RowList (class RowToList)
@@ -426,37 +426,208 @@ basicTestSuite = do
             { filt: Tuple (g'bandpass 440.0 1.0) (SProxy :: SProxy "mic")
             }
       O.size g `shouldEqual` 1
-
   it "should correctly transform a complex object" do
-      let
-        g =
-          toObject
-              { processors: {
-                 filt: Tuple (g'bandpass 440.0 1.0 ) (SProxy :: SProxy "mic")
-              },
-              generators: { mic: microphone }
+    let
+      g =
+        toObject
+          { processors:
+              { filt: Tuple (g'bandpass 440.0 1.0) (SProxy :: SProxy "mic")
               }
-           ::
-            AudioGraph D1
-      O.size g.generators `shouldEqual` 1
-      O.size g.processors `shouldEqual` 1
-      (snd <$> O.values g.processors) `shouldEqual` ["mic"]
+          , generators: { mic: microphone }
+          } ::
+          AudioGraph D1
+    O.size g.generators `shouldEqual` 1
+    O.size g.processors `shouldEqual` 1
+    (snd <$> O.values g.processors) `shouldEqual` [ "mic" ]
   it "should correctly transform a very complex object" do
-      let
-        g =
-          toObject
-              { aggregators: {
-                combine: Tuple g'add (SLProxy :: SLProxy ("filt" :/ "sosc" :/ SNil))
-              },
-                processors: {
-                filt: Tuple (g'bandpass 440.0 1.0 ) (SProxy :: SProxy "mic")
-              },
-              generators: { 
-                mic: microphone,
-                sosc: sinOsc 440.0 }
+    let
+      g =
+        toObject
+          { aggregators:
+              { combine: Tuple g'add (SLProxy :: SLProxy ("filt" :/ "sosc" :/ SNil))
               }
-           ::
-            AudioGraph D1
-      O.size g.generators `shouldEqual` 2
-      --O.size g.processors `shouldEqual` 1
-      --(snd <$> O.values g.processors) `shouldEqual` ["mic"]
+          , processors:
+              { filt: Tuple (g'bandpass 440.0 1.0) (SProxy :: SProxy "mic")
+              }
+          , generators:
+              { mic: microphone
+              , sosc: sinOsc 440.0
+              }
+          } ::
+          AudioGraph D1
+    O.size g.generators `shouldEqual` 2
+    O.size g.processors `shouldEqual` 1
+    (snd <$> O.values g.processors) `shouldEqual` [ "mic" ]
+    (snd <$> O.values g.aggregators) `shouldEqual` [ DS.fromFoldable [ "filt", "sosc" ] ]
+  describe "Audio tree" do
+    it "should correctly compile" do
+      let
+        tree =
+          audioToPtr
+            ( speaker'
+                $ ( graph
+                      { aggregators:
+                          { combine: Tuple g'add (SLProxy :: SLProxy ("filt" :/ "sosc" :/ SNil))
+                          }
+                      , processors:
+                          { filt: Tuple (g'bandpass 440.0 1.0) (SProxy :: SProxy "mic")
+                          }
+                      , generators:
+                          { mic: microphone
+                          , sosc: sinOsc 440.0
+                          }
+                      }
+                  ) ::
+                AudioUnit D1
+            )
+      tree
+        `shouldEqual`
+          { flat:
+              ( DM.fromFoldable
+                  [ (Tuple 0 { au: Speaker', chan: 1, head: 0, name: Nothing, next: (fromFoldable Nil), prev: (fromFoldable (2 : Nil)), ptr: 0, status: On })
+                  , ( Tuple 1
+                        { au:
+                            ( Bandpass'
+                                ( AudioParameter
+                                    { param: 440.0, timeOffset: 0.0
+                                    }
+                                )
+                                (AudioParameter { param: 1.0, timeOffset: 0.0 })
+                            )
+                        , chan: 1
+                        , head: 1
+                        , name: Nothing
+                        , next: (fromFoldable (2 : Nil))
+                        , prev: (fromFoldable (3 : Nil))
+                        , ptr: 1
+                        , status: On
+                        }
+                    )
+                  , ( Tuple 2
+                        { au: Add'
+                        , chan: 1
+                        , head: 2
+                        , name: Nothing
+                        , next: (fromFoldable (0 : Nil))
+                        , prev: (fromFoldable (1 : 4 : Nil))
+                        , ptr: 2
+                        , status: On
+                        }
+                    )
+                  , ( Tuple 3
+                        { au: Microphone'
+                        , chan: 1
+                        , head: 3
+                        , name: Nothing
+                        , next: (fromFoldable (1 : Nil))
+                        , prev: (fromFoldable Nil)
+                        , ptr: 3
+                        , status: On
+                        }
+                    )
+                  , ( Tuple 4
+                        { au:
+                            ( SinOsc'
+                                ( AudioParameter
+                                    { param: 440.0
+                                    , timeOffset: 0.0
+                                    }
+                                )
+                            )
+                        , chan: 1
+                        , head: 4
+                        , name: Nothing
+                        , next: (fromFoldable (2 : Nil))
+                        , prev: (fromFoldable Nil)
+                        , ptr: 4
+                        , status: On
+                        }
+                    )
+                  ]
+              )
+          , len: 5
+          , p: { au: Speaker', chan: 1, head: 0, name: Nothing, next: (fromFoldable Nil), prev: (fromFoldable (2 : Nil)), ptr: 0, status: On }
+          }
+    it "should correctly compile feedback" do
+      let
+        tree =
+          audioToPtr
+            ( speaker'
+                $ ( graph
+                      { aggregators:
+                          { combine: Tuple g'add (SLProxy :: SLProxy ("del" :/ "mic" :/ SNil))
+                          }
+                      , processors:
+                          { filt: Tuple (g'bandpass 440.0 1.0) (SProxy :: SProxy "mic")
+                          , del: Tuple (g'delay 0.2) (SProxy :: SProxy "filt")
+                          }
+                      , generators:
+                          { mic: microphone
+                          }
+                      }
+                  ) ::
+                AudioUnit D1
+            )
+      tree
+        `shouldEqual`
+          { flat:
+              ( DM.fromFoldable
+                  [ ( Tuple 0
+                        { au: Speaker'
+                        , chan: 1
+                        , head: 0
+                        , name: Nothing
+                        , next: (fromFoldable Nil)
+                        , prev:
+                            (fromFoldable (3 : Nil))
+                        , ptr: 0
+                        , status: On
+                        }
+                    )
+                  , ( Tuple 1
+                        { au: (Bandpass' (AudioParameter { param: 440.0, timeOffset: 0.0 }) (AudioParameter { param: 1.0, timeOffset: 0.0 }))
+                        , chan: 1
+                        , head: 1
+                        , name: Nothing
+                        , next:
+                            (fromFoldable (2 : Nil))
+                        , prev: (fromFoldable (4 : Nil))
+                        , ptr: 1
+                        , status: On
+                        }
+                    )
+                  , ( Tuple 2
+                        { au: (Delay' (AudioParameter { param: 0.2, timeOffset: 0.0 }))
+                        , chan: 1
+                        , head:
+                            2
+                        , name: Nothing
+                        , next: (fromFoldable (3 : Nil))
+                        , prev: (fromFoldable (1 : Nil))
+                        , ptr: 2
+                        , status: On
+                        }
+                    )
+                  , (Tuple 3 { au: Add', chan: 1, head: 3, name: Nothing, next: (fromFoldable (0 : Nil)), prev: 
+                  (fromFoldable (2 : 4 : Nil)), ptr: 3, status: On })
+                  , ( Tuple 4
+                        { au: Microphone'
+                        , chan: 1
+                        , head: 4
+                        , name: Nothing
+                        , next:
+                            ( fromFoldable
+                                ( 1 : 3
+                                    : Nil
+                                )
+                            )
+                        , prev: (fromFoldable Nil)
+                        , ptr: 4
+                        , status: On
+                        }
+                    )
+                  ]
+              )
+          , len: 5
+          , p: { au: Speaker', chan: 1, head: 0, name: Nothing, next: (fromFoldable Nil), prev: (fromFoldable (3 : Nil)), ptr: 0, status: On }
+          }
