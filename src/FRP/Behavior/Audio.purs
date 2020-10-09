@@ -327,7 +327,6 @@ import Data.Unfoldable (class Unfoldable)
 import Data.Unfoldable1 as DU
 import Data.Vec (Vec, fill)
 import Data.Vec as V
-import Debug.Trace (spy)
 import Effect (Effect, whileE)
 import Effect.Class.Console (log)
 import Effect.Exception (try)
@@ -352,11 +351,9 @@ import Record.Extra (SLProxy(..), SNil, kind SList)
 import Record.Unsafe (unsafeGet)
 import Type.Data.Boolean (class And, class Not)
 import Type.Data.Graph (class FlipDirection, class HasDuplicateEdges, class HasDuplicateNodes, class HasOrphanNodes, class HasUniqueTerminus, class IsConnected, class IsEq, type (:/))
-import Type.Data.Row (RProxy(..))
 import Type.Proxy (Proxy(..))
 import Type.Row.Homogeneous (class Homogeneous)
 import Type.RowList (class ListToRow, RLProxy(..))
-import Unsafe.Coerce (unsafeCoerce)
 
 foreign import data BrowserPeriodicWave :: Type
 
@@ -1469,7 +1466,7 @@ splitResGetImpetus s =
                 s.flat
         )
 
-getNextFromProcessors :: forall ch. String -> Map String Int -> O.Object (Tuple (AudioGraphProcessor) String) -> Set Int
+getNextFromProcessors :: String -> Map String Int -> O.Object (Tuple (AudioGraphProcessor) String) -> Set Int
 getNextFromProcessors k pag proc =
   DS.fromFoldable
     ( catMaybes
