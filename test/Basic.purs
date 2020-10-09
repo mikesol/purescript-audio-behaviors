@@ -14,9 +14,11 @@ import Data.Typelevel.Num (D1, d3)
 import Data.Vec as V
 import Effect.Aff (Error)
 import Effect.Class (class MonadEffect)
-import FRP.Behavior.Audio (AudioParameter(..), AudioProcessor, AudioUnit, AudioUnit'(..), SampleFrame, Status(..), audioToPtr, dup1, gain, gain', graph, merger, microphone, sinOsc, speaker', split3)
+import FRP.Behavior.Audio (class IsValidAudioGraph, AudioParameter(..), AudioProcessor, AudioUnit, AudioUnit'(..), SampleFrame, Status(..), audioToPtr, dup1, gain, gain', graph, merger, microphone, sinOsc, speaker', split3)
+import Prim.Boolean (True)
 import Test.Spec (SpecT, describe, it)
 import Test.Spec.Assertions (shouldEqual)
+import Type.Data.Boolean (BProxy(..))
 
 frameZip :: SampleFrame -> SampleFrame -> SampleFrame
 frameZip = zipWith (zipWith (+))
@@ -29,6 +31,16 @@ simpleProcessor _ audio params = mulSampleFrame 0.25 <$> (audio 0.0)
 
 delayProcessor :: forall (r :: # Type). AudioProcessor r
 delayProcessor _ audio params = frameZip <$> (mulSampleFrame 0.25 <$> (audio 0.0)) <*> (mulSampleFrame 0.5 <$> (audio 1.0))
+
+isValidAudioGraph1 :: BProxy True
+isValidAudioGraph1 =
+  BProxy ::
+    forall b ch.
+    IsValidAudioGraph
+      ( generators :: Record ( hello :: AudioUnit ch )
+      )
+      b =>
+    BProxy b
 
 basicTestSuite :: ∀ eff m. Monad m ⇒ Bind eff ⇒ MonadEffect eff ⇒ MonadThrow Error eff ⇒ SpecT eff Unit m Unit
 basicTestSuite = do

@@ -159,6 +159,7 @@ module FRP.Behavior.Audio
   , class AudioGraphProcessors
   , class AsAggregatorObject
   , class AudioGraphAggregators
+  , class IsValidAudioGraph
   , class ValidAudioGraph
   , class HasOneGeneratorInternal
   , class AsGeneratorObject
@@ -342,9 +343,11 @@ import Prim.Boolean (False, True, kind Boolean)
 import Prim.Row (class Union)
 import Prim.RowList (class RowToList, Cons, Nil, kind RowList)
 import Prim.Symbol (class Compare)
+import Prim.TypeError (class Fail, Text)
 import Record (merge)
 import Record.Extra (SLProxy(..), SNil, kind SList)
 import Record.Unsafe (unsafeGet)
+import Type.Data.Boolean (class And, class Not)
 import Type.Data.Graph (class FlipDirection, class HasDuplicateEdges, class HasDuplicateNodes, class HasOrphanNodes, class HasUniqueTerminus, class IsConnected, class IsEq, type (:/))
 import Type.Data.Row (RProxy(..))
 import Type.Proxy (Proxy(..))
@@ -2674,6 +2677,13 @@ instance aggregatorsToGraphInternalCons ::
     ) =>
   AggregatorsToGraphInternal (Cons k (Tuple (AudioGraphAggregator ch) (SLProxy v)) t) (Cons k (SLProxy v) newT)
 
+instance aggregatorsToGraph ::
+  ( RowToList aggregators ag
+  , AggregatorsToGraphInternal ag gl
+  , ListToRow gl graph
+  ) =>
+  AggregatorsToGraph aggregators graph
+
 class AggregatorsToGraph (aggregators :: # Type) (graph :: # Type) | aggregators -> graph
 
 class ProcessorsToGraphInternal (processors :: RowList) (graph :: RowList) | processors -> graph
@@ -2686,6 +2696,13 @@ instance processorsToGraphInternalCons ::
   ProcessorsToGraphInternal (Cons k (Tuple (AudioGraphProcessor ch) (SProxy v)) t) (Cons k (SLProxy (v :/ SNil)) newT)
 
 class ProcessorsToGraph (processors :: # Type) (graph :: # Type) | processors -> graph
+
+instance porocessorsToGraph ::
+  ( RowToList processors ps
+  , ProcessorsToGraphInternal ps gl
+  , ListToRow gl graph
+  ) =>
+  ProcessorsToGraph processors graph
 
 class GeneratorsToGraphInternal (generators :: RowList) (graph :: RowList) | generators -> graph
 
@@ -2800,18 +2817,34 @@ instance hasOneGenerator ::
   ) =>
   HasOneGenerator graph b
 
-instance validAudioGraph ::
-  ( HasOneGenerator audioGraph True
+instance isValidAudioGraph ::
+  ( HasOneGenerator audioGraph hasOneGenerator
   , AudioGraphToGraph audioGraph graph
-  , HasDuplicateNodes graph False
-  , HasDuplicateEdges graph False
-  , HasUniqueTerminus graph True
-  , IsConnected graph True
-  , HasOrphanNodes graph False
+  , HasDuplicateNodes graph hasDuplicateNodes
+  , HasDuplicateEdges graph hasDuplicateEdges
+  , HasUniqueTerminus graph hasUniqueTerminus
+  , IsConnected graph isConnected
+  , HasOrphanNodes graph hasOrphanNodes
+  , Not hasOrphanNodes noOrphanNodes
+  , Not hasDuplicateNodes noDuplicateNodes
+  , Not hasDuplicateEdges noDuplicateEdges
+  , And hasOneGenerator hasUniqueTerminus step0
+  , And step0 isConnected step1
+  , And step1 noOrphanNodes step2
+  , And step2 noDuplicateNodes step3
+  , And step3 noDuplicateEdges b
   ) =>
-  ValidAudioGraph audioGraph
+  IsValidAudioGraph audioGraph b
+
+class IsValidAudioGraph (graph :: # Type) (b :: Boolean) | graph -> b
 
 class ValidAudioGraph (graph :: # Type)
+
+instance validAudioGraph :: (IsValidAudioGraph graph True) => ValidAudioGraph graph
+else instance validAudioGraphFail ::
+  (Fail (Text "Graph is not a valid audio graph"), IsValidAudioGraph graph False) =>
+  ValidAudioGraph
+    graph
 
 class AsProcessorObject (iter :: RowList) (processors :: # Type) ch where
   asProcessorObject :: RLProxy iter -> Record processors -> Object (Tuple (AudioGraphProcessor ch) String)
