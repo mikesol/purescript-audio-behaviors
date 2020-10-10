@@ -167,6 +167,7 @@ module FRP.Behavior.Audio
   , class ReflectSymbols
   , class AsProcessor
   , class AsAggregator
+  , class RecordHomogeneousInAudioUnits
   , toObject
   , asProcessor
   , asProcessorObject
@@ -299,6 +300,7 @@ module FRP.Behavior.Audio
   ) where
 
 import Prelude
+
 import Control.Bind (bindFlipped)
 import Control.Promise (Promise)
 import Data.Array (catMaybes, fold, foldl, head, index, length, mapWithIndex, range, replicate, snoc, takeEnd, zipWith, (!!))
@@ -2791,34 +2793,40 @@ instance audioGraphToGraph ::
   ) =>
   AudioGraphToGraph audioGraph graph
 
+class RecordHomogeneousInAudioUnits (gate :: Boolean) (generators :: Type) ch
+
+instance recordHomogeneousInAudioUnitsFalse :: RecordHomogeneousInAudioUnits False g ch
+instance recordHomogeneousInAudioUnitsF :: Homogeneous g (AudioUnit ch) => RecordHomogeneousInAudioUnits True (Record g) ch
+
 class RecordNotEmptyInternal (gate :: Boolean) (generators :: Type) (b :: Boolean) | gate generators -> b
 
 instance recordNotEmptyInternalFalse :: RecordNotEmptyInternal False g False
 else instance recordNotEmptyInternalTrue :: (RowToList g (Cons k v t)) => RecordNotEmptyInternal True (Record g) True
 else instance recordNotEmptyInternalF :: RecordNotEmptyInternal True g False
 
-class HasOneGeneratorInternal (gate :: Boolean) (graph :: RowList) (b :: Boolean) | gate graph -> b
+class HasOneGeneratorInternal (gate :: Boolean) (graph :: RowList) ch (b :: Boolean) | gate graph -> b
 
-instance hasOneGeneratorInternalNil :: HasOneGeneratorInternal b Nil b
-else instance hasOneGeneratorInternalTrue :: HasOneGeneratorInternal True g True
+instance hasOneGeneratorInternalNil :: HasOneGeneratorInternal b Nil ch b
+else instance hasOneGeneratorInternalTrue :: HasOneGeneratorInternal True g ch True
 else instance hasOneGeneratorInternalCons ::
   ( Compare "generators" k kgen
   , IsEq kgen isGeneratorRecord
   , RecordNotEmptyInternal isGeneratorRecord v bx
-  , HasOneGeneratorInternal bx t b
+  , RecordHomogeneousInAudioUnits isGeneratorRecord v ch
+  , HasOneGeneratorInternal bx t ch b
   ) =>
-  HasOneGeneratorInternal False (Cons k v t) b
+  HasOneGeneratorInternal False (Cons k v t) ch b
 
-class HasOneGenerator (graph :: # Type) (b :: Boolean) | graph -> b
+class HasOneGenerator (graph :: # Type) ch (b :: Boolean) | graph ch -> b
 
 instance hasOneGenerator ::
   ( RowToList graph gl
-  , HasOneGeneratorInternal False gl b
+  , HasOneGeneratorInternal False gl ch b
   ) =>
-  HasOneGenerator graph b
+  HasOneGenerator graph ch b
 
 instance isValidAudioGraph ::
-  ( HasOneGenerator audioGraph hasOneGenerator
+  ( HasOneGenerator audioGraph ch hasOneGenerator
   , AudioGraphToGraph audioGraph graph
   , HasDuplicateNodes graph hasDuplicateNodes
   , HasDuplicateEdges graph hasDuplicateEdges
@@ -2834,17 +2842,17 @@ instance isValidAudioGraph ::
   , And step2 noDuplicateNodes step3
   , And step3 noDuplicateEdges b
   ) =>
-  IsValidAudioGraph audioGraph b
+  IsValidAudioGraph audioGraph ch b
 
-class IsValidAudioGraph (graph :: # Type) (b :: Boolean) | graph -> b
+class IsValidAudioGraph (graph :: # Type) ch (b :: Boolean) | graph -> b
 
-class ValidAudioGraph (graph :: # Type)
+class ValidAudioGraph (graph :: # Type) ch
 
-instance validAudioGraph :: (IsValidAudioGraph graph True) => ValidAudioGraph graph
+instance validAudioGraph :: (IsValidAudioGraph graph ch True) => ValidAudioGraph graph ch
 else instance validAudioGraphFail ::
-  (Fail (Text "Graph is not a valid audio graph"), IsValidAudioGraph graph False) =>
+  (Fail (Text "Graph is not a valid audio graph"), IsValidAudioGraph graph ch False) =>
   ValidAudioGraph
-    graph
+    graph ch
 
 class AsProcessor v where
   asProcessor :: v -> Maybe (Tuple AudioGraphProcessor String)
@@ -2944,7 +2952,7 @@ class AudioGraphToObject (graph :: # Type) ch where
   toObject :: Record graph -> AudioGraph ch
 
 instance audioGraphToObject ::
-  ( ValidAudioGraph graph
+  ( ValidAudioGraph graph ch
   , RowToList graph gl
   , AudioGraphGenerators gl graph ch
   , AudioGraphProcessors gl graph

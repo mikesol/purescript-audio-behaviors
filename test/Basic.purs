@@ -45,16 +45,16 @@ isValidAudioGraph1 =
     forall b ch.
     IsValidAudioGraph
       ( generators :: Record ( hello :: AudioUnit ch )
-      )
+      ) ch
       b =>
     BProxy b
 
 isValidAudioGraph2 :: BProxy False
 isValidAudioGraph2 =
   BProxy ::
-    forall b.
+    forall b ch.
     IsValidAudioGraph
-      ()
+      () ch
       b =>
     BProxy b
 
@@ -65,7 +65,7 @@ isValidAudioGraph3 =
     IsValidAudioGraph
       ( processors :: Record ( goodbye :: Tuple (AudioGraphProcessor) (SProxy "hello") )
       , generators :: Record ( hello :: AudioUnit ch )
-      )
+      ) ch
       b =>
     BProxy b
 
@@ -76,7 +76,7 @@ isValidAudioGraph4 =
     IsValidAudioGraph
       ( processors :: Record ( goodbye :: Tuple (AudioGraphProcessor) (SProxy "notThere") )
       , generators :: Record ( hello :: AudioUnit ch )
-      )
+      ) ch
       b =>
     BProxy b
 
@@ -477,8 +477,7 @@ basicTestSuite = do
                           , sosc: sinOsc 440.0
                           }
                       }
-                  ) ::
-                AudioUnit D1
+                  )
             )
       tree
         `shouldEqual`
@@ -565,8 +564,7 @@ basicTestSuite = do
                           { mic: microphone
                           }
                       }
-                  ) ::
-                AudioUnit D1
+                  )
             )
       tree
         `shouldEqual`

@@ -157,8 +157,7 @@ feedback _ =
                   { mic: microphone
                   }
               }
-          ) ::
-        AudioUnit D1
+          )
     )
 
 run = runInBrowser feedback
