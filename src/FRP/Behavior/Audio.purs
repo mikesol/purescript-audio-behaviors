@@ -2788,8 +2788,7 @@ instance audioGraphToGraph ::
   , ProcessorsToGraph processors procGraph
   , AggregatorsToGraph aggregators accGraph
   , Union genGraph procGraph step0
-  , Union step0 accGraph step1
-  , FlipDirection step1 graph
+  , Union step0 accGraph graph
   ) =>
   AudioGraphToGraph audioGraph graph
 
@@ -2827,12 +2826,13 @@ instance hasOneGenerator ::
 
 instance isValidAudioGraph ::
   ( HasOneGenerator audioGraph ch hasOneGenerator
-  , AudioGraphToGraph audioGraph graph
+  , AudioGraphToGraph audioGraph graphUnflipped
+  , FlipDirection graphUnflipped graph
+  , HasOrphanNodes graphUnflipped hasOrphanNodes
   , HasDuplicateNodes graph hasDuplicateNodes
   , HasDuplicateEdges graph hasDuplicateEdges
   , HasUniqueTerminus graph hasUniqueTerminus
   , IsConnected graph isConnected
-  , HasOrphanNodes graph hasOrphanNodes
   , Not hasOrphanNodes noOrphanNodes
   , Not hasDuplicateNodes noDuplicateNodes
   , Not hasDuplicateEdges noDuplicateEdges
