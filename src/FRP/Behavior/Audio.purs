@@ -339,7 +339,7 @@ import FRP.Event.Time (interval)
 import Foreign (Foreign)
 import Foreign.Object (Object, filterWithKey)
 import Foreign.Object as O
-import Graphics.Canvas (CanvasElement, clearRect, getCanvasHeight, getCanvasWidth, getContext2D)
+import Graphics.Canvas (CanvasElement, clearRect, getCanvasHeight, getCanvasWidth, setCanvasHeight, setCanvasWidth, getContext2D)
 import Graphics.Drawing (Drawing, render)
 import Heterogeneous.Mapping (class HMap, class Mapping, hmap)
 import Math as Math
@@ -4375,7 +4375,9 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
                       __r <-
                         try do
                           __cvs <- _cvsNow
-                          getCanvasWidth __cvs
+                          out <- getCanvasWidth __cvs
+                          _ <- setCanvasWidth __cvs out
+                          pure out
                       either (const $ pure 0.0) pure __r
                   )
                   __cvsNow
@@ -4385,7 +4387,9 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
                       __r <-
                         try do
                           __cvs <- _cvsNow
-                          getCanvasHeight __cvs
+                          out <- getCanvasHeight __cvs
+                          _ <- setCanvasHeight __cvs out
+                          pure out
                       either (const $ pure 0.0) pure __r
                   )
                   __cvsNow
