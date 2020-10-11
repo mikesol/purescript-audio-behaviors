@@ -680,7 +680,7 @@ spago -x examples.dhall bundle-app \
 
 Other examples will work the same way, with the directory and module name changing.
 
-You will also need to copy all of the files from the `custom-units` folter into your project folder. With a correct setup, the hello-world directory should look like this:
+You will also need to copy all of the files from the top-level `custom-units` folter into your project folder. With a correct setup, the hello-world directory should look like this:
 
 ```bash
 examples/
@@ -690,3 +690,5 @@ examples/
     index.js # the generated js from spago bundle-app
     ps-aud-mul.js # plus any other files from the custom-units folder
 ```
+
+From there, you can run `python -m http.server` in the directory of the example and it will serve all of the files. Visit `http://localhost:8000` in Firefox to interact with the page.
