@@ -24,6 +24,8 @@ This library uses the [behaviors pattern](https://wiki.haskell.org/Functional_Re
 
 For example, consider the following behavior, taken from [`HelloWorld.purs`](./examples/hello-world/HelloWorld.purs):
 
+[Try me on klank.dev](https://link.klank.dev/nxBFDRVoaCeNrgya8)
+
 ```haskell
 scene ::  Number -> Behavior (AudioUnit D1)
 scene time = let
@@ -61,6 +63,8 @@ In this section, we'll build a scene from the ground up. In doing so, we'll acco
 
 Let's start with a sine wave at A440 playing at a volume of `0.5` (where `1.0` is the loudest volume).
 
+[Try me on klank.dev](https://link.klank.dev/nCQ2pAzscJh89cHC7)
+
 ```haskell
 scene :: Number -> Behavior (AudioUnit D1)
 scene = const $ pure (speaker' $ (gain' 0.5 $ sinOsc 440.0))
@@ -71,6 +75,8 @@ Note that, because this function does not depend on time, we can ignore the inpu
 ### Adding sound via the microphone
 
 Let's add our voice to the mix! We'll put it above a nice low drone.
+
+[Try me on klank.dev](https://link.klank.dev/beHpH35VyYTbvT2F8)
 
 ```haskell
 scene :: Number -> Behavior (AudioUnit D1)
@@ -91,6 +97,8 @@ Make sure to wear headphones to avoid feedback!
 ### Adding playback from an audio tag
 
 Let's add some soothing jungle sounds to the mix. We use the function `play` to add an audio element. This function assumes that you provide an audio element with the appropriate tag to the toplevel `runInBrowser` function. In this case, the tag is `"forest"`.
+
+[Try me on klank.dev](https://link.klank.dev/f8EPDgt62Pm3J4WJ7)
 
 ```haskell
 -- assuming we have passed in an object
