@@ -611,3 +611,15 @@ exports.getAudioClockTime = function (ctx) {
     return ctx.currentTime;
   };
 };
+
+exports.getBoundingClientRect = function (canvas) {
+  return function () {
+    var o = canvas.getBoundingClientRect();
+    return {
+      x: o.left,
+      y: o.top,
+      width: o.right - o.left,
+      height: o.bottom - o.top,
+    };
+  };
+};

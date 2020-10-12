@@ -22,5 +22,8 @@
   "homepage": "https://github.com/mikesol/purescript-audio-behaviors#readme",
   "dependencies": {
     "glpk.js": "^3.2.0"
+  },
+  "devDependencies": {
+    "purty": "^6.2.0"
   }
 }

@@ -16,7 +16,7 @@ import Data.Vec ((+>), empty)
 import Effect (Effect)
 import FRP.Behavior (Behavior)
 import FRP.Behavior.Audio (AV(..), AudioParameter(..), AudioUnit, CanvasInfo(..), IAudioUnit(..), RunInBrowser, RunInBrowserAV_, RunInBrowserIAudioUnit_, RunInBrowser_, dup1, g'add, g'bandpass, g'delay, g'gain, gain', gainT', graph, merger, microphone, panner, play, runInBrowser, runInBrowser_, sinOsc, speaker, speaker')
-import FRP.Behavior.Mouse (buttons)
+import FRP.Behavior.Mouse (buttons, position)
 import FRP.Event.Mouse (Mouse, getMouse)
 import Graphics.Drawing (circle, fillColor, filled)
 import Math (pi, sin)
@@ -304,7 +304,7 @@ scene8 ::
   CanvasInfo ->
   Number ->
   Behavior (AV D2 { onset :: Maybe Number | a })
-scene8 mouse acc@{ onset } (CanvasInfo { w, h }) time = f time <$> click
+scene8 mouse acc@{ onset } (CanvasInfo { w, h, boundingClientRect: { x, y } }) time = f time <$> click <*> pos
   where
   split s = span ((s >= _) <<< fst) pwf
 
@@ -329,7 +329,7 @@ scene8 mouse acc@{ onset } (CanvasInfo { w, h }) time = f time <$> click
         in
           AudioParameter { param: (m * s + b), timeOffset: 0.0 }
 
-  f s cl =
+  f s cl ps =
     AV
       ( Just
           $ dup1
@@ -361,7 +361,11 @@ scene8 mouse acc@{ onset } (CanvasInfo { w, h }) time = f time <$> click
       ( Just
           $ filled
               (fillColor (rgb 0 0 0))
-              (circle (w / 2.0) (h / 2.0) (if cl then 25.0 else 5.0))
+              ( circle
+                  (if cl then toNumber ps.x - x else w / 2.0)
+                  (if cl then toNumber ps.y - y else h / 2.0)
+                  (if cl then 25.0 else 5.0)
+              )
       )
       (acc { onset = stTime })
     where
@@ -374,6 +378,9 @@ scene8 mouse acc@{ onset } (CanvasInfo { w, h }) time = f time <$> click
 
   click :: Behavior Boolean
   click = map (not <<< isEmpty) $ buttons mouse
+
+  pos :: Behavior { x :: Int, y :: Int }
+  pos = map (fromMaybe { x: 0, y: 0 }) (position mouse)
 
 run =
   ( runInBrowser_ ::

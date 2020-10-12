@@ -246,6 +246,7 @@ module FRP.Behavior.Audio
   , AudioUnit
   , AudioContext
   , CanvasInfo(..)
+  , CanvasInfo'
   , AudioInfo
   , VisualInfo
   , BrowserPeriodicWave
@@ -300,7 +301,6 @@ module FRP.Behavior.Audio
   ) where
 
 import Prelude
-
 import Control.Bind (bindFlipped)
 import Control.Promise (Promise)
 import Data.Array (catMaybes, fold, foldl, head, index, length, mapWithIndex, range, replicate, snoc, takeEnd, zipWith, (!!))
@@ -339,7 +339,7 @@ import FRP.Event.Time (interval)
 import Foreign (Foreign)
 import Foreign.Object (Object, filterWithKey)
 import Foreign.Object as O
-import Graphics.Canvas (CanvasElement, clearRect, getCanvasHeight, getCanvasWidth, getContext2D)
+import Graphics.Canvas (CanvasElement, Rectangle, clearRect, getCanvasHeight, getCanvasWidth, getContext2D)
 import Graphics.Drawing (Drawing, render)
 import Heterogeneous.Mapping (class HMap, class Mapping, hmap)
 import Math as Math
@@ -382,6 +382,8 @@ foreign import makeAudioTrack :: String -> Effect BrowserAudioTrack
 foreign import makeAudioBuffer :: AudioContext -> AudioBuffer -> Effect BrowserAudioBuffer
 
 foreign import makeFloatArray :: Array Number -> Effect BrowserFloatArray
+
+foreign import getBoundingClientRect :: CanvasElement -> Effect Rectangle
 
 makePeriodicWave ::
   forall len.
@@ -2795,6 +2797,7 @@ instance audioGraphToGraph ::
 class RecordHomogeneousInAudioUnits (gate :: Boolean) (generators :: Type) ch
 
 instance recordHomogeneousInAudioUnitsFalse :: RecordHomogeneousInAudioUnits False g ch
+
 instance recordHomogeneousInAudioUnitsF :: Homogeneous g (AudioUnit ch) => RecordHomogeneousInAudioUnits True (Record g) ch
 
 class RecordNotEmptyInternal (gate :: Boolean) (generators :: Type) (b :: Boolean) | gate generators -> b
@@ -2852,7 +2855,8 @@ instance validAudioGraph :: (IsValidAudioGraph graph ch True) => ValidAudioGraph
 else instance validAudioGraphFail ::
   (Fail (Text "Graph is not a valid audio graph"), IsValidAudioGraph graph ch False) =>
   ValidAudioGraph
-    graph ch
+    graph
+    ch
 
 class AsProcessor v where
   asProcessor :: v -> Maybe (Tuple AudioGraphProcessor String)
@@ -4230,8 +4234,14 @@ type VisualInfo
 
 foreign import getAudioClockTime :: AudioContext -> Effect Number
 
+type CanvasInfo'
+  = { w :: Number, h :: Number, boundingClientRect :: Rectangle }
+
 newtype CanvasInfo
-  = CanvasInfo { w :: Number, h :: Number }
+  = CanvasInfo CanvasInfo'
+
+dummyCanvasInfo :: CanvasInfo'
+dummyCanvasInfo = { w: 0.0, h: 0.0, boundingClientRect: { width: 0.0, height: 0.0, x: 0.0, y: 0.0 } }
 
 type RunInBrowserIAudioUnit accumulator ch
   = RunInBrowser (accumulator -> Number -> Behavior (IAudioUnit ch accumulator)) accumulator
@@ -4369,28 +4379,21 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
               _accNow <- read __accumulator
               let
                 __cvsNow = getFirstCanvas visualInfo.canvases
-              __w <-
-                maybe (pure 0.0)
+              canvasInfo <-
+                maybe (pure dummyCanvasInfo)
                   ( \_cvsNow -> do
                       __r <-
                         try do
                           __cvs <- _cvsNow
-                          getCanvasWidth __cvs
-                      either (const $ pure 0.0) pure __r
-                  )
-                  __cvsNow
-              __h <-
-                maybe (pure 0.0)
-                  ( \_cvsNow -> do
-                      __r <-
-                        try do
-                          __cvs <- _cvsNow
-                          getCanvasHeight __cvs
-                      either (const $ pure 0.0) pure __r
+                          w <- getCanvasWidth __cvs
+                          h <- getCanvasHeight __cvs
+                          boundingClientRect <- getBoundingClientRect __cvs
+                          pure $ { w, h, boundingClientRect }
+                      either (const $ pure dummyCanvasInfo) pure __r
                   )
                   __cvsNow
               let
-                behavior = scene _accNow (CanvasInfo { w: __w, h: __h }) (toNumber ct / 1000.0)
+                behavior = scene _accNow (CanvasInfo canvasInfo) (toNumber ct / 1000.0)
               bang <- create :: Effect (EventIO Unit)
               let
                 behaviorSampled = sample_ behavior bang.event
@@ -4409,7 +4412,12 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
                                     try do
                                       cvs <- cvs__
                                       canvasCtx <- getContext2D cvs
-                                      clearRect canvasCtx { height: __h, width: __w, x: 0.0, y: 0.0 }
+                                      clearRect canvasCtx
+                                        { height: canvasInfo.h
+                                        , width: canvasInfo.w
+                                        , x: 0.0
+                                        , y: 0.0
+                                        }
                                       render canvasCtx viz
                                   pure unit
                               )
