@@ -1,5 +1,5 @@
-// white-noise-processor.js
-class WhiteNoiseProcessor extends AudioWorkletProcessor {
+// gain-processor.js
+class GainProcessor extends AudioWorkletProcessor {
   static get parameterDescriptors() {
     return [
       {
@@ -28,4 +28,4 @@ class WhiteNoiseProcessor extends AudioWorkletProcessor {
   }
 }
 
-registerProcessor("gain-processor", WhiteNoiseProcessor);
+registerProcessor("gain-processor", GainProcessor);
