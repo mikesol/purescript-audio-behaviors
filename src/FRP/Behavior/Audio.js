@@ -375,7 +375,9 @@ exports.touchAudio = function (predicates) {
                           numberOfOutputs: 1,
                         });
                       })()
-                    : predicates.isAudioWorkletGenerator(c.value1)
+                    : predicates.isAudioWorkletGenerator(c.value1) ||
+                      predicates.isAudioWorkletProcessor(c.value1) ||
+                      predicates.isAudioWorkletAggregator(c.value1)
                     ? (function () {
                         var initialParams = {};
                         for (var j = 0; j < instructions.length; j++) {
@@ -387,26 +389,32 @@ exports.touchAudio = function (predicates) {
                             initialParams[d.value1] = d.value2;
                           }
                         }
-                        return new AudioWorkletNode(context, c.value3.value0, {
-                          numberOfInputs: 0,
-                          numberOfOutputs: 1,
-                          parameterData: initialParams,
-                        });
-                      })()
-                    : predicates.isAudioWorkletProcessor(c.value1)
-                    ? (function () {
-                        var initialParams = {};
-                        for (var j = 0; j < instructions.length; j++) {
-                          var d = instructions[j];
-                          if (
-                            predicates.isSetCustomParam(d) &&
-                            d.value0 == c.value0
-                          ) {
-                            initialParams[d.value1] = d.value2;
+                        if (predicates.isAudioWorkletAggregator(c.value1)) {
+                          var nConnections = 0;
+                          for (var j = 0; j < instructions.length; j++) {
+                            // this hack is necessary because
+                            // custom audio worklets need explicit
+                            // channel assignments. maybe make explicit everywhere?
+                            var d = instructions[j];
+                            if (
+                              predicates.isConnectTo(d) &&
+                              d.value1 == c.value0
+                            ) {
+                              d.value2 = predicates.justly(
+                                predicates.tupply(0)(nConnections)
+                              );
+                              nConnections += 1;
+                            }
                           }
                         }
                         return new AudioWorkletNode(context, c.value3.value0, {
-                          numberOfInputs: 1,
+                          numberOfInputs: predicates.isAudioWorkletGenerator(
+                            c.value1
+                          )
+                            ? 0
+                            : predicates.isAudioWorkletProcessor(c.value1)
+                            ? 1
+                            : 2,
                           numberOfOutputs: 1,
                           parameterData: initialParams,
                         });
