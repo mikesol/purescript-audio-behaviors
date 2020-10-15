@@ -12,6 +12,7 @@ module FRP.Behavior.Audio
   , microphone
   , audioWorkletGenerator
   , audioWorkletProcessor
+  , audioWorkletAggregator
   , play
   , playBuf
   , loopBuf
@@ -53,6 +54,7 @@ module FRP.Behavior.Audio
   , microphone_
   , audioWorkletGenerator_
   , audioWorkletProcessor_
+  , audioWorkletAggregator_
   , play_
   , playBuf_
   , loopBuf_
@@ -91,6 +93,7 @@ module FRP.Behavior.Audio
   , gain_
   , audioWorkletGeneratorT
   , audioWorkletProcessorT
+  , audioWorkletAggregatorT
   , playBufT
   , loopBufT
   , lowpassT
@@ -113,6 +116,7 @@ module FRP.Behavior.Audio
   , gainT
   , audioWorkletGeneratorT_
   , audioWorkletProcessorT_
+  , audioWorkletAggregatorT_
   , playBufT_
   , loopBufT_
   , lowpassT_
@@ -196,6 +200,10 @@ module FRP.Behavior.Audio
   , g'dynamicsCompressorT
   , g'mul_
   , g'gain_
+  , g'audioWorkletAggregator
+  , g'audioWorkletAggregatorT
+  , g'audioWorkletAggregator_
+  , g'audioWorkletAggregatorT_
   , g'audioWorkletProcessorT
   , g'audioWorkletProcessorT_
   , g'peaking
@@ -246,6 +254,7 @@ module FRP.Behavior.Audio
   , AudioUnit
   , AudioContext
   , CanvasInfo(..)
+  , CanvasInfo'
   , AudioInfo
   , VisualInfo
   , BrowserPeriodicWave
@@ -300,7 +309,6 @@ module FRP.Behavior.Audio
   ) where
 
 import Prelude
-
 import Control.Bind (bindFlipped)
 import Control.Promise (Promise)
 import Data.Array (catMaybes, fold, foldl, head, index, length, mapWithIndex, range, replicate, snoc, takeEnd, zipWith, (!!))
@@ -339,7 +347,7 @@ import FRP.Event.Time (interval)
 import Foreign (Foreign)
 import Foreign.Object (Object, filterWithKey)
 import Foreign.Object as O
-import Graphics.Canvas (CanvasElement, clearRect, getCanvasHeight, getCanvasWidth, getContext2D)
+import Graphics.Canvas (CanvasElement, Rectangle, clearRect, getCanvasHeight, getCanvasWidth, getContext2D)
 import Graphics.Drawing (Drawing, render)
 import Heterogeneous.Mapping (class HMap, class Mapping, hmap)
 import Math as Math
@@ -382,6 +390,8 @@ foreign import makeAudioTrack :: String -> Effect BrowserAudioTrack
 foreign import makeAudioBuffer :: AudioContext -> AudioBuffer -> Effect BrowserAudioBuffer
 
 foreign import makeFloatArray :: Array Number -> Effect BrowserFloatArray
+
+foreign import getBoundingClientRect :: CanvasElement -> Effect Rectangle
 
 makePeriodicWave ::
   forall len.
@@ -811,7 +821,8 @@ data AudioGraphProcessor
   | GDelay MString (AudioParameter Number)
 
 data AudioGraphAggregator
-  = GMul MString
+  = GAudioWorkletAggregator MString String (Object (AudioParameter Number))
+  | GMul MString
   | GAdd MString
   | GGain MString (AudioParameter Number)
 
@@ -825,6 +836,7 @@ data AudioUnit ch
   = Microphone MString
   | AudioWorkletGenerator MString String (Object (AudioParameter Number))
   | AudioWorkletProcessor MString String (Object (AudioParameter Number)) (AudioUnit ch)
+  | AudioWorkletAggregator MString String (Object (AudioParameter Number)) (NonEmpty List (AudioUnit ch))
   | Play MString String Number
   | PlayBuf MString String (AudioParameter Number)
   | LoopBuf MString String (AudioParameter Number) Number Number
@@ -871,6 +883,7 @@ data AudioUnit'
   = Microphone'
   | AudioWorkletGenerator' String (Object (AudioParameter Number))
   | AudioWorkletProcessor' String (Object (AudioParameter Number))
+  | AudioWorkletAggregator' String (Object (AudioParameter Number))
   | Play' String Number
   | PlayBuf' String (AudioParameter Number)
   | LoopBuf' String (AudioParameter Number) Number Number
@@ -926,6 +939,11 @@ isAudioWorkletProcessor_ :: AudioUnit'' -> Boolean
 isAudioWorkletProcessor_ AudioWorkletProcessor'' = true
 
 isAudioWorkletProcessor_ _ = false
+
+isAudioWorkletAggregator_ :: AudioUnit'' -> Boolean
+isAudioWorkletAggregator_ AudioWorkletAggregator'' = true
+
+isAudioWorkletAggregator_ _ = false
 
 isPlay_ :: AudioUnit'' -> Boolean
 isPlay_ Play'' = true
@@ -1096,6 +1114,7 @@ data AudioUnit''
   = Microphone''
   | AudioWorkletGenerator''
   | AudioWorkletProcessor''
+  | AudioWorkletAggregator''
   | Play''
   | PlayBuf''
   | LoopBuf''
@@ -1141,6 +1160,8 @@ instance ordAudioUnit'' :: Ord AudioUnit'' where
   compare a b = compare (show a) (show b)
 
 aga2au' :: AudioGraphAggregator -> { au :: AudioUnit', name :: MString }
+aga2au' (GAudioWorkletAggregator name unit params) = { au: AudioWorkletAggregator' unit params, name }
+
 aga2au' (GMul name) = { au: Mul', name }
 
 aga2au' (GAdd name) = { au: Add', name }
@@ -1185,6 +1206,8 @@ au' (Microphone name) = { au: Microphone', name }
 au' (AudioWorkletGenerator name unit params) = { au: AudioWorkletGenerator' unit params, name }
 
 au' (AudioWorkletProcessor name unit params _) = { au: AudioWorkletProcessor' unit params, name }
+
+au' (AudioWorkletAggregator name unit params _) = { au: AudioWorkletAggregator' unit params, name }
 
 au' (Play name file timingHack) = { au: Play' file timingHack, name }
 
@@ -1284,6 +1307,8 @@ au'' (AudioWorkletGenerator' _ _) = AudioWorkletGenerator''
 
 au'' (AudioWorkletProcessor' _ _) = AudioWorkletProcessor''
 
+au'' (AudioWorkletAggregator' _ _) = AudioWorkletAggregator''
+
 au'' (Play' _ _) = Play''
 
 au'' (PlayBuf' _ _) = PlayBuf''
@@ -1358,6 +1383,8 @@ tagToAU Play'' = Play' "" 0.0
 tagToAU AudioWorkletGenerator'' = AudioWorkletGenerator' "" O.empty
 
 tagToAU AudioWorkletProcessor'' = AudioWorkletProcessor' "" O.empty
+
+tagToAU AudioWorkletAggregator'' = AudioWorkletAggregator' "" O.empty
 
 tagToAU PlayBuf'' = PlayBuf' "" (ap_ (-1.0))
 
@@ -1809,6 +1836,8 @@ type PtrInfo
 
   go' ptr v@(AudioWorkletProcessor _ _ _ a) = passthrough ptr v a
 
+  go' ptr v@(AudioWorkletAggregator _ _ _ l) = listthrough ptr v l
+
   go' ptr v@(Play _ _ _) = terminus ptr v
 
   go' ptr v@(PlayBuf _ _ _) = terminus ptr v
@@ -2051,6 +2080,52 @@ audioWorkletProcessorT_ ::
   AudioUnit ch ->
   AudioUnit ch
 audioWorkletProcessorT_ s handle n = AudioWorkletProcessor (Just s) handle n
+
+-- | A custom audio worklet aggregator
+-- |
+-- | - s: A unique identifier for the audio worklet to be used. The worklet should be preloaded before using this.
+-- | - params: The custom params passed to the audio worklet
+audioWorkletAggregator ::
+  forall ch.
+  Pos ch =>
+  String ->
+  Object Number ->
+  AudioUnit ch ->
+  AudioUnit ch ->
+  AudioUnit ch
+audioWorkletAggregator handle n a b = AudioWorkletAggregator Nothing handle (map ap_ n) (a :| b : Nil)
+
+audioWorkletAggregator_ ::
+  forall ch.
+  Pos ch =>
+  String ->
+  String ->
+  Object Number ->
+  AudioUnit ch ->
+  AudioUnit ch ->
+  AudioUnit ch
+audioWorkletAggregator_ s handle n a b = AudioWorkletAggregator (Just s) handle (map ap_ n) (a :| b : Nil)
+
+audioWorkletAggregatorT ::
+  forall ch.
+  Pos ch =>
+  String ->
+  Object (AudioParameter Number) ->
+  AudioUnit ch ->
+  AudioUnit ch ->
+  AudioUnit ch
+audioWorkletAggregatorT handle n a b = AudioWorkletAggregator Nothing handle n (a :| b : Nil)
+
+audioWorkletAggregatorT_ ::
+  forall ch.
+  Pos ch =>
+  String ->
+  String ->
+  Object (AudioParameter Number) ->
+  AudioUnit ch ->
+  AudioUnit ch ->
+  AudioUnit ch
+audioWorkletAggregatorT_ s handle n a b = AudioWorkletAggregator (Just s) handle n (a :| b : Nil)
 
 -- | Play a sound from a buffer
 -- |
@@ -2788,14 +2863,14 @@ instance audioGraphToGraph ::
   , ProcessorsToGraph processors procGraph
   , AggregatorsToGraph aggregators accGraph
   , Union genGraph procGraph step0
-  , Union step0 accGraph step1
-  , FlipDirection step1 graph
+  , Union step0 accGraph graph
   ) =>
   AudioGraphToGraph audioGraph graph
 
 class RecordHomogeneousInAudioUnits (gate :: Boolean) (generators :: Type) ch
 
 instance recordHomogeneousInAudioUnitsFalse :: RecordHomogeneousInAudioUnits False g ch
+
 instance recordHomogeneousInAudioUnitsF :: Homogeneous g (AudioUnit ch) => RecordHomogeneousInAudioUnits True (Record g) ch
 
 class RecordNotEmptyInternal (gate :: Boolean) (generators :: Type) (b :: Boolean) | gate generators -> b
@@ -2827,12 +2902,13 @@ instance hasOneGenerator ::
 
 instance isValidAudioGraph ::
   ( HasOneGenerator audioGraph ch hasOneGenerator
-  , AudioGraphToGraph audioGraph graph
+  , AudioGraphToGraph audioGraph graphUnflipped
+  , FlipDirection graphUnflipped graph
+  , HasOrphanNodes graphUnflipped hasOrphanNodes
   , HasDuplicateNodes graph hasDuplicateNodes
   , HasDuplicateEdges graph hasDuplicateEdges
   , HasUniqueTerminus graph hasUniqueTerminus
   , IsConnected graph isConnected
-  , HasOrphanNodes graph hasOrphanNodes
   , Not hasOrphanNodes noOrphanNodes
   , Not hasDuplicateNodes noDuplicateNodes
   , Not hasDuplicateEdges noDuplicateEdges
@@ -2852,7 +2928,8 @@ instance validAudioGraph :: (IsValidAudioGraph graph ch True) => ValidAudioGraph
 else instance validAudioGraphFail ::
   (Fail (Text "Graph is not a valid audio graph"), IsValidAudioGraph graph ch False) =>
   ValidAudioGraph
-    graph ch
+    graph
+    ch
 
 class AsProcessor v where
   asProcessor :: v -> Maybe (Tuple AudioGraphProcessor String)
@@ -2985,6 +3062,32 @@ graph_ s g = Graph (Just s) (toObject g)
 --------------------------------------------
 --------------------------------------------
 --------------------------------------------
+g'audioWorkletAggregator ::
+  String ->
+  Object Number ->
+  AudioGraphAggregator
+g'audioWorkletAggregator handle n = GAudioWorkletAggregator Nothing handle (map ap_ n)
+
+g'audioWorkletAggregator_ ::
+  String ->
+  String ->
+  Object Number ->
+  AudioGraphAggregator
+g'audioWorkletAggregator_ s handle n = GAudioWorkletAggregator (Just s) handle (map ap_ n)
+
+g'audioWorkletAggregatorT ::
+  String ->
+  Object (AudioParameter Number) ->
+  AudioGraphAggregator
+g'audioWorkletAggregatorT handle n = GAudioWorkletAggregator Nothing handle n
+
+g'audioWorkletAggregatorT_ ::
+  String ->
+  String ->
+  Object (AudioParameter Number) ->
+  AudioGraphAggregator
+g'audioWorkletAggregatorT_ s handle n = GAudioWorkletAggregator (Just s) handle n
+
 g'audioWorkletProcessor ::
   String ->
   Object Number ->
@@ -3236,6 +3339,8 @@ ucomp Microphone' Microphone' = true
 ucomp (AudioWorkletGenerator' n0 _) (AudioWorkletGenerator' n1 _) = n0 == n1
 
 ucomp (AudioWorkletProcessor' n0 _) (AudioWorkletProcessor' n1 _) = n0 == n1
+
+ucomp (AudioWorkletAggregator' n0 _) (AudioWorkletAggregator' n1 _) = n0 == n1
 
 ucomp (Play' s0 _) (Play' s1 _) = s0 == s1
 
@@ -3751,6 +3856,7 @@ type FFIPredicates
     , isMicrophone :: (AudioUnit'' -> Boolean)
     , isAudioWorkletGenerator :: (AudioUnit'' -> Boolean)
     , isAudioWorkletProcessor :: (AudioUnit'' -> Boolean)
+    , isAudioWorkletAggregator :: (AudioUnit'' -> Boolean)
     , isPlay :: (AudioUnit'' -> Boolean)
     , isPlayBuf :: (AudioUnit'' -> Boolean)
     , isLoopBuf :: (AudioUnit'' -> Boolean)
@@ -3817,6 +3923,7 @@ toFFI =
   , isMicrophone: isMicrophone_
   , isAudioWorkletGenerator: isAudioWorkletGenerator_
   , isAudioWorkletProcessor: isAudioWorkletProcessor_
+  , isAudioWorkletAggregator: isAudioWorkletAggregator_
   , isPlay: isPlay_
   , isPlayBuf: isPlayBuf_
   , isLoopBuf: isLoopBuf_
@@ -3897,6 +4004,8 @@ sourceConstructor (Play' s _) = Just s
 sourceConstructor (AudioWorkletGenerator' s _) = Just s
 
 sourceConstructor (AudioWorkletProcessor' s _) = Just s
+
+sourceConstructor (AudioWorkletAggregator' s _) = Just s
 
 sourceConstructor (PlayBuf' s _) = Just s
 
@@ -3995,6 +4104,19 @@ isGen (SquareOsc' _) = true
 isGen (Constant' _) = true
 
 isGen _ = false
+
+scp :: Int -> Object (AudioParameter Number) -> Object (AudioParameter Number) -> Array (Maybe Instruction)
+scp i n nx =
+  map
+    ( \(Tuple k0 v0) ->
+        if ( fromMaybe true
+            $ map (napeq v0) (O.lookup k0 nx)
+        ) then
+          Just $ SetCustomParam i k0 (apP v0) (apT v0)
+        else
+          Nothing
+    )
+    (O.toUnfoldable n)
 
 reconciliationToInstructionSet :: Reconciled' -> Reconciled
 reconciliationToInstructionSet { prev, cur, reconciliation } =
@@ -4111,29 +4233,11 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
     , if napeq c z then Just $ SetGain i (apP c) (apT c) else Nothing
     ]
 
-  set' i (AudioWorkletGenerator' _ n) (AudioWorkletGenerator' _ nx) =
-    map
-      ( \(Tuple k0 v0) ->
-          if ( fromMaybe true
-              $ map (napeq v0) (O.lookup k0 nx)
-          ) then
-            Just $ SetCustomParam i k0 (apP v0) (apT v0)
-          else
-            Nothing
-      )
-      (O.toUnfoldable n)
+  set' i (AudioWorkletGenerator' _ n) (AudioWorkletGenerator' _ nx) = scp i n nx
 
-  set' i (AudioWorkletProcessor' _ n) (AudioWorkletProcessor' _ nx) =
-    map
-      ( \(Tuple k0 v0) ->
-          if ( fromMaybe true
-              $ map (napeq v0) (O.lookup k0 nx)
-          ) then
-            Just $ SetCustomParam i k0 (apP v0) (apT v0)
-          else
-            Nothing
-      )
-      (O.toUnfoldable n)
+  set' i (AudioWorkletProcessor' _ n) (AudioWorkletProcessor' _ nx) = scp i n nx
+
+  set' i (AudioWorkletAggregator' _ n) (AudioWorkletAggregator' _ nx) = scp i n nx
 
   set' i (PlayBuf' _ n) (PlayBuf' _ nx) = pure $ if napeq n nx then Just $ SetPlaybackRate i (apP n) (apT n) else Nothing
 
@@ -4230,8 +4334,14 @@ type VisualInfo
 
 foreign import getAudioClockTime :: AudioContext -> Effect Number
 
+type CanvasInfo'
+  = { w :: Number, h :: Number, boundingClientRect :: Rectangle }
+
 newtype CanvasInfo
-  = CanvasInfo { w :: Number, h :: Number }
+  = CanvasInfo CanvasInfo'
+
+dummyCanvasInfo :: CanvasInfo'
+dummyCanvasInfo = { w: 0.0, h: 0.0, boundingClientRect: { width: 0.0, height: 0.0, x: 0.0, y: 0.0 } }
 
 type RunInBrowserIAudioUnit accumulator ch
   = RunInBrowser (accumulator -> Number -> Behavior (IAudioUnit ch accumulator)) accumulator
@@ -4369,28 +4479,21 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
               _accNow <- read __accumulator
               let
                 __cvsNow = getFirstCanvas visualInfo.canvases
-              __w <-
-                maybe (pure 0.0)
+              canvasInfo <-
+                maybe (pure dummyCanvasInfo)
                   ( \_cvsNow -> do
                       __r <-
                         try do
                           __cvs <- _cvsNow
-                          getCanvasWidth __cvs
-                      either (const $ pure 0.0) pure __r
-                  )
-                  __cvsNow
-              __h <-
-                maybe (pure 0.0)
-                  ( \_cvsNow -> do
-                      __r <-
-                        try do
-                          __cvs <- _cvsNow
-                          getCanvasHeight __cvs
-                      either (const $ pure 0.0) pure __r
+                          w <- getCanvasWidth __cvs
+                          h <- getCanvasHeight __cvs
+                          boundingClientRect <- getBoundingClientRect __cvs
+                          pure $ { w, h, boundingClientRect }
+                      either (const $ pure dummyCanvasInfo) pure __r
                   )
                   __cvsNow
               let
-                behavior = scene _accNow (CanvasInfo { w: __w, h: __h }) (toNumber ct / 1000.0)
+                behavior = scene _accNow (CanvasInfo canvasInfo) (toNumber ct / 1000.0)
               bang <- create :: Effect (EventIO Unit)
               let
                 behaviorSampled = sample_ behavior bang.event
@@ -4409,7 +4512,12 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
                                     try do
                                       cvs <- cvs__
                                       canvasCtx <- getContext2D cvs
-                                      clearRect canvasCtx { height: __h, width: __w, x: 0.0, y: 0.0 }
+                                      clearRect canvasCtx
+                                        { height: canvasInfo.h
+                                        , width: canvasInfo.w
+                                        , x: 0.0
+                                        , y: 0.0
+                                        }
                                       render canvasCtx viz
                                   pure unit
                               )
