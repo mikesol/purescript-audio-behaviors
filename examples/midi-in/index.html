@@ -5,15 +5,12 @@
     var offCb = null;
     var audioCtx = null;
     function turnOnAudio() {
-      console.log("tau");
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       audioCtx.audioWorklet.addModule("ps-aud-mul.js").then(function () {
-        console.log("psaud");
         return PS["FRP.Behavior.Audio.Example.MidiIn"]
           .macc()
           .then(function (midiAccess) {
-            console.log(midiAccess);
-            offCb = PS["FRP.Behavior.Audio.Example.MidiIn"].run()(midiAccess)(
+            offCb = PS["FRP.Behavior.Audio.Example.MidiIn"].run(midiAccess)()(
               20
             )(15)(audioCtx)({})({})();
           });

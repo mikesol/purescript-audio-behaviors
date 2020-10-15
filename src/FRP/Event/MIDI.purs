@@ -107,34 +107,36 @@ getMidi midiAccess_ = do
               data__ <- getData me
               timeStamp__ <- getTimeStamp me
               midiEvent__ <- maybe (pure Nothing) toMIDIEvent data__
-              fromMaybe (pure unit)
-                ( do
-                    data_ <- data__
-                    timeStamp_ <- timeStamp__
-                    midiEvent_ <- midiEvent__
-                    let
-                      toAdd =
+              let
+                toAdd_ =
+                  ( do
+                      timeStamp_ <- timeStamp__
+                      midiEvent_ <- midiEvent__
+                      pure
                         { timeStamp: timeStamp_
                         , event: midiEvent_
                         }
-                    _ <-
-                      pure
-                        $ ( Ref.modify
-                              ( \mmap ->
-                                  M.union
-                                    ( M.singleton inputName
-                                        ( toAdd
-                                            : ( fromMaybe Nil
-                                                  $ M.lookup inputName mmap
-                                              )
-                                        )
+                  )
+              case toAdd_ of
+                Nothing -> pure unit
+                Just toAdd ->
+                  ( do
+                      _ <-
+                        Ref.modify
+                          ( \mmap ->
+                              M.union
+                                ( M.singleton inputName
+                                    ( toAdd
+                                        : ( fromMaybe Nil
+                                              $ M.lookup inputName mmap
+                                          )
                                     )
-                                    mmap
-                              )
-                              midi
+                                )
+                                mmap
                           )
-                    Just $ pure unit
-                )
+                          midi
+                      pure unit
+                  )
   listeners <-
     sequence
       $ M.mapMaybeWithKey

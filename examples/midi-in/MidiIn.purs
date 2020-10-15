@@ -12,7 +12,7 @@ import Effect (Effect)
 import FRP.Behavior (Behavior)
 import FRP.Behavior.Audio (AudioUnit, CanvasInfo, gain', runInBrowser, runInBrowser_, sinOsc, speaker, speaker')
 import FRP.Behavior.MIDI (midi)
-import FRP.Event.MIDI (MIDI, MIDIEvent(..), MIDIEventInTime, midiAccess)
+import FRP.Event.MIDI (MIDI, MIDIEvent(..), MIDIEventInTime, getMidi, midiAccess)
 import Math (pi, sin)
 
 simpleOnOff :: M.Map String (List MIDIEventInTime) -> Boolean
@@ -41,7 +41,10 @@ scene midiIn time = f <$> (midi midiIn)
     speaker'
       (gain' (if simpleOnOff md then 0.6 else 0.0) $ sinOsc 440.0)
 
-run md = runInBrowser (scene md)
+run macc =
+  runInBrowser_ do
+    md <- getMidi macc
+    pure (scene md)
 
 macc = midiAccess
 
