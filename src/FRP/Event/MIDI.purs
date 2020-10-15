@@ -1,15 +1,15 @@
 module FRP.Event.MIDI
-  ( MIDI
-  , MIDIAccess
-  , MIDIEvent
-  , MIDIEventInTime
+  ( MIDI(..)
+  , MIDIAccess(..)
+  , MIDIEvent(..)
+  , MIDIEventInTime(..)
   , getMidi
   , disposeMidi
   , withMidi
+  , midiAccess
   ) where
 
 import Prelude
-
 import Control.Promise (Promise)
 import Data.ArrayBuffer.Types (ArrayBuffer)
 import Data.Foldable (traverse_)
@@ -58,12 +58,20 @@ foreign import toMIDIEvent_ ::
   (Int -> Int -> MIDIEvent) ->
   (Int -> Int -> MIDIEvent) ->
   (Int -> Int -> MIDIEvent) ->
+  Maybe MIDIEvent ->
+  (MIDIEvent -> Maybe MIDIEvent) ->
   ArrayBuffer ->
   Effect (Maybe MIDIEvent)
 
-foreign import getData :: MIDIMessageEvent -> Effect (Maybe ArrayBuffer)
+foreign import getData_ :: (Maybe ArrayBuffer) -> (ArrayBuffer -> Maybe ArrayBuffer) -> MIDIMessageEvent -> Effect (Maybe ArrayBuffer)
 
-foreign import getTimeStamp :: MIDIMessageEvent -> Effect (Maybe Number)
+foreign import getTimeStamp_ :: (Maybe Number) -> (Number -> Maybe Number) -> MIDIMessageEvent -> Effect (Maybe Number)
+
+getData :: MIDIMessageEvent -> Effect (Maybe ArrayBuffer)
+getData = getData_ Nothing Just
+
+getTimeStamp :: MIDIMessageEvent -> Effect (Maybe Number)
+getTimeStamp = getTimeStamp_ Nothing Just
 
 newtype MIDI
   = MIDI
@@ -81,18 +89,15 @@ toMIDIEvent =
     ProgramChange
     Aftertouch
     Pitchwheel
+    Nothing
+    Just
 
 fromEvent :: WE.Event -> Maybe MIDIMessageEvent
 fromEvent = unsafeReadProtoTagged "MIDIMessageEvent"
 
--- unsafeReadProtoTagged 
--- MIDIMessageEvent
--- midiAccess
--- toTargetMap :: MIDIAccess -> Map String EventTarget
--- | Get a handle for working with the mouse.
 getMidi :: MIDIAccess -> Effect MIDI
-getMidi midiAccess = do
-  targetMap <- toTargetMap midiAccess >>= pure <<< M.fromFoldable <<< (O.toUnfoldable :: O.Object EventTarget -> List (Tuple String EventTarget))
+getMidi midiAccess_ = do
+  targetMap <- toTargetMap midiAccess_ >>= pure <<< M.fromFoldable <<< (O.toUnfoldable :: O.Object EventTarget -> List (Tuple String EventTarget))
   midi <- Ref.new M.empty
   let
     makeListener inputName =
@@ -169,15 +174,15 @@ disposeMidi :: MIDI -> Effect Unit
 disposeMidi (MIDI { dispose }) = dispose
 
 -- | Create an event which also returns the current state of MIDI.
-withMidi
-  :: forall a
-   . MIDI
-  -> Event a
-  -> Event { value :: a, midi :: Map String (List MIDIEventInTime)}
-withMidi (MIDI { midi }) e = makeEvent \k ->
-  e `subscribe` \value -> do
-    midi_ <- Ref.read midi
-    k { value, midi: midi_ }
-
-
-    
+withMidi ::
+  forall a.
+  MIDI ->
+  Event a ->
+  Event { value :: a, midi :: Map String (List MIDIEventInTime) }
+withMidi (MIDI { midi }) e =
+  makeEvent \k ->
+    e
+      `subscribe`
+        \value -> do
+          midi_ <- Ref.read midi
+          k { value, midi: midi_ }
