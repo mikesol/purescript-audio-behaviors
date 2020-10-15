@@ -9,7 +9,7 @@ import Data.Typelevel.Num (D1, D2)
 import Data.Vec ((+>), empty)
 import Effect (Effect)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AudioUnit, Oversample(..), allpass, bandpass, convolver, delay, dup1, dynamicsCompressor, g'add, g'bandpass, g'delay, g'gain, gain', graph, highpass, highshelf, loopBuf, lowpass, lowshelf, merger, microphone, notch, panner, peaking, periodicOsc, play, playBuf, playBuf_, play_, runInBrowser, sawtoothOsc, sinOsc, speaker, speaker', squareOsc, traingleOsc, waveShaper)
+import FRP.Behavior.Audio (AudioUnit, Oversample(..), allpass, bandpass, convolver, delay, dup1, dynamicsCompressor, g'add, g'bandpass, g'delay, g'gain, gain', graph, highpass, highshelf, loopBuf, lowpass, lowshelf, merger, microphone, notch, panner, peaking, periodicOsc, play, playBuf, playBuf_, play_, runInBrowser, sawtoothOsc, sinOsc, speaker, speaker', squareOsc, triangleOsc, waveShaper)
 import Math (pi, sin)
 import Record.Extra (SLProxy(..), SNil)
 import Type.Data.Graph (type (:/))
@@ -20,7 +20,7 @@ nothing _ = pure zero
 
 -- triangle
 triangle :: Number -> Behavior (AudioUnit D1)
-triangle _ = pure $ speaker' (gain' 0.3 $ traingleOsc 420.0)
+triangle _ = pure $ speaker' (gain' 0.3 $ triangleOsc 420.0)
 
 -- saw
 saw :: Number -> Behavior (AudioUnit D1)

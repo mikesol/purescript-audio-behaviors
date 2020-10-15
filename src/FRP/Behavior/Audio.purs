@@ -36,7 +36,7 @@ module FRP.Behavior.Audio
   , periodicOsc
   , sinOsc
   , sawtoothOsc
-  , traingleOsc
+  , triangleOsc
   , squareOsc
   , split1
   , split2
@@ -77,7 +77,7 @@ module FRP.Behavior.Audio
   , periodicOsc_
   , sinOsc_
   , sawtoothOsc_
-  , traingleOsc_
+  , triangleOsc_
   , squareOsc_
   , split1_
   , split2_
@@ -108,7 +108,7 @@ module FRP.Behavior.Audio
   , periodicOscT
   , sinOscT
   , sawtoothOscT
-  , traingleOscT
+  , triangleOscT
   , squareOscT
   , pannerT
   , constantT
@@ -131,7 +131,7 @@ module FRP.Behavior.Audio
   , periodicOscT_
   , sinOscT_
   , sawtoothOscT_
-  , traingleOscT_
+  , triangleOscT_
   , squareOscT_
   , pannerT_
   , constantT_
@@ -2544,17 +2544,17 @@ sawtoothOscT_ s n = SawtoothOsc (Just s) n
 -- | A triangle oscillator.
 -- |
 -- | - f: The fundamental frequency
-traingleOsc :: Number -> AudioUnit D1
-traingleOsc n = TriangleOsc Nothing (ap_ n)
+triangleOsc :: Number -> AudioUnit D1
+triangleOsc n = TriangleOsc Nothing (ap_ n)
 
-traingleOsc_ :: String -> Number -> AudioUnit D1
-traingleOsc_ s n = TriangleOsc (Just s) (ap_ n)
+triangleOsc_ :: String -> Number -> AudioUnit D1
+triangleOsc_ s n = TriangleOsc (Just s) (ap_ n)
 
-traingleOscT :: AudioParameter Number -> AudioUnit D1
-traingleOscT n = TriangleOsc Nothing n
+triangleOscT :: AudioParameter Number -> AudioUnit D1
+triangleOscT n = TriangleOsc Nothing n
 
-traingleOscT_ :: String -> AudioParameter Number -> AudioUnit D1
-traingleOscT_ s n = TriangleOsc (Just s) n
+triangleOscT_ :: String -> AudioParameter Number -> AudioUnit D1
+triangleOscT_ s n = TriangleOsc (Just s) n
 
 -- | A square oscillator.
 -- |
