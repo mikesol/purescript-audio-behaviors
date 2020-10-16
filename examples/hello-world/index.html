@@ -9,7 +9,7 @@
       audioCtx.audioWorklet.addModule("ps-aud-mul.js").then(function () {
         offCb = PS["FRP.Behavior.Audio.Example.HelloWorld"].run()(20)(15)(
           audioCtx
-        )({})({})();
+        )({})({})(PS["FRP.Behavior.Audio.Example.HelloWorld"].exporter)();
       });
     }
     function turnOffAudio() {

@@ -16,6 +16,8 @@ examples/hello-world/index.js
 examples/hello-world/ps-aud-mul.js
 examples/midi-in/index.js
 examples/midi-in/ps-aud-mul.js
+examples/exporter/index.js
+examples/exporter/ps-aud-mul.js
 examples/dupsplit/index.js
 examples/dupsplit/ps-aud-mul.js
 examples/audio-worklet/index.js

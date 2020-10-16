@@ -15,7 +15,7 @@ import Data.Typelevel.Num (D1, D2)
 import Data.Vec ((+>), empty)
 import Effect (Effect)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AV(..), AudioParameter(..), AudioUnit, CanvasInfo(..), IAudioUnit(..), RunInBrowser, RunInBrowserAV_, RunInBrowserIAudioUnit_, RunInBrowser_, dup1, g'add, g'bandpass, g'delay, g'gain, gain', gainT', graph, merger, microphone, panner, play, runInBrowser, runInBrowser_, sinOsc, speaker, speaker')
+import FRP.Behavior.Audio (AV(..), AudioParameter(..), AudioUnit, CanvasInfo(..), IAudioUnit(..), RunInBrowser, RunInBrowserAV_, RunInBrowserIAudioUnit_, RunInBrowser_, defaultExporter, dup1, g'add, g'bandpass, g'delay, g'gain, gain', gainT', graph, merger, microphone, panner, play, runInBrowser, runInBrowser_, sinOsc, speaker, speaker')
 import FRP.Behavior.Mouse (buttons, position)
 import FRP.Event.Mouse (Mouse, getMouse)
 import Graphics.Drawing (circle, fillColor, filled)
@@ -385,12 +385,14 @@ scene8 mouse acc@{ onset } (CanvasInfo { w, h, boundingClientRect: { x, y } }) t
 run =
   ( runInBrowser_ ::
       forall a.
-      RunInBrowserAV_ { onset :: Maybe Number | a } D2
+      RunInBrowserAV_ { onset :: Maybe Number | a } D2 Unit
   )
     ( do
         mouse <- getMouse
         pure (scene8 mouse)
     )
+
+exporter = defaultExporter
 
 main :: Effect Unit
 main = pure unit

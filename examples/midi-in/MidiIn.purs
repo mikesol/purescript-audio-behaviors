@@ -10,9 +10,10 @@ import Data.Tuple (snd)
 import Data.Typelevel.Num (D1)
 import Effect (Effect)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AudioUnit, CanvasInfo, gain', runInBrowser, runInBrowser_, sinOsc, speaker, speaker')
+import FRP.Behavior.Audio (AudioContext, AudioInfo, AudioUnit, CanvasInfo, Exporter, Time'AudioInstructions(..), VisualInfo, defaultExporter, gain', runInBrowser, runInBrowser_, sinOsc, speaker, speaker')
 import FRP.Behavior.MIDI (midi)
-import FRP.Event.MIDI (MIDI, MIDIEvent(..), MIDIEventInTime, getMidi, midiAccess)
+import FRP.Event.MIDI (MIDI, MIDIAccess, MIDIEvent(..), MIDIEventInTime, getMidi, midiAccess)
+import Foreign.Object (Object)
 import Math (pi, sin)
 
 simpleOnOff :: M.Map String (List MIDIEventInTime) -> Boolean
@@ -41,12 +42,25 @@ scene midiIn time = f <$> (midi midiIn)
     speaker'
       (gain' (if simpleOnOff md then 0.6 else 0.0) $ sinOsc 440.0)
 
-run macc =
+run ::
+  forall microphone track buffer floatArray periodicWave.
+  MIDIAccess ->
+  Unit ->
+  Int ->
+  Int ->
+  AudioContext ->
+  AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
+  VisualInfo ->
+  Exporter Unit Time'AudioInstructions ->
+  Effect (Effect Unit)
+run max =
   runInBrowser_ do
-    md <- getMidi macc
+    md <- getMidi max
     pure (scene md)
 
 macc = midiAccess
+
+exporter = defaultExporter
 
 main :: Effect Unit
 main = pure unit
