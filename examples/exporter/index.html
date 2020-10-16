@@ -6,13 +6,13 @@
     var audioCtx = null;
     function turnOnAudio() {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      audioCtx.audioWorklet.addModule("ps-aud-mul.js").then(function () {
-        var now = new Date().getTime();
-        var ctr = 0;
-        // null for the microphone
-        offCb = PS["FRP.Behavior.Audio.Example.Metronome"].run()(20)(15)(
+      // as we don't use multiplication, we won't pass the audio worklet here
+      // that's to avoid a temporary windows bug where for some reason it does not serve
+      // with the simple python http server
+      Promise.resolve(true).then(function () {
+        offCb = PS["FRP.Behavior.Audio.Example.Exporter"].run()(20)(15)(
           audioCtx
-        )({})({})(PS["FRP.Behavior.Audio.Example.Metronome"].exporter)();
+        )({})({})(PS["FRP.Behavior.Audio.Example.Exporter"].exporter)();
       });
     }
     function turnOffAudio() {

@@ -6,7 +6,7 @@ import Data.NonEmpty ((:|))
 import Data.Typelevel.Num (D1)
 import Effect (Effect)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AudioUnit, gain', runInBrowser, sinOsc, speaker, CanvasInfo)
+import FRP.Behavior.Audio (AudioUnit, CanvasInfo, defaultExporter, gain', runInBrowser, sinOsc, speaker)
 import Math (pi, sin)
 
 scene :: Number -> Behavior (AudioUnit D1)
@@ -24,6 +24,8 @@ scene time =
           )
 
 run = runInBrowser scene
+
+exporter = defaultExporter
 
 main :: Effect Unit
 main = pure unit

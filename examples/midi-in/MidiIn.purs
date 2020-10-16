@@ -10,7 +10,7 @@ import Data.Tuple (snd)
 import Data.Typelevel.Num (D1)
 import Effect (Effect)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AudioUnit, CanvasInfo, gain', runInBrowser, runInBrowser_, sinOsc, speaker, speaker')
+import FRP.Behavior.Audio (AudioUnit, CanvasInfo, defaultExporter, gain', runInBrowser, runInBrowser_, sinOsc, speaker, speaker')
 import FRP.Behavior.MIDI (midi)
 import FRP.Event.MIDI (MIDI, MIDIEvent(..), MIDIEventInTime, getMidi, midiAccess)
 import Math (pi, sin)
@@ -47,6 +47,8 @@ run macc =
     pure (scene md)
 
 macc = midiAccess
+
+exporter = defaultExporter
 
 main :: Effect Unit
 main = pure unit

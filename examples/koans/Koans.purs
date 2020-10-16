@@ -9,7 +9,7 @@ import Data.Typelevel.Num (D1, D2)
 import Data.Vec ((+>), empty)
 import Effect (Effect)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AudioUnit, Oversample(..), allpass, bandpass, convolver, delay, dup1, dynamicsCompressor, g'add, g'bandpass, g'delay, g'gain, gain', graph, highpass, highshelf, loopBuf, lowpass, lowshelf, merger, microphone, notch, panner, peaking, periodicOsc, play, playBuf, playBuf_, play_, runInBrowser, sawtoothOsc, sinOsc, speaker, speaker', squareOsc, triangleOsc, waveShaper)
+import FRP.Behavior.Audio (AudioUnit, Oversample(..), allpass, bandpass, convolver, defaultExporter, delay, dup1, dynamicsCompressor, g'add, g'bandpass, g'delay, g'gain, gain', graph, highpass, highshelf, loopBuf, lowpass, lowshelf, merger, microphone, notch, panner, peaking, periodicOsc, play, playBuf, playBuf_, play_, runInBrowser, sawtoothOsc, sinOsc, speaker, speaker', squareOsc, triangleOsc, waveShaper)
 import Math (pi, sin)
 import Record.Extra (SLProxy(..), SNil)
 import Type.Data.Graph (type (:/))
@@ -161,6 +161,8 @@ feedback _ =
     )
 
 run = runInBrowser feedback
+
+exporter = defaultExporter
 
 main :: Effect Unit
 main = pure unit
