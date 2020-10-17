@@ -12,7 +12,9 @@
           .then(function (midiAccess) {
             offCb = PS["FRP.Behavior.Audio.Example.MidiIn"].run(midiAccess)()(
               20
-            )(15)(audioCtx)({})({})();
+            )(15)(audioCtx)({})({})(
+              PS["FRP.Behavior.Audio.Example.MidiIn"].exporter
+            )();
           });
       });
     }

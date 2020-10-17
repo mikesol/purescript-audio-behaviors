@@ -8,7 +8,8 @@ import Data.Tuple (Tuple(..), fst, snd)
 import Data.Typelevel.Num (D1)
 import Effect (Effect)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AudioParameter(..), AudioUnit, gain', gainT', runInBrowser, sinOsc, speaker')
+import FRP.Behavior.Audio (AudioContext, AudioInfo, AudioParameter(..), AudioUnit, Exporter, Time'AudioInstructions(..), VisualInfo, defaultExporter, gain', gainT', runInBrowser, sinOsc, speaker')
+import Foreign.Object (Object)
 
 -- a piecewise function that creates an attack/release/sustain envelope
 -- at a periodicity of every 0.9 seconds
@@ -56,7 +57,19 @@ scene time = pure $ speaker' (gain' 0.1 (gainT' (gn time) $ sinOsc 440.0))
               in
                 AudioParameter { param: (m * s + b), timeOffset: 0.0 }
 
+run ::
+  forall microphone track buffer floatArray periodicWave.
+  Unit ->
+  Int ->
+  Int ->
+  AudioContext ->
+  AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
+  VisualInfo ->
+  Exporter Unit Time'AudioInstructions ->
+  Effect (Effect Unit)
 run = runInBrowser scene
+
+exporter = defaultExporter
 
 main :: Effect Unit
 main = pure unit

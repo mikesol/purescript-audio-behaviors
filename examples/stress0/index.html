@@ -12,7 +12,7 @@
         // null for the microphone
         offCb = PS["FRP.Behavior.Audio.Example.Stress0"].run()(20)(18)(
           audioCtx
-        )({})({})();
+        )({})({})(PS["FRP.Behavior.Audio.Example.Stress0"].exporter)();
       });
     }
     function turnOffAudio() {
