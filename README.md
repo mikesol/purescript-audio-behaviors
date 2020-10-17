@@ -24,7 +24,7 @@ This library uses the [behaviors pattern](https://wiki.haskell.org/Functional_Re
 
 For example, consider the following behavior, taken from [`HelloWorld.purs`](./examples/hello-world/HelloWorld.purs):
 
-[Try me on klank.dev](https://link.klank.dev/69fUKUA2DcR5PHMu6)
+[Try me on klank.dev](https://link.klank.dev/CBv8TPJxVWJikohT9)
 
 ```haskell
 scene ::  Number -> Behavior (AudioUnit D1)
@@ -63,7 +63,7 @@ In this section, we'll build a scene from the ground up. In doing so, we'll acco
 
 Let's start with a sine wave at A440 playing at a volume of `0.5` (where `1.0` is the loudest volume).
 
-[Try me on klank.dev](https://link.klank.dev/FQknFoih1D4jnFuLA)
+[Try me on klank.dev](https://link.klank.dev/TYgGyYwjdh5mWg9D9)
 
 ```haskell
 scene :: Number -> Behavior (AudioUnit D1)
@@ -76,7 +76,7 @@ Note that, because this function does not depend on time, we can ignore the inpu
 
 Let's add our voice to the mix! We'll put it above a nice low drone.
 
-[Try me on klank.dev](https://link.klank.dev/s8V1bmHSjVohQg5N9)
+[Try me on klank.dev](https://link.klank.dev/qCFPu6fK7h4BGiUx9)
 
 ```haskell
 scene :: Number -> Behavior (AudioUnit D1)
@@ -98,7 +98,7 @@ Make sure to wear headphones to avoid feedback!
 
 Let's add some soothing jungle sounds to the mix. We use the function `play` to add an audio element. This function assumes that you provide an audio element with the appropriate tag to the toplevel `runInBrowser` function. In this case, the tag is `"forest"`.
 
-[Try me on klank.dev](https://link.klank.dev/ZpVFkupG6dHp6Jut7)
+[Try me on klank.dev](https://link.klank.dev/mkpLh13aNu1duSEa9)
 
 ```haskell
 -- assuming we have passed in an object
@@ -124,7 +124,7 @@ To go from mono to stereo, there is a class of functions called `dupX`, `splitX`
 
 If you want to make two separate audio units, then you can use a normal let block. If, on the other hand, you want to use the same underlying unit, use `dupX`. When in doubt, use `dupX`, as you'll rarely need to duplicate an identical audio source.
 
-[Try me on klank.dev](https://link.klank.dev/fe2GMGcpBaDXxh3v5)
+[Try me on klank.dev](https://link.klank.dev/wUrdhc4Q2dn5v3TNA)
 
 ```haskell
 scene :: Number -> Behavior (AudioUnit D2)
@@ -148,7 +148,7 @@ scene =
 
 Up until this point, our audio hasn't reacted to many behaviors. Let's fix that! One behavior to react to is the passage of time. Let's add a slow undulation to the lowest pitch in the drone that is based on the passage of time
 
-[Try me on klank.dev](https://link.klank.dev/kRB5dRZFupDh5KRJ6)
+[Try me on klank.dev](https://link.klank.dev/7R891WVcSnTcZT5G6)
 
 ```haskell
 scene :: Number -> Behavior (AudioUnit D2)
@@ -173,7 +173,7 @@ scene time =
 
 The next snippet of code uses the mouse to modulate the pitch of the higher note by roughly a major third.
 
-[Try me on klank.dev](https://link.klank.dev/ZMGtrPGZD8xcXVE79)
+[Try me on klank.dev](https://link.klank.dev/bkvxvHTFQeKeyMZK6)
 
 ```haskell
 scene :: Mouse -> Number -> Behavior (AudioUnit D2)
@@ -208,7 +208,7 @@ For example, let's say the control rate is `66Hz` and you want a sound to trigge
 
 Let's add a small metronome on the inside of our sound. We will have it beat every `0.9` seconds, and we use the function `gainT'` instead of `gain` to accept an `AudioParameter`.
 
-[Try me on klank.dev](https://link.klank.dev/WHAxvMXB2ERxHXCr8)
+[Try me on klank.dev](https://link.klank.dev/yRmb7EC1zGLqQANn8)
 
 ```haskell
 -- a piecewise function that creates an attack/release/sustain envelope
@@ -282,7 +282,7 @@ To accomplish this, or anything where memory needs to be retained, the scene acc
 
 To make the accumulator useful, the scene should return the accumulator as well. The constructor `IAudioUnit` allows for this: it accepts an audio unit as well as an accumulator.
 
-[Try me on klank.dev](https://link.klank.dev/DuoyzRJauwQvRnPWA)
+[Try me on klank.dev](https://link.klank.dev/mw6KayjtZnDWcqFU7)
 
 ```haskell
 pwf :: Array (Tuple Number Number)
@@ -373,7 +373,7 @@ The audio graph must respect certain rules: it must be fully connected, it must 
 
 The graph structure is represented using _incoming_ edges, so processors have only one incoming edge whereas accumulators have an arbitrary number of incoming edges, as we see below. Play it and you'll hear an echo effect!
 
-[Try me on klank.dev](https://link.klank.dev/CnUuXUubPQpASU4w8)
+[Try me on klank.dev](https://link.klank.dev/mAdQpbB2nH3ZzW4Y9)
 
 ```haskell
 pwf :: Array (Tuple Number Number)
@@ -466,7 +466,7 @@ scene mouse acc@{ onset } time = f time <$> click
 
 Let's add a little dot that gets bigger when we click. We'll do that using the `AV` constructor that accepts a [Drawing](https://pursuit.purescript.org/packages/purescript-drawing/4.0.0/docs/Graphics.Drawing#t:Drawing).
 
-[Try me on klank.dev](https://klank.dev/?k&ec&url=https://klank-share.s3.eu-west-1.amazonaws.com/16025627099647107.purs)
+[Try me on klank.dev](https://klank.dev/?k&ec&url=https://klank-share.s3.eu-west-1.amazonaws.com/K16029054664258658.purs)
 
 ```haskell
 pwf :: Array (Tuple Number Number)
