@@ -614,30 +614,19 @@ makePeriodicWave ::
   Effect BrowserPeriodicWave
 ```
 
-### AudioContext
-
 ## Advanced usage
 
 Here are some tips for advanced usage of `purescript-audio-behaviors`.
 
-### Debugging our scene
+### Exporting
 
-`purescript-audio-behaviors` translates scenes to a sort of "assembly" language that is passed to an audio rendering function. This language has primitives like `NewUnit` for a new audio unit, `ConnectTo`, to connect one unit to another one, etc. When debugging, the recommendation is to print these instructions to the console using `console.log`. Then, you will see exactly how the audio graph is updating in realtime.
+`purescript-audio-behaviors` translates scenes to a sort of "assembly" language that is passed to an audio rendering function. This language has primitives like `NewUnit` for a new audio unit, `ConnectTo`, to connect one unit to another one, etc. These instructions are sent to an exporter for further downstream processing. Examples of downstream actions could be:
 
-Another useful way to debug is unit tests. Most behaviors can be refactored as pure functions with the `Behavior` as a top-level applicative control structure, and you can sample them at various times to make sure the audio graph is consistent with your expectations.
+- printing all processing information to a log, ie `console.log`
+- sending to a server for dispatching to MIDI devices or SuperCollider
+- tweeting your audio graph every 20ms (I don't know why you'd do this... but you could!)
 
-### Function signatures
-
-Depending on how you set up your scene, you may need to give a hint to the PureScript compiler about its type when passing it to `runInBrowser` or `runInBrowser_`. There are several type hints shipped with the library:
-
-- `RunInBrowserIAudioUnit`
-- `RunInBrowserIAudioUnit_`
-- `RunInBrowserIAnimation`
-- `RunInBrowserIAnimation_`
-- `RunInBrowserAV`
-- `RunInBrowserAV_`
-
-Examples of how these are used can be found in [README.purs](./examples/readme/Readme.purs).
+The library provides a `defaultExporter` that is a no-op. To override this, pass an exporter with type `Exporter` to the `runInBrowser` function. [Here is an example on klank.dev of an exporter that prints to `console.log`](https://link.klank.dev/6N3KnLpyiZJJm14m7).
 
 ### Named units
 
@@ -666,7 +655,7 @@ Under the hood, `purescript-audio-behaviors` tries _really hard_ to guarantee th
 All of the parameters are passed to the function `runInBrowser` in the class `RunnableMedia`, which has the following signature:
 
 ```haskell
-class RunnableMedia callback accumulator where
+class RunnableMedia callback accumulator env where
   runInBrowser ::
     forall microphone track buffer floatArray periodicWave.
     callback -> -- scene
@@ -676,6 +665,7 @@ class RunnableMedia callback accumulator where
     AudioContext -> -- audioContext
     AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) -> -- audio info
     VisualInfo -> -- visual info
+    Exporter env -> -- exporter
     Effect (Effect Unit)
 ```
 
