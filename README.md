@@ -373,7 +373,7 @@ The audio graph must respect certain rules: it must be fully connected, it must 
 
 The graph structure is represented using _incoming_ edges, so processors have only one incoming edge whereas accumulators have an arbitrary number of incoming edges, as we see below. Play it and you'll hear an echo effect!
 
-[Try me on klank.dev](https://link.klank.dev/mAdQpbB2nH3ZzW4Y9)
+[Try me on klank.dev](https://link.klank.dev/soK6Z2guc4XRuRNm8)
 
 ```haskell
 pwf :: Array (Tuple Number Number)
