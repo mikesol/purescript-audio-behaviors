@@ -7,9 +7,13 @@
     function turnOnAudio() {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       audioCtx.audioWorklet.addModule("ps-aud-mul.js").then(function () {
-        offCb = PS["FRP.Behavior.Audio.Example.HelloWorld"].run()(20)(15)(
-          audioCtx
-        )({})({})(PS["FRP.Behavior.Audio.Example.HelloWorld"].exporter)();
+        offCb = PS["FRP.Behavior.Audio.Example.HelloWorld"].run()(audioCtx)({
+          msBetweenSamples: 20,
+          msBetweenPings: 15,
+          fastforwardLowerBound: 0.025,
+          rewindUpperBound: 0.15,
+          initialOffset: 0.1,
+        })({})({})(PS["FRP.Behavior.Audio.Example.HelloWorld"].exporter)();
       });
     }
     function turnOffAudio() {

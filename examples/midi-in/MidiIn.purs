@@ -1,20 +1,20 @@
 module FRP.Behavior.Audio.Example.MidiIn where
 
 import Prelude
+import Control.Promise (Promise)
 import Data.Array (head)
 import Data.List ((:), List(..))
 import Data.Map as M
-import Data.Maybe (Maybe(..), fromMaybe)
-import Data.NonEmpty ((:|))
+import Data.Maybe (fromMaybe)
 import Data.Tuple (snd)
 import Data.Typelevel.Num (D1)
 import Effect (Effect)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AudioContext, AudioInfo, AudioUnit, CanvasInfo, Exporter, Time'AudioInstructions(..), VisualInfo, defaultExporter, gain', runInBrowser, runInBrowser_, sinOsc, speaker, speaker')
+import FRP.Behavior.Audio (AudioContext, AudioInfo, AudioUnit, EngineInfo, Exporter, VisualInfo, defaultExporter, gain', runInBrowser_, sinOsc, speaker')
 import FRP.Behavior.MIDI (midi)
 import FRP.Event.MIDI (MIDI, MIDIAccess, MIDIEvent(..), MIDIEventInTime, getMidi, midiAccess)
 import Foreign.Object (Object)
-import Math (pi, sin)
+import Math (pi)
 
 simpleOnOff :: M.Map String (List MIDIEventInTime) -> Boolean
 simpleOnOff m =
@@ -46,21 +46,25 @@ run ::
   forall microphone track buffer floatArray periodicWave.
   MIDIAccess ->
   Unit ->
-  Int ->
-  Int ->
   AudioContext ->
-  AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
+  EngineInfo ->
+  AudioInfo
+    (Object microphone)
+    (Object track)
+    (Object buffer)
+    (Object floatArray)
+    (Object periodicWave) ->
   VisualInfo ->
-  Exporter Unit Time'AudioInstructions ->
+  Exporter Unit ->
   Effect (Effect Unit)
 run max =
   runInBrowser_ do
     md <- getMidi max
     pure (scene md)
 
-macc = midiAccess
+macc = midiAccess :: (Effect (Promise MIDIAccess))
 
-exporter = defaultExporter
+exporter = defaultExporter :: Exporter Unit
 
 main :: Effect Unit
 main = pure unit

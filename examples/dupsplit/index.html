@@ -14,7 +14,13 @@
           // null for the microphone
           offCb = PS["FRP.Behavior.Audio.Example.DupSplit"].run(
             PS["FRP.Behavior.Audio.Example.DupSplit"].initialOnset
-          )(20)(15)(audioCtx)({
+          )(audioCtx)({
+            msBetweenSamples: 20,
+            msBetweenPings: 15,
+            fastforwardLowerBound: 0.025,
+            rewindUpperBound: 0.15,
+            initialOffset: 0.1,
+          })({
             microphones: { mic },
           })({
             canvases: {

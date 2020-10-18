@@ -15,9 +15,10 @@ import Data.Typelevel.Num (D1, D2)
 import Data.Vec ((+>), empty)
 import Effect (Effect)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AV(..), AudioParameter(..), AudioUnit, CanvasInfo(..), IAudioUnit(..), RunInBrowser, RunInBrowserAV_, RunInBrowserIAudioUnit_, RunInBrowser_, defaultExporter, dup1, g'add, g'bandpass, g'delay, g'gain, gain', gainT', graph, merger, microphone, panner, play, runInBrowser, runInBrowser_, sinOsc, speaker, speaker')
+import FRP.Behavior.Audio (AV(..), AudioContext, AudioInfo, AudioParameter(..), AudioUnit, CanvasInfo(..), EngineInfo, Exporter, IAudioUnit(..), VisualInfo, defaultExporter, dup1, g'add, g'bandpass, g'delay, g'gain, gain', gainT', graph, merger, microphone, panner, play, runInBrowser_, sinOsc, speaker, speaker')
 import FRP.Behavior.Mouse (buttons, position)
 import FRP.Event.Mouse (Mouse, getMouse)
+import Foreign.Object (Object)
 import Graphics.Drawing (circle, fillColor, filled)
 import Math (pi, sin)
 import Record.Extra (SLProxy(..), SNil)
@@ -170,11 +171,10 @@ scene6 mouse time = f time <$> click
 initialOnset = { onset: Nothing } :: { onset :: Maybe Number }
 
 scene7 ::
-  forall a.
   Mouse ->
-  { onset :: Maybe Number | a } ->
+  { onset :: Maybe Number } ->
   Number ->
-  Behavior (IAudioUnit D2 { onset :: Maybe Number | a })
+  Behavior (IAudioUnit D2 { onset :: Maybe Number })
 scene7 mouse acc@{ onset } time = f time <$> click
   where
   split s = span ((s >= _) <<< fst) pwf
@@ -227,11 +227,10 @@ scene7 mouse acc@{ onset } time = f time <$> click
   click = map (not <<< isEmpty) $ buttons mouse
 
 scene7_1 ::
-  forall a.
   Mouse ->
-  { onset :: Maybe Number | a } ->
+  { onset :: Maybe Number } ->
   Number ->
-  Behavior (IAudioUnit D2 { onset :: Maybe Number | a })
+  Behavior (IAudioUnit D2 { onset :: Maybe Number })
 scene7_1 mouse acc@{ onset } time = f time <$> click
   where
   split s = span ((s >= _) <<< fst) pwf
@@ -298,12 +297,11 @@ scene7_1 mouse acc@{ onset } time = f time <$> click
   click = map (not <<< isEmpty) $ buttons mouse
 
 scene8 ::
-  forall a.
   Mouse ->
-  { onset :: Maybe Number | a } ->
+  { onset :: Maybe Number } ->
   CanvasInfo ->
   Number ->
-  Behavior (AV D2 { onset :: Maybe Number | a })
+  Behavior (AV D2 { onset :: Maybe Number })
 scene8 mouse acc@{ onset } (CanvasInfo { w, h, boundingClientRect: { x, y } }) time = f time <$> click <*> pos
   where
   split s = span ((s >= _) <<< fst) pwf
@@ -373,7 +371,7 @@ scene8 mouse acc@{ onset } (CanvasInfo { w, h, boundingClientRect: { x, y } }) t
 
     stTime = case Tuple onset cl of
       (Tuple Nothing true) -> Just s
-      (Tuple (Just y) true) -> Just y
+      (Tuple (Just y') true) -> Just y'
       (Tuple _ false) -> Nothing
 
   click :: Behavior Boolean
@@ -382,17 +380,21 @@ scene8 mouse acc@{ onset } (CanvasInfo { w, h, boundingClientRect: { x, y } }) t
   pos :: Behavior { x :: Int, y :: Int }
   pos = map (fromMaybe { x: 0, y: 0 }) (position mouse)
 
+run ::
+  forall microphone track buffer floatArray periodicWave.
+  { onset :: Maybe Number } ->
+  AudioContext ->
+  EngineInfo ->
+  AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
+  VisualInfo ->
+  Exporter Unit ->
+  Effect (Effect Unit)
 run =
-  ( runInBrowser_ ::
-      forall a.
-      RunInBrowserAV_ { onset :: Maybe Number | a } D2 Unit
-  )
-    ( do
-        mouse <- getMouse
-        pure (scene8 mouse)
-    )
+  runInBrowser_ do
+    mouse <- getMouse
+    pure (scene8 mouse)
 
-exporter = defaultExporter
+exporter = defaultExporter :: Exporter Unit
 
 main :: Effect Unit
 main = pure unit

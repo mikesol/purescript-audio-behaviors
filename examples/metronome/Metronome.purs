@@ -1,6 +1,7 @@
 module FRP.Behavior.Audio.Example.Metronome where
 
 import Prelude
+
 import Data.Array (head, last, range, span)
 import Data.Int (toNumber)
 import Data.Maybe (fromMaybe)
@@ -8,7 +9,7 @@ import Data.Tuple (Tuple(..), fst, snd)
 import Data.Typelevel.Num (D1)
 import Effect (Effect)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AudioContext, AudioInfo, AudioParameter(..), AudioUnit, Exporter, Time'AudioInstructions(..), VisualInfo, defaultExporter, gain', gainT', runInBrowser, sinOsc, speaker')
+import FRP.Behavior.Audio (AudioContext, AudioInfo, AudioParameter(..), AudioUnit, EngineInfo, VisualInfo, Exporter, defaultExporter, gain', gainT', runInBrowser, sinOsc, speaker')
 import Foreign.Object (Object)
 
 -- a piecewise function that creates an attack/release/sustain envelope
@@ -60,16 +61,15 @@ scene time = pure $ speaker' (gain' 0.1 (gainT' (gn time) $ sinOsc 440.0))
 run ::
   forall microphone track buffer floatArray periodicWave.
   Unit ->
-  Int ->
-  Int ->
   AudioContext ->
+  EngineInfo ->
   AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
   VisualInfo ->
-  Exporter Unit Time'AudioInstructions ->
+  Exporter Unit ->
   Effect (Effect Unit)
 run = runInBrowser scene
 
-exporter = defaultExporter
+exporter = defaultExporter :: Exporter Unit
 
 main :: Effect Unit
 main = pure unit
