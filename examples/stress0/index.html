@@ -10,9 +10,13 @@
         var now = new Date().getTime();
         var ctr = 0;
         // null for the microphone
-        offCb = PS["FRP.Behavior.Audio.Example.Stress0"].run()(20)(18)(
-          audioCtx
-        )({})({})(PS["FRP.Behavior.Audio.Example.Stress0"].exporter)();
+        offCb = PS["FRP.Behavior.Audio.Example.Stress0"].run()(audioCtx)({
+          msBetweenSamples: 20,
+          msBetweenPings: 15,
+          fastforwardLowerBound: 0.025,
+          rewindUpperBound: 0.15,
+          initialOffset: 0.1,
+        })({})({})(PS["FRP.Behavior.Audio.Example.Stress0"].exporter)();
       });
     }
     function turnOffAudio() {

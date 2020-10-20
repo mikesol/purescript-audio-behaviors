@@ -6,13 +6,14 @@
     var audioCtx = null;
     function turnOnAudio() {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      // as we don't use multiplication, we won't pass the audio worklet here
-      // that's to avoid a temporary windows bug where for some reason it does not serve
-      // with the simple python http server
-      Promise.resolve(true).then(function () {
-        offCb = PS["FRP.Behavior.Audio.Example.Exporter"].run()(20)(15)(
-          audioCtx
-        )({})({})(PS["FRP.Behavior.Audio.Example.Exporter"].exporter)();
+      audioCtx.audioWorklet.addModule("ps-aud-mul.js").then.then(function () {
+        offCb = PS["FRP.Behavior.Audio.Example.Exporter"].run()(audioCtx)({
+          msBetweenSamples: 20,
+          msBetweenPings: 15,
+          fastforwardLowerBound: 0.025,
+          rewindUpperBound: 0.15,
+          initialOffset: 0.1,
+        })({})({})(PS["FRP.Behavior.Audio.Example.Exporter"].exporter)();
       });
     }
     function turnOffAudio() {

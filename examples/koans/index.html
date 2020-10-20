@@ -57,9 +57,13 @@
           imag[0] = 0.25;
           imag[1] = 0.1;
           imag[2] = 0.055;
-          offCb = PS["FRP.Behavior.Audio.Example.Koans"].run()(20)(15)(
-            audioCtx
-          )({
+          offCb = PS["FRP.Behavior.Audio.Example.Koans"].run()(audioCtx)({
+            msBetweenSamples: 20,
+            msBetweenPings: 15,
+            fastforwardLowerBound: 0.025,
+            rewindUpperBound: 0.15,
+            initialOffset: 0.1,
+          })({
             periodicWaves: {
               funtimes: audioCtx.createPeriodicWave(real, imag),
             },

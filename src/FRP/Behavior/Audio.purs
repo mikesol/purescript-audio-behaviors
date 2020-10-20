@@ -256,6 +256,7 @@ module FRP.Behavior.Audio
   , AudioContext
   , CanvasInfo(..)
   , CanvasInfo'
+  , EngineInfo
   , AudioInfo
   , VisualInfo
   , BrowserPeriodicWave
@@ -4383,9 +4384,8 @@ type RunInBrowser callback accumulator env
   = forall microphone track buffer floatArray periodicWave.
     callback ->
     accumulator ->
-    Int ->
-    Int ->
     AudioContext ->
+    EngineInfo ->
     AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
     VisualInfo ->
     Exporter env ->
@@ -4395,9 +4395,8 @@ type RunInBrowser_ callback accumulator env
   = forall microphone track buffer floatArray periodicWave.
     Effect callback ->
     accumulator ->
-    Int ->
-    Int ->
     AudioContext ->
+    EngineInfo ->
     AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
     VisualInfo ->
     Exporter env ->
@@ -4416,14 +4415,21 @@ defaultExporter =
   , release: \_ -> pure unit
   }
 
+type EngineInfo
+  = { msBetweenSamples :: Int
+    , msBetweenPings :: Int
+    , fastforwardLowerBound :: Number
+    , rewindUpperBound :: Number
+    , initialOffset :: Number
+    }
+
 class RunnableMedia callback accumulator env where
   runInBrowser ::
     forall microphone track buffer floatArray periodicWave.
     callback ->
     accumulator ->
-    Int ->
-    Int ->
     AudioContext ->
+    EngineInfo ->
     AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
     VisualInfo ->
     Exporter env ->
@@ -4458,25 +4464,24 @@ getFirstCanvas :: Object (Effect CanvasElement) -> Maybe (Effect CanvasElement)
 getFirstCanvas = map snd <<< A.head <<< O.toUnfoldable
 
 instance soundscapeRunnableMedia :: Pos ch => RunnableMedia (Number -> ABehavior Event (AudioUnit ch)) accumulator env where
-  runInBrowser f a i0 i1 ac ai vi ex = runInBrowser ((\z wh s -> map (\x -> AV (Just x) Nothing unit) (f s)) :: (Unit -> CanvasInfo -> Number -> ABehavior Event (AV ch Unit))) unit i0 i1 ac ai vi ex
+  runInBrowser f a ac ei ai vi ex = runInBrowser ((\z wh s -> map (\x -> AV (Just x) Nothing unit) (f s)) :: (Unit -> CanvasInfo -> Number -> ABehavior Event (AV ch Unit))) unit ac ei ai vi ex
 
 instance iSoundscapeRunnableMedia :: Pos ch => RunnableMedia (accumulator -> Number -> ABehavior Event (IAudioUnit ch accumulator)) accumulator env where
-  runInBrowser f a i0 i1 ac ai vi ex = runInBrowser ((\z wh s -> map (\(IAudioUnit xa xz) -> AV (Just xa) Nothing xz) (f z s)) :: (accumulator -> CanvasInfo -> Number -> ABehavior Event (AV ch accumulator))) a i0 i1 ac ai vi ex
+  runInBrowser f a ac ei ai vi ex = runInBrowser ((\z wh s -> map (\(IAudioUnit xa xz) -> AV (Just xa) Nothing xz) (f z s)) :: (accumulator -> CanvasInfo -> Number -> ABehavior Event (AV ch accumulator))) a ac ei ai vi ex
 
 instance animationRunnable :: RunnableMedia (CanvasInfo -> Number -> ABehavior Event Animation) accumulator env where
-  runInBrowser f a i0 i1 ac ai vi ex =
+  runInBrowser f a ac ei ai vi ex =
     runInBrowser
       ((\z wh s -> map (\(Animation x) -> (AV (Nothing :: Maybe (AudioUnit D1)) (Just x) z)) (f wh s)) :: (Unit -> CanvasInfo -> Number -> ABehavior Event (AV D1 Unit)))
       unit
-      i0
-      i1
       ac
+      ei
       ai
       vi
       ex
 
 instance iAnimationRunnable :: RunnableMedia (accumulator -> CanvasInfo -> Number -> ABehavior Event (IAnimation accumulator)) accumulator env where
-  runInBrowser f a i0 i1 ac ai vi ex =
+  runInBrowser f a ac ei ai vi ex =
     runInBrowser
       ( \z wh s ->
           map
@@ -4489,17 +4494,16 @@ instance iAnimationRunnable :: RunnableMedia (accumulator -> CanvasInfo -> Numbe
             (f z wh s)
       )
       a
-      i0
-      i1
       ac
+      ei
       ai
       vi
       ex
 
 instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -> Number -> ABehavior Event (AV ch accumulator)) accumulator env where
-  runInBrowser scene accumulator pingEvery actualSpeed ctx audioInfo visualInfo exporter = do
+  runInBrowser scene accumulator ctx engineInfo audioInfo visualInfo exporter = do
     let
-      __contract = toNumber $ pingEvery
+      __contract = toNumber $ engineInfo.msBetweenSamples
     __accumulator <- new accumulator
     __totalFromStart <- new 0.0
     ciRef <- new 0
@@ -4512,39 +4516,39 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
         , flat: M.empty
         }
     let
-      tOffset = 100
+      tOffset = engineInfo.initialOffset
     clock <- new 0
     units <- new ([] :: Array Foreign)
     audioClockStart <- getAudioClockTime ctx
     fiber <- launchAff exporter.acquire
     bam <-
       subscribe
-        (interval actualSpeed)
+        (interval engineInfo.msBetweenPings)
         ( const do
             ct <- read clock
-            write (ct + pingEvery) clock
+            write (ct + engineInfo.msBetweenSamples) clock
             acc_ <- getAudioClockTime ctx
             curIt <- read ciRef
             write (curIt + 1) ciRef
             clockNow_ <- read clock
             let
               startingPosWRT =
-                ( (toNumber (clockNow_ + tOffset) / 1000.0)
+                ( ((toNumber clockNow_ + tOffset) / 1000.0)
                     - (acc_ - audioClockStart)
                 )
-            if (startingPosWRT > 0.15) then
+            if (startingPosWRT > engineInfo.rewindUpperBound) then
               -- reset the clock
               ( do
                   let
-                    newV = (clockNow_ - pingEvery)
+                    newV = (clockNow_ - engineInfo.msBetweenSamples)
                   -- log $ "Rewinding " <> show clockNow_ <> " " <> show newV <> " " <> show startingPosWRT
                   write newV clock
               )
             else do
-              if (startingPosWRT < 0.025) then
+              if (startingPosWRT < engineInfo.fastforwardLowerBound) then
                 ( do
                     let
-                      newV = clockNow_ + pingEvery
+                      newV = clockNow_ + engineInfo.msBetweenSamples
                     log $ "Fastforwarding " <> show clockNow_ <> " " <> show newV <> " " <> show startingPosWRT
                     write newV clock
                 )
@@ -4637,7 +4641,7 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
                             uts' <-
                               touchAudio
                                 toFFI
-                                (audioClockStart + (toNumber (instructions.t + tOffset) / 1000.0))
+                                (audioClockStart + ((toNumber instructions.t + tOffset) / 1000.0))
                                 instructions.i
                                 ctx
                                 audioInfo
@@ -4677,13 +4681,12 @@ runInBrowser_ ::
   RunnableMedia callback accumulator env =>
   Effect callback ->
   accumulator ->
-  Int ->
-  Int ->
   AudioContext ->
+  EngineInfo ->
   AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
   VisualInfo ->
   Exporter env ->
   Effect (Effect Unit)
-runInBrowser_ scene' accumulator pingEvery actualSpeed ctx audioInfo visualInfo exporter = do
+runInBrowser_ scene' accumulator ctx engineInfo audioInfo visualInfo exporter = do
   scene <- scene'
-  runInBrowser scene accumulator pingEvery actualSpeed ctx audioInfo visualInfo exporter
+  runInBrowser scene accumulator ctx engineInfo audioInfo visualInfo exporter

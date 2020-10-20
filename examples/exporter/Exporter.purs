@@ -7,7 +7,7 @@ import Data.Typelevel.Num (D1)
 import Effect (Effect)
 import Effect.Class.Console (log)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AudioContext, AudioInfo, AudioUnit, CanvasInfo, Exporter, Instruction, RunInBrowserAudioUnit, Time'AudioInstructions(..), VisualInfo, defaultExporter, gain', microphone, runInBrowser, sinOsc, speaker)
+import FRP.Behavior.Audio (AudioContext, AudioInfo, AudioUnit, EngineInfo, Exporter, VisualInfo, gain', runInBrowser, sinOsc, speaker)
 import Foreign.Object (Object)
 import Math (pi, sin)
 
@@ -38,25 +38,25 @@ accumulator ->
 run ::
   forall microphone track buffer floatArray periodicWave.
   Unit ->
-  Int ->
-  Int ->
   AudioContext ->
+  EngineInfo ->
   AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
   VisualInfo ->
-  Exporter String Time'AudioInstructions ->
+  Exporter String ->
   Effect (Effect Unit)
 run = runInBrowser scene
 
-exporter :: Exporter String Time'AudioInstructions
+exporter :: Exporter String
 exporter =
   { acquire: pure "hello"
   -- this prints to the log, but it can be used for sending audio instructions
   -- anywhere, ie to an external MIDI device
   , use:
-      \env (Time'AudioInstructions time instr) -> do
+      \env ({ id, timeStamp, audio }) -> do
         log env
-        log $ show time
-        log $ show instr
+        log $ show id
+        log $ show timeStamp
+        log $ show audio
   , release: \env -> log ("releasing " <> env)
   }
 

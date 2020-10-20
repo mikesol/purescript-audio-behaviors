@@ -9,7 +9,8 @@ import Data.Typelevel.Num (D1, D2)
 import Data.Vec ((+>), empty)
 import Effect (Effect)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AudioUnit, Oversample(..), allpass, bandpass, convolver, defaultExporter, delay, dup1, dynamicsCompressor, g'add, g'bandpass, g'delay, g'gain, gain', graph, highpass, highshelf, loopBuf, lowpass, lowshelf, merger, microphone, notch, panner, peaking, periodicOsc, play, playBuf, playBuf_, play_, runInBrowser, sawtoothOsc, sinOsc, speaker, speaker', squareOsc, triangleOsc, waveShaper)
+import FRP.Behavior.Audio (AudioContext, AudioInfo, AudioUnit, EngineInfo, Oversample(..), VisualInfo, Exporter, allpass, bandpass, convolver, defaultExporter, delay, dup1, dynamicsCompressor, g'add, g'bandpass, g'delay, g'gain, gain', graph, highpass, highshelf, loopBuf, lowpass, lowshelf, merger, microphone, notch, panner, peaking, periodicOsc, play, playBuf, playBuf_, play_, runInBrowser, sawtoothOsc, sinOsc, speaker, speaker', squareOsc, triangleOsc, waveShaper)
+import Foreign.Object (Object)
 import Math (pi, sin)
 import Record.Extra (SLProxy(..), SNil)
 import Type.Data.Graph (type (:/))
@@ -160,9 +161,18 @@ feedback _ =
           )
     )
 
+run ::
+  forall microphone track buffer floatArray periodicWave.
+  Unit ->
+  AudioContext ->
+  EngineInfo ->
+  AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
+  VisualInfo ->
+  Exporter Unit ->
+  Effect (Effect Unit)
 run = runInBrowser feedback
 
-exporter = defaultExporter
+exporter = defaultExporter :: Exporter Unit
 
 main :: Effect Unit
 main = pure unit
