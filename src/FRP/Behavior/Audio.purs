@@ -4223,36 +4223,28 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
 
   -- new units that were not in the old array
   new =
-    map
-      ((uncurry <<< uncurry <<< uncurry <<< uncurry <<< uncurry) NewUnit)
-      ( DL.catMaybes
-          ( map
-              ( \i ->
-                  map
-                    ( \ptr ->
-                        ( Tuple
-                            ( Tuple
-                                ( Tuple
-                                    (Tuple (Tuple i $ au'' ptr.au) (channelConstructor ptr.au))
-                                    (sourceConstructor ptr.au)
-                                )
-                                (startConstructor ptr.au)
-                            )
-                            (offsetConstructor ptr.au)
-                        )
-                    )
-                    $ M.lookup i cur.flat
-              )
-              ( DL.catMaybes
-                  ( map
-                      ( \k ->
-                          M.lookup k reconciliationAsMap
-                      )
-                      $ (DL.fromFoldable <<< M.keys) (M.filter (\i -> i.status == Off) prev.flat)
+    ( DL.catMaybes
+        ( map
+            ( \i ->
+                map
+                  ( \ptr ->
+                      (NewUnit i $ au'' ptr.au) (channelConstructor ptr.au)
+                        (sourceConstructor ptr.au)
+                        (startConstructor ptr.au)
+                        (offsetConstructor ptr.au)
                   )
-              )
-          )
-      )
+                  $ M.lookup i cur.flat
+            )
+            ( DL.catMaybes
+                ( map
+                    ( \k ->
+                        M.lookup k reconciliationAsMap
+                    )
+                    $ (DL.fromFoldable <<< M.keys) (M.filter (\i -> i.status == Off) prev.flat)
+                )
+            )
+        )
+    )
 
   harmonizeCurrChannels' :: PtrInfo -> PtrInfo -> Maybe (Tuple Int Int)
   harmonizeCurrChannels' _ { au: SplitRes' n } = Just (Tuple n 0)
