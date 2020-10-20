@@ -570,6 +570,10 @@ From here, the only thing left is to make some noise! There are many more audio 
 
 To see a list of exported audio units, you can check out [`Audio.purs`](./src/FRP/Behavior/Audio.purs). In a future version of this, we will refactor things so that all of the audio units are in one package.
 
+## MIDI
+
+The file [src/FRP/Behavior/MIDI.purs](./src/FRP/Behavior/MIDI.purs) exposes one function - `midi` - that can be used in conjunction with `getMidi` [src/FRP/Event/MIDI.purs](./src/FRP/Event/MIDI.purs) to incorporate [realtime MIDI data](https://twitter.com/stronglynormal/status/1316756584786276352) into the audio graph. For an example of how this is done, check out [examples/midi](./examples/midi).
+
 ## Interacting with the browser
 
 In simple setups, you'll interact with the browser in a `<script>` tag to create resources like buffers and float arrays. This is how it is done in most of the [./examples](./examples) directory. However, sometimes you'll be creating a webpage using PureScript, in which case you may need to create a browser-specific resource like an audio buffer for a `playBuf` in PureScript.
