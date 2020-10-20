@@ -15,6 +15,7 @@ module FRP.Behavior.Audio
   , audioWorkletAggregator
   , play
   , playBuf
+  , playBufWithOffset
   , loopBuf
   , lowpass
   , highpass
@@ -57,6 +58,7 @@ module FRP.Behavior.Audio
   , audioWorkletAggregator_
   , play_
   , playBuf_
+  , playBufWithOffset_
   , loopBuf_
   , lowpass_
   , highpass_
@@ -95,6 +97,7 @@ module FRP.Behavior.Audio
   , audioWorkletProcessorT
   , audioWorkletAggregatorT
   , playBufT
+  , playBufWithOffsetT
   , loopBufT
   , lowpassT
   , highpassT
@@ -118,6 +121,7 @@ module FRP.Behavior.Audio
   , audioWorkletProcessorT_
   , audioWorkletAggregatorT_
   , playBufT_
+  , playBufWithOffsetT_
   , loopBufT_
   , lowpassT_
   , highpassT_
@@ -845,7 +849,7 @@ data AudioUnit ch
   | AudioWorkletProcessor MString String (Object (AudioParameter Number)) (AudioUnit ch)
   | AudioWorkletAggregator MString String (Object (AudioParameter Number)) (NonEmpty List (AudioUnit ch))
   | Play MString String Number
-  | PlayBuf MString String (AudioParameter Number)
+  | PlayBuf MString String (AudioParameter Number) (AudioParameter Number)
   | LoopBuf MString String (AudioParameter Number) Number Number
   | Lowpass MString (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
   | Highpass MString (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
@@ -892,7 +896,7 @@ data AudioUnit'
   | AudioWorkletProcessor' String (Object (AudioParameter Number))
   | AudioWorkletAggregator' String (Object (AudioParameter Number))
   | Play' String Number
-  | PlayBuf' String (AudioParameter Number)
+  | PlayBuf' String (AudioParameter Number) (AudioParameter Number)
   | LoopBuf' String (AudioParameter Number) Number Number
   | Lowpass' (AudioParameter Number) (AudioParameter Number)
   | Highpass' (AudioParameter Number) (AudioParameter Number)
@@ -1218,7 +1222,7 @@ au' (AudioWorkletAggregator name unit params _) = { au: AudioWorkletAggregator' 
 
 au' (Play name file timingHack) = { au: Play' file timingHack, name }
 
-au' (PlayBuf name buf speed) = { au: PlayBuf' buf speed, name }
+au' (PlayBuf name buf speed offsetInBuffer) = { au: PlayBuf' buf speed offsetInBuffer, name }
 
 au' (LoopBuf name buf speed start end) = { au: LoopBuf' buf speed start end, name }
 
@@ -1318,7 +1322,7 @@ au'' (AudioWorkletAggregator' _ _) = AudioWorkletAggregator''
 
 au'' (Play' _ _) = Play''
 
-au'' (PlayBuf' _ _) = PlayBuf''
+au'' (PlayBuf' _ _ _) = PlayBuf''
 
 au'' (LoopBuf' _ _ _ _) = LoopBuf''
 
@@ -1393,7 +1397,7 @@ tagToAU AudioWorkletProcessor'' = AudioWorkletProcessor' "" O.empty
 
 tagToAU AudioWorkletAggregator'' = AudioWorkletAggregator' "" O.empty
 
-tagToAU PlayBuf'' = PlayBuf' "" (ap_ (-1.0))
+tagToAU PlayBuf'' = PlayBuf' "" (ap_ (-1.0)) (ap_ (-1.0))
 
 tagToAU LoopBuf'' = LoopBuf' "" (ap_ (-1.0)) (-1.0) (-1.0)
 
@@ -1847,7 +1851,7 @@ type PtrInfo
 
   go' ptr v@(Play _ _ _) = terminus ptr v
 
-  go' ptr v@(PlayBuf _ _ _) = terminus ptr v
+  go' ptr v@(PlayBuf _ _ _ _) = terminus ptr v
 
   go' ptr v@(LoopBuf _ _ _ _ _) = terminus ptr v
 
@@ -2144,7 +2148,7 @@ playBuf ::
   String ->
   Number ->
   AudioUnit ch
-playBuf handle n = PlayBuf Nothing handle (ap_ n)
+playBuf handle n = PlayBuf Nothing handle (ap_ n) (ap_ 0.0)
 
 playBuf_ ::
   forall ch.
@@ -2153,7 +2157,7 @@ playBuf_ ::
   String ->
   Number ->
   AudioUnit ch
-playBuf_ s handle n = PlayBuf (Just s) handle (ap_ n)
+playBuf_ s handle n = PlayBuf (Just s) handle (ap_ n) (ap_ 0.0)
 
 playBufT ::
   forall ch.
@@ -2161,7 +2165,7 @@ playBufT ::
   String ->
   AudioParameter Number ->
   AudioUnit ch
-playBufT handle n = PlayBuf Nothing handle n
+playBufT handle n = PlayBuf Nothing handle n (ap_ 0.0)
 
 playBufT_ ::
   forall ch.
@@ -2170,7 +2174,45 @@ playBufT_ ::
   String ->
   AudioParameter Number ->
   AudioUnit ch
-playBufT_ s handle n = PlayBuf (Just s) handle n
+playBufT_ s handle n = PlayBuf (Just s) handle n (ap_ 0.0)
+
+playBufWithOffset ::
+  forall ch.
+  Pos ch =>
+  String ->
+  Number ->
+  Number ->
+  AudioUnit ch
+playBufWithOffset handle n o = PlayBuf Nothing handle (ap_ n) (ap_ o)
+
+playBufWithOffset_ ::
+  forall ch.
+  Pos ch =>
+  String ->
+  String ->
+  Number ->
+  Number ->
+  AudioUnit ch
+playBufWithOffset_ s handle n o = PlayBuf (Just s) handle (ap_ n) (ap_ o)
+
+playBufWithOffsetT ::
+  forall ch.
+  Pos ch =>
+  String ->
+  AudioParameter Number ->
+  AudioParameter Number ->
+  AudioUnit ch
+playBufWithOffsetT handle n o = PlayBuf Nothing handle n o
+
+playBufWithOffsetT_ ::
+  forall ch.
+  Pos ch =>
+  String ->
+  String ->
+  AudioParameter Number ->
+  AudioParameter Number ->
+  AudioUnit ch
+playBufWithOffsetT_ s handle n o = PlayBuf (Just s) handle n o
 
 -- | Loop a sound from a buffer
 -- |
@@ -3351,7 +3393,7 @@ ucomp (AudioWorkletAggregator' n0 _) (AudioWorkletAggregator' n1 _) = n0 == n1
 
 ucomp (Play' s0 _) (Play' s1 _) = s0 == s1
 
-ucomp (PlayBuf' s0 _) (PlayBuf' s1 _) = s0 == s1
+ucomp (PlayBuf' s0 _ _) (PlayBuf' s1 _ _) = s0 == s1
 
 ucomp (LoopBuf' s0 _ _ _) (LoopBuf' s1 _ _ _) = s0 == s1
 
@@ -3715,7 +3757,7 @@ data Instruction
   | DisconnectFrom Int Int -- id id
   | ConnectTo Int Int (Maybe (Tuple Int Int)) -- id id channelConnections
   | Shuffle (Array (Tuple Int Int)) -- id id, shuffles the map
-  | NewUnit Int AudioUnit'' (Maybe Int) (Maybe String) (Maybe Number) -- new audio unit, maybe with channel info, maybe with a source, maybe with a start time
+  | NewUnit Int AudioUnit'' (Maybe Int) (Maybe String) (Maybe Number) (Maybe Number) -- new audio unit, maybe with channel info, maybe with a source, maybe with a start time, maybe with an offset
   | SetFrequency Int Number Number -- frequency
   | SetThreshold Int Number Number -- threshold
   | SetKnee Int Number Number -- knee
@@ -3757,7 +3799,7 @@ isShuffle_ (Shuffle _) = true
 isShuffle_ _ = false
 
 isNewUnit_ :: Instruction -> Boolean
-isNewUnit_ (NewUnit _ _ _ _ _) = true
+isNewUnit_ (NewUnit _ _ _ _ _ _) = true
 
 isNewUnit_ _ = false
 
@@ -4014,7 +4056,7 @@ sourceConstructor (AudioWorkletProcessor' s _) = Just s
 
 sourceConstructor (AudioWorkletAggregator' s _) = Just s
 
-sourceConstructor (PlayBuf' s _) = Just s
+sourceConstructor (PlayBuf' s _ _) = Just s
 
 sourceConstructor (LoopBuf' s _ _ _) = Just s
 
@@ -4026,10 +4068,15 @@ sourceConstructor (Convolver' s) = Just s
 
 sourceConstructor _ = Nothing
 
+offsetConstructor :: AudioUnit' -> Maybe Number
+offsetConstructor (PlayBuf' _ _ o) = Just (apP o)
+
+offsetConstructor _ = Nothing
+
 startConstructor :: AudioUnit' -> Maybe Number
 startConstructor (Play' n timingHack) = Just timingHack
 
-startConstructor (PlayBuf' _ n) = Just (apT n)
+startConstructor (PlayBuf' _ n _) = Just (apT n)
 
 startConstructor (LoopBuf' _ n _ _) = Just (apT n)
 
@@ -4094,7 +4141,7 @@ isGen (Microphone') = true
 -- this is a bad, as it will keep playing in the background after
 -- disconnected from the speaker
 -- find a way to disconnect
-isGen (PlayBuf' _ _) = true
+isGen (PlayBuf' _ _ _) = true
 
 isGen (LoopBuf' _ _ _ _) = true
 
@@ -4177,7 +4224,7 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
   -- new units that were not in the old array
   new =
     map
-      ((uncurry <<< uncurry <<< uncurry <<< uncurry) NewUnit)
+      ((uncurry <<< uncurry <<< uncurry <<< uncurry <<< uncurry) NewUnit)
       ( DL.catMaybes
           ( map
               ( \i ->
@@ -4185,10 +4232,13 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
                     ( \ptr ->
                         ( Tuple
                             ( Tuple
-                                (Tuple (Tuple i $ au'' ptr.au) (channelConstructor ptr.au))
-                                (sourceConstructor ptr.au)
+                                ( Tuple
+                                    (Tuple (Tuple i $ au'' ptr.au) (channelConstructor ptr.au))
+                                    (sourceConstructor ptr.au)
+                                )
+                                (startConstructor ptr.au)
                             )
-                            (startConstructor ptr.au)
+                            (offsetConstructor ptr.au)
                         )
                     )
                     $ M.lookup i cur.flat
@@ -4246,7 +4296,7 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
 
   set' i (AudioWorkletAggregator' _ n) (AudioWorkletAggregator' _ nx) = scp i n nx
 
-  set' i (PlayBuf' _ n) (PlayBuf' _ nx) = pure $ if napeq n nx then Just $ SetPlaybackRate i (apP n) (apT n) else Nothing
+  set' i (PlayBuf' _ n _) (PlayBuf' _ nx _) = pure $ if napeq n nx then Just $ SetPlaybackRate i (apP n) (apT n) else Nothing
 
   set' i (LoopBuf' _ n s e) (LoopBuf' _ nx sx ex) =
     [ if napeq n nx then Just $ SetPlaybackRate i (apP n) (apT n) else Nothing
