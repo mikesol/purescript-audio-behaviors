@@ -572,7 +572,7 @@ To see a list of exported audio units, you can check out [`Audio.purs`](./src/FR
 
 ## MIDI
 
-The file [src/FRP/Behavior/MIDI.purs](./src/FRP/Behavior/MIDI.purs) exposes one function - `midi` - that can be used in conjunction with `getMidi` [src/FRP/Event/MIDI.purs](./src/FRP/Event/MIDI.purs) to incorporate [realtime MIDI data](https://twitter.com/stronglynormal/status/1316756584786276352) into the audio graph. For an example of how this is done, check out [examples/midi](./examples/midi).
+The file [src/FRP/Behavior/MIDI.purs](./src/FRP/Behavior/MIDI.purs) exposes one function - `midi` - that can be used in conjunction with `getMidi` [src/FRP/Event/MIDI.purs](./src/FRP/Event/MIDI.purs) to incorporate [realtime MIDI data](https://twitter.com/stronglynormal/status/1316756584786276352) into the audio graph. For an example of how this is done, check out [examples/midi-in](./examples/midi-in).
 
 ## Interacting with the browser
 
