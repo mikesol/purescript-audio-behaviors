@@ -6,7 +6,7 @@
     var audioCtx = null;
     function turnOnAudio() {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      audioCtx.audioWorklet.addModule("ps-aud-mul.js").then.then(function () {
+      audioCtx.audioWorklet.addModule("ps-aud-mul.js").then(function () {
         offCb = PS["FRP.Behavior.Audio.Example.Exporter"].run()(audioCtx)({
           msBetweenSamples: 20,
           msBetweenPings: 15,

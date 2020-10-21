@@ -4550,6 +4550,7 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
     __accumulator <- new accumulator
     __totalFromStart <- new 0.0
     ciRef <- new 0
+    __exporterQueueRef <- (launchAff $ pure unit) >>= new
     __totalTillProgram <- new 0.0
     __totalProgram <- new 0.0
     __totalPostProgram <- new 0.0
@@ -4668,10 +4669,11 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
                                 { t: clockNow_
                                 , i: (A.fromFoldable instr.instructionSet)
                                 }
-                            launchAff_
+                            exporterQueueRef <- read __exporterQueueRef
+                            launchAff
                               ( do
                                   env <- joinFiber fiber
-                                  ------ here!
+                                  _ <- joinFiber exporterQueueRef
                                   exporter.use
                                     env
                                     { id: curIt
@@ -4680,6 +4682,7 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
                                     , canvas: avv
                                     }
                               )
+                              >>= flip write __exporterQueueRef
                             uts <- read units
                             uts' <-
                               if engineInfo.doWebAudio then
