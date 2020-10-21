@@ -4463,6 +4463,7 @@ type EngineInfo
     , fastforwardLowerBound :: Number
     , rewindUpperBound :: Number
     , initialOffset :: Number
+    , doWebAudio :: Boolean
     }
 
 class RunnableMedia callback accumulator env where
@@ -4681,13 +4682,16 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
                               )
                             uts <- read units
                             uts' <-
-                              touchAudio
-                                toFFI
-                                (audioClockStart + ((toNumber instructions.t + tOffset) / 1000.0))
-                                instructions.i
-                                ctx
-                                audioInfo
-                                uts
+                              if engineInfo.doWebAudio then
+                                touchAudio
+                                  toFFI
+                                  (audioClockStart + ((toNumber instructions.t + tOffset) / 1000.0))
+                                  instructions.i
+                                  ctx
+                                  audioInfo
+                                  uts
+                              else
+                                pure []
                             write uts' units
                             __endTime <- map getTime now
                             if (__endTime - __startTime) >= __contract then

@@ -671,6 +671,7 @@ type EngineInfo
 - `fastforwardLowerBound` - The number of seconds below which the audio engine will skip a frame. The lower this is, the less likely there will be a skip, but the more likely the skip will sound jarring if it happens. Try `0.025`.
 - `rewindUpperBound` - The number of seconds of look-ahead. For uses that have no interactive component other than starting and stopping the sound (meaning no mouse, no MIDI Keyboard, etc) this can be large (ie `1.0` or even higher). For apps with an interactive component, you want this as low as possible, ie `0.06` or even lower. Note that this should be _at least_ twice `msBetweenSamples`.
 - `initialOffset` - The number of seconds to wait before playing. JavaScript does a lot of memory allocation when a klank starts playing, which sometimes results in jank. Try something between `0.1` and `0.4`.
+- `doWebAudio` - Should we render all of this stuff towith the web audio API? If true, then yes, otherwise the Web Audio API won't be called. Useful when you want to use an exporter without making sound in the browser.
 
 ## Bundling on your site
 
