@@ -9,7 +9,7 @@ import Data.Typelevel.Num (D1, D2)
 import Data.Vec ((+>), empty)
 import Effect (Effect)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AudioContext, AudioInfo, AudioUnit, EngineInfo, Exporter, Oversample(..), VisualInfo, allpass, bandpass, convolver, defaultExporter, delay, dup1, dynamicsCompressor, g'add, g'bandpass, g'delay, g'gain, gain', graph, highpass, highshelf, loopBuf, lowpass, lowshelf, merger, microphone, notch, panner, peaking, periodicOsc, play, playBuf, playBufWithOffset, playBuf_, play_, runInBrowser, sawtoothOsc, sinOsc, speaker, speaker', squareOsc, triangleOsc, waveShaper)
+import FRP.Behavior.Audio (AudioContext, AudioInfo, AudioUnit, EngineInfo, Exporter, Oversample(..), VisualInfo, allpass, bandpass, convolver, defaultExporter, delay, dup1, dynamicsCompressor, g'add, g'bandpass, g'delay, g'gain, gain', graph, highpass, highshelf, loopBuf, lowpass, lowshelf, merger, microphone, notch, panner, pannerVars', peaking, periodicOsc, play, playBuf, playBufWithOffset, playBuf_, play_, runInBrowser, sawtoothOsc, sinOsc, spatialPanner, speaker, speaker', squareOsc, triangleOsc, waveShaper)
 import Foreign.Object (Object)
 import Math (pi, sin)
 import Record.Extra (SLProxy(..), SNil)
@@ -111,6 +111,25 @@ pan time =
   where
   rad = pi * time
 
+-- spatialPanner
+span :: Number -> Behavior (AudioUnit D2)
+span t =
+  pure
+    $ speaker'
+        ( spatialPanner
+            pannerVars'
+              { positionX = sin (0.2 * rad)
+              , positionY = sin (0.1 * rad)
+              , positionZ = sin (0.3 * rad)
+              , orientationX = sin (0.05 * rad)
+              , orientationY = sin (0.15 * rad)
+              , orientationZ = sin (0.19 * rad)
+              }
+            (play_ "f0" "forest")
+        )
+  where
+  rad = pi * t
+
 -- pb
 pb :: Number -> Behavior (AudioUnit D1)
 pb _ = pure $ speaker' (gain' 0.3 (playBuf "moo" 1.0))
@@ -174,7 +193,7 @@ run ::
   VisualInfo ->
   Exporter Unit ->
   Effect (Effect Unit)
-run = runInBrowser pb
+run = runInBrowser span
 
 exporter = defaultExporter :: Exporter Unit
 

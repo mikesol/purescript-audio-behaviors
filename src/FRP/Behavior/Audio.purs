@@ -45,6 +45,7 @@ module FRP.Behavior.Audio
   , split4
   , split5
   , panner
+  , spatialPanner
   , mul
   , add
   , merger
@@ -87,6 +88,7 @@ module FRP.Behavior.Audio
   , split4_
   , split5_
   , panner_
+  , spatialPanner_
   , mul_
   , add_
   , merger_
@@ -114,6 +116,7 @@ module FRP.Behavior.Audio
   , triangleOscT
   , squareOscT
   , pannerT
+  , spatialPannerT
   , constantT
   , delayT
   , gainT
@@ -138,6 +141,7 @@ module FRP.Behavior.Audio
   , triangleOscT_
   , squareOscT_
   , pannerT_
+  , spatialPannerT_
   , constantT_
   , delayT_
   , gainT_
@@ -196,8 +200,10 @@ module FRP.Behavior.Audio
   , g'lowshelf
   , g'notchT_
   , g'panner
+  , g'spatialPanner
   , g'gain
   , g'panner_
+  , g'spatialPanner_
   , g'bandpassT
   , g'delay_
   , g'bandpass_
@@ -212,6 +218,7 @@ module FRP.Behavior.Audio
   , g'audioWorkletProcessorT_
   , g'peaking
   , g'pannerT_
+  , g'spatialPannerT_
   , g'audioWorkletProcessor_
   , g'delayT_
   , g'lowpass
@@ -229,6 +236,7 @@ module FRP.Behavior.Audio
   , g'audioWorkletProcessor
   , g'mul
   , g'pannerT
+  , g'spatialPannerT
   , g'lowshelf_
   , g'bandpassT_
   , g'lowshelfT_
@@ -250,8 +258,12 @@ module FRP.Behavior.Audio
   , g'waveShaper_
   , g'highshelf_
   , defaultExporter
-  , AudioUnit'(..)
   , audioGrouper
+  , pannerVars
+  , pannerVars'
+  , PannerVars
+  , PannerVars'
+  , AudioUnit'(..)
   , SampleFrame
   , AudioProcessor
   , AudioParameter(..)
@@ -283,6 +295,8 @@ module FRP.Behavior.Audio
   , Animation(..)
   , IAudioUnit(..)
   , IAnimation(..)
+  , DistanceModel(..)
+  , PanningModel(..)
   , AudioGraph
   , AudioGraphProcessor
   , AudioGraphAggregator
@@ -361,7 +375,6 @@ import Foreign.Object as O
 import Graphics.Canvas (CanvasElement, Rectangle, clearRect, getCanvasHeight, getCanvasWidth, getContext2D)
 import Graphics.Drawing (Drawing, render)
 import Heterogeneous.Mapping (class HMap, class Mapping, hmap)
-import Math as Math
 import Prim.Boolean (False, True, kind Boolean)
 import Prim.Row (class Union)
 import Prim.RowList (class RowToList, Cons, Nil, kind RowList)
@@ -794,6 +807,41 @@ instance showAudioBuffer :: Show AudioBuffer where
 
 derive instance eqAudioBuffer :: Eq AudioBuffer
 
+data DistanceModel
+  = Linear
+  | Inverse
+  | Exponential
+
+dm2str :: DistanceModel -> String
+dm2str Linear = "linear"
+
+dm2str Inverse = "inverse"
+
+dm2str Exponential = "exponential"
+
+derive instance genericDistanceModel :: Generic DistanceModel _
+
+instance showDistanceModel :: Show DistanceModel where
+  show s = genericShow s
+
+derive instance eqDistanceModel :: Eq DistanceModel
+
+data PanningModel
+  = EqualPower
+  | HRTF
+
+pm2str :: PanningModel -> String
+pm2str EqualPower = "equalpower"
+
+pm2str HRTF = "HRTF"
+
+derive instance genericPanningModel :: Generic PanningModel _
+
+instance showPanningModel :: Show PanningModel where
+  show s = genericShow s
+
+derive instance eqPanningModel :: Eq PanningModel
+
 data Oversample
   = None
   | TwoX
@@ -815,6 +863,61 @@ newtype AudioParameter a
 instance audioParameterFunctor :: Functor AudioParameter where
   map f (AudioParameter { param, timeOffset }) = AudioParameter { param: f param, timeOffset }
 
+type PannerVars
+  = { coneInnerAngle :: (AudioParameter Number)
+    , coneOuterAngle :: (AudioParameter Number)
+    , coneOuterGain :: (AudioParameter Number)
+    , distanceModel :: DistanceModel
+    , maxDistance :: (AudioParameter Number)
+    , orientationX :: (AudioParameter Number)
+    , orientationY :: (AudioParameter Number)
+    , orientationZ :: (AudioParameter Number)
+    , panningModel :: PanningModel
+    , positionX :: (AudioParameter Number)
+    , positionY :: (AudioParameter Number)
+    , positionZ :: (AudioParameter Number)
+    , refDistance :: (AudioParameter Number)
+    , rolloffFactor :: (AudioParameter Number)
+    }
+
+type PannerVars'
+  = { coneInnerAngle :: Number
+    , coneOuterAngle :: Number
+    , coneOuterGain :: Number
+    , distanceModel :: DistanceModel
+    , maxDistance :: Number
+    , orientationX :: Number
+    , orientationY :: Number
+    , orientationZ :: Number
+    , panningModel :: PanningModel
+    , positionX :: Number
+    , positionY :: Number
+    , positionZ :: Number
+    , refDistance :: Number
+    , rolloffFactor :: Number
+    }
+
+pannerVars' :: PannerVars'
+pannerVars' =
+  { coneInnerAngle: 360.0
+  , coneOuterAngle: 360.0
+  , coneOuterGain: 0.0
+  , distanceModel: Inverse
+  , maxDistance: 10000.0
+  , orientationX: 1.0
+  , orientationY: 0.0
+  , orientationZ: 0.0
+  , panningModel: EqualPower
+  , positionX: 0.0
+  , positionY: 0.0
+  , positionZ: 0.0
+  , refDistance: 1.0
+  , rolloffFactor: 1.0
+  }
+
+pannerVars :: PannerVars
+pannerVars = pannerVarsAsAudioParams pannerVars'
+
 data AudioGraphProcessor
   = GAudioWorkletProcessor MString String (Object (AudioParameter Number))
   | GLowpass MString (AudioParameter Number) (AudioParameter Number)
@@ -829,6 +932,7 @@ data AudioGraphProcessor
   | GDynamicsCompressor MString (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioParameter Number)
   | GWaveShaper MString String Oversample
   | GStereoPanner MString (AudioParameter Number)
+  | GPanner MString PannerVars
   | GDelay MString (AudioParameter Number)
 
 data AudioGraphAggregator
@@ -877,6 +981,7 @@ data AudioUnit ch
   | Split3 MString (AudioUnit D3) (Vec D3 (AudioUnit D1) -> AudioUnit ch)
   | Split4 MString (AudioUnit D4) (Vec D4 (AudioUnit D1) -> AudioUnit ch)
   | Split5 MString (AudioUnit D5) (Vec D5 (AudioUnit D1) -> AudioUnit ch)
+  | Panner MString PannerVars (AudioUnit ch)
   | StereoPanner MString (AudioParameter Number) (AudioUnit ch)
   | Mul MString (NonEmpty List (AudioUnit ch))
   | Add MString (NonEmpty List (AudioUnit ch))
@@ -917,6 +1022,22 @@ data AudioUnit'
   | SquareOsc' (AudioParameter Number)
   | Splitter' Int
   | StereoPanner' (AudioParameter Number)
+  | Panner'
+    { coneInnerAngle :: (AudioParameter Number)
+    , coneOuterAngle :: (AudioParameter Number)
+    , coneOuterGain :: (AudioParameter Number)
+    , distanceModel :: DistanceModel
+    , maxDistance :: (AudioParameter Number)
+    , orientationX :: (AudioParameter Number)
+    , orientationY :: (AudioParameter Number)
+    , orientationZ :: (AudioParameter Number)
+    , panningModel :: PanningModel
+    , positionX :: (AudioParameter Number)
+    , positionY :: (AudioParameter Number)
+    , positionZ :: (AudioParameter Number)
+    , refDistance :: (AudioParameter Number)
+    , rolloffFactor :: (AudioParameter Number)
+    }
   | Mul'
   | Add'
   | Swap'
@@ -1066,6 +1187,11 @@ isStereoPanner_ StereoPanner'' = true
 
 isStereoPanner_ _ = false
 
+isPanner_ :: AudioUnit'' -> Boolean
+isPanner_ Panner'' = true
+
+isPanner_ _ = false
+
 isMul_ :: AudioUnit'' -> Boolean
 isMul_ Mul'' = true
 
@@ -1148,6 +1274,7 @@ data AudioUnit''
   | SquareOsc''
   | Splitter''
   | StereoPanner''
+  | Panner''
   | Mul''
   | Add''
   | Swap''
@@ -1210,6 +1337,8 @@ agp2au' (GDynamicsCompressor name thresh knee ratio attack release) =
 agp2au' (GWaveShaper name curve os) = { au: (WaveShaper' curve os), name }
 
 agp2au' (GStereoPanner name n) = { au: (StereoPanner' n), name }
+
+agp2au' (GPanner name vars) = { au: (Panner' vars), name }
 
 au' :: forall ch. Pos ch => AudioUnit ch -> { au :: AudioUnit', name :: MString }
 au' (Microphone name) = { au: Microphone', name }
@@ -1282,6 +1411,8 @@ au' (Split4 name _ _) = { au: (Splitter' 4), name }
 au' (Split5 name _ _) = { au: (Splitter' 5), name }
 
 au' (StereoPanner name n _) = { au: (StereoPanner' n), name }
+
+au' (Panner name vars _) = { au: (Panner' vars), name }
 
 au' (Mul name _) = { au: Mul', name }
 
@@ -1364,6 +1495,8 @@ au'' (Splitter' _) = Splitter''
 
 au'' (StereoPanner' _) = StereoPanner''
 
+au'' (Panner' _) = Panner''
+
 au'' Mul' = Mul''
 
 au'' Add' = Add''
@@ -1436,6 +1569,24 @@ tagToAU SinOsc'' = SinOsc' (ap_ 50000.0)
 tagToAU SquareOsc'' = SquareOsc' (ap_ 50000.0)
 
 tagToAU Splitter'' = Splitter' (-1)
+
+tagToAU Panner'' =
+  Panner'
+    { coneInnerAngle: (ap_ (-3.0))
+    , coneOuterAngle: (ap_ (-3.0))
+    , coneOuterGain: (ap_ (-3.0))
+    , distanceModel: Inverse
+    , maxDistance: (ap_ (-3.0))
+    , orientationX: (ap_ (-3.0))
+    , orientationY: (ap_ (-3.0))
+    , orientationZ: (ap_ (-3.0))
+    , panningModel: EqualPower
+    , positionX: (ap_ (-3.0))
+    , positionY: (ap_ (-3.0))
+    , positionZ: (ap_ (-3.0))
+    , refDistance: (ap_ (-3.0))
+    , rolloffFactor: (ap_ (-3.0))
+    }
 
 tagToAU StereoPanner'' = (StereoPanner' (ap_ 3.0))
 
@@ -1906,6 +2057,8 @@ type PtrInfo
   go' ptr v@(DupRes) = terminus ptr v
 
   go' ptr v@(StereoPanner name n a) = passthrough ptr v a
+
+  go' ptr v@(Panner name vars a) = passthrough ptr v a
 
   go' ptr v@(Delay name n a) = passthrough ptr v a
 
@@ -2691,6 +2844,39 @@ pannerT n = StereoPanner Nothing n
 pannerT_ :: String -> AudioParameter Number -> AudioUnit D2 -> AudioUnit D2
 pannerT_ s n = StereoPanner (Just s) n
 
+-- | A spatial panner.
+-- |
+-- | See [Panner](https://developer.mozilla.org/en-US/docs/Web/API/PannerNode) in the WebAudio API.
+pannerVarsAsAudioParams :: PannerVars' -> PannerVars
+pannerVarsAsAudioParams n =
+  { coneInnerAngle: (ap_ n.coneInnerAngle)
+  , coneOuterAngle: (ap_ n.coneOuterAngle)
+  , coneOuterGain: (ap_ n.coneOuterGain)
+  , distanceModel: n.distanceModel
+  , maxDistance: (ap_ n.maxDistance)
+  , orientationX: (ap_ n.orientationX)
+  , orientationY: (ap_ n.orientationY)
+  , orientationZ: (ap_ n.orientationZ)
+  , panningModel: n.panningModel
+  , positionX: (ap_ n.positionX)
+  , positionY: (ap_ n.positionY)
+  , positionZ: (ap_ n.positionZ)
+  , refDistance: (ap_ n.refDistance)
+  , rolloffFactor: (ap_ n.rolloffFactor)
+  }
+
+spatialPanner :: PannerVars' -> AudioUnit D2 -> AudioUnit D2
+spatialPanner = Panner Nothing <<< pannerVarsAsAudioParams
+
+spatialPanner_ :: String -> PannerVars' -> AudioUnit D2 -> AudioUnit D2
+spatialPanner_ s = Panner (Just s) <<< pannerVarsAsAudioParams
+
+spatialPannerT :: PannerVars -> AudioUnit D2 -> AudioUnit D2
+spatialPannerT = Panner Nothing
+
+spatialPannerT_ :: String -> PannerVars -> AudioUnit D2 -> AudioUnit D2
+spatialPannerT_ s = Panner (Just s)
+
 -- | Send sound to the speaker.
 -- |
 -- | If you want sound to be played from your speaker, you _must_ use this function
@@ -3328,6 +3514,18 @@ g'pannerT n = GStereoPanner Nothing n
 g'pannerT_ :: String -> AudioParameter Number -> AudioGraphProcessor
 g'pannerT_ s n = GStereoPanner (Just s) n
 
+g'spatialPanner :: PannerVars' -> AudioGraphProcessor
+g'spatialPanner = GPanner Nothing <<< pannerVarsAsAudioParams
+
+g'spatialPanner_ :: String -> PannerVars' -> AudioGraphProcessor
+g'spatialPanner_ s = GPanner (Just s) <<< pannerVarsAsAudioParams
+
+g'spatialPannerT :: PannerVars -> AudioGraphProcessor
+g'spatialPannerT = GPanner Nothing
+
+g'spatialPannerT_ :: String -> PannerVars -> AudioGraphProcessor
+g'spatialPannerT_ s = GPanner (Just s)
+
 g'mul :: AudioGraphAggregator
 g'mul = GMul Nothing
 
@@ -3435,6 +3633,8 @@ ucomp (Splitter' _) (Splitter' _) = true
 
 ucomp (StereoPanner' _) (StereoPanner' _) = true
 
+ucomp (Panner' x) (Panner' y) = x.distanceModel == y.distanceModel && x.panningModel == y.panningModel
+
 ucomp Mul' Mul' = true
 
 ucomp Add' Add' = true
@@ -3472,93 +3672,6 @@ delayMULT = 0.1 :: Number
 panMULT = 0.5 :: Number
 
 srMULT = 100.0 :: Number -- should never happen
-
-filtCoef :: AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> Number
-filtCoef (AudioParameter { param: a }) (AudioParameter { param: b }) (AudioParameter { param: c }) (AudioParameter { param: x }) (AudioParameter { param: y }) (AudioParameter { param: z }) = (Math.abs $ a - x) * oscMULT + (Math.abs $ b - y) * qMULT + (Math.abs $ c - z) * gainMULT
-
-twoCoef :: AudioParameter Number -> AudioParameter Number -> Number
-twoCoef (AudioParameter { param: f0 }) (AudioParameter { param: f1 }) = (Math.abs $ f0 - f1)
-
-toCoef :: AudioUnit' -> AudioUnit' -> Number
-toCoef Microphone' Microphone' = 0.0
-
-toCoef (Lowpass' a b) (Lowpass' x y) = filtCoef a b (ap_ 0.0) x y (ap_ 0.0)
-
-toCoef (Highpass' a b) (Highpass' x y) = filtCoef a b (ap_ 0.0) x y (ap_ 0.0)
-
-toCoef (Bandpass' a b) (Bandpass' x y) = filtCoef a b (ap_ 0.0) x y (ap_ 0.0)
-
-toCoef (Lowshelf' a c) (Lowshelf' x z) = filtCoef a (ap_ 0.0) c x (ap_ 0.0) z
-
-toCoef (Highshelf' a c) (Highshelf' x z) = filtCoef a (ap_ 0.0) c x (ap_ 0.0) z
-
-toCoef (Peaking' a b c) (Peaking' x y z) = filtCoef a b c x y z
-
-toCoef (Notch' a b) (Notch' x y) = filtCoef a b (ap_ 0.0) x y (ap_ 0.0)
-
-toCoef (Allpass' a b) (Allpass' x y) = filtCoef a b (ap_ 0.0) x y (ap_ 0.0)
-
--- we use types in the function-level constructor to gate closeness
--- we still assess an absurd penalty just as a precaution
--- in case the sizes don't match
-toCoef (Convolver' a) (Convolver' b) =
-  if a /= b then
-    10000.0
-  else
-    0.0
-
-toCoef (DynamicsCompressor' (AudioParameter { param: a }) (AudioParameter { param: b }) (AudioParameter { param: c }) (AudioParameter { param: d }) (AudioParameter { param: e })) (DynamicsCompressor' (AudioParameter { param: v }) (AudioParameter { param: w }) (AudioParameter { param: x }) (AudioParameter { param: y }) (AudioParameter { param: z })) =
-  foldl (+)
-    0.0
-    (zipWith (\i j -> Math.abs $ i - j) [ a, b, c, d, e ] [ v, w, x, y, z ])
-
-toCoef (SawtoothOsc' f0) (SawtoothOsc' f1) = oscMULT * twoCoef f0 f1
-
-toCoef (TriangleOsc' f0) (TriangleOsc' f1) = oscMULT * twoCoef f0 f1
-
--- todo : make periodic osc wavetable weighted?
-toCoef (PeriodicOsc' f0 _) (PeriodicOsc' f1 _) = oscMULT * twoCoef f0 f1
-
-toCoef (WaveShaper' l0 e0) (WaveShaper' l1 e1) =
-  ( if e0 /= e1 then
-      5.0
-    else
-      0.0
-  )
-
-toCoef (Dup') (Dup') = 0.0
-
-toCoef (SinOsc' f0) (SinOsc' f1) = oscMULT * twoCoef f0 f1
-
-toCoef (SquareOsc' f0) (SquareOsc' f1) = oscMULT * twoCoef f0 f1
-
-toCoef (Splitter' _) (Splitter' _) = 0.0
-
-toCoef (StereoPanner' p0) (StereoPanner' p1) = panMULT * twoCoef p0 p1
-
-toCoef Mul' Mul' = 0.0
-
-toCoef Add' Add' = 0.0
-
-toCoef Swap' Swap' = 0.0
-
-toCoef (Merger' _) (Merger' _) = 0.0
-
-toCoef (Constant' c0) (Constant' c1) = constMULT * twoCoef c0 c1
-
-toCoef (Delay' d0) (Delay' d1) = delayMULT * twoCoef d0 d1
-
-toCoef (Gain' g0) (Gain' g1) = gainMULT * twoCoef g0 g1
-
-toCoef Speaker' Speaker' = 0.0
-
-toCoef NoSound' NoSound' = 0.0
-
-toCoef (SplitRes' i0) (SplitRes' i1) = (Math.abs $ toNumber (i0 - i1)) * srMULT
-
-toCoef DupRes' DupRes' = 0.0
-
-toCoef _ _ = 0.0
 
 acomp :: PtrInfo -> PtrInfo -> Boolean
 acomp a b = ucomp a.au b.au && a.name == b.name && a.chan == b.chan
@@ -3777,6 +3890,20 @@ data Instruction
   | SetDelay Int Number Number -- delay for delay node
   | SetOffset Int Number Number -- offset for const node
   | SetCustomParam Int String Number Number -- for audio worklet nodes
+  | SetConeInnerAngle Int Number
+  | SetConeOuterAngle Int Number
+  | SetConeOuterGain Int Number
+  | SetDistanceModel Int String
+  | SetMaxDistance Int Number
+  | SetOrientationX Int Number Number
+  | SetOrientationY Int Number Number
+  | SetOrientationZ Int Number Number
+  | SetPanningModel Int String
+  | SetPositionX Int Number Number
+  | SetPositionY Int Number Number
+  | SetPositionZ Int Number Number
+  | SetRefDistance Int Number
+  | SetRolloffFactor Int Number
 
 isStop_ :: Instruction -> Boolean
 isStop_ (Stop _) = true
@@ -3898,6 +4025,76 @@ isSetCustomParam_ (SetCustomParam _ _ _ _) = true
 
 isSetCustomParam_ _ = false
 
+isSetConeInnerAngle_ :: Instruction -> Boolean
+isSetConeInnerAngle_ (SetConeInnerAngle _ _) = true
+
+isSetConeInnerAngle_ _ = false
+
+isSetConeOuterAngle_ :: Instruction -> Boolean
+isSetConeOuterAngle_ (SetConeOuterAngle _ _) = true
+
+isSetConeOuterAngle_ _ = false
+
+isSetConeOuterGain_ :: Instruction -> Boolean
+isSetConeOuterGain_ (SetConeOuterGain _ _) = true
+
+isSetConeOuterGain_ _ = false
+
+isSetDistanceModel_ :: Instruction -> Boolean
+isSetDistanceModel_ (SetDistanceModel _ _) = true
+
+isSetDistanceModel_ _ = false
+
+isSetMaxDistance_ :: Instruction -> Boolean
+isSetMaxDistance_ (SetMaxDistance _ _) = true
+
+isSetMaxDistance_ _ = false
+
+isSetOrientationX_ :: Instruction -> Boolean
+isSetOrientationX_ (SetOrientationX _ _ _) = true
+
+isSetOrientationX_ _ = false
+
+isSetOrientationY_ :: Instruction -> Boolean
+isSetOrientationY_ (SetOrientationY _ _ _) = true
+
+isSetOrientationY_ _ = false
+
+isSetOrientationZ_ :: Instruction -> Boolean
+isSetOrientationZ_ (SetOrientationZ _ _ _) = true
+
+isSetOrientationZ_ _ = false
+
+isSetPanningModel_ :: Instruction -> Boolean
+isSetPanningModel_ (SetPanningModel _ _) = true
+
+isSetPanningModel_ _ = false
+
+isSetPositionX_ :: Instruction -> Boolean
+isSetPositionX_ (SetPositionX _ _ _) = true
+
+isSetPositionX_ _ = false
+
+isSetPositionY_ :: Instruction -> Boolean
+isSetPositionY_ (SetPositionY _ _ _) = true
+
+isSetPositionY_ _ = false
+
+isSetPositionZ_ :: Instruction -> Boolean
+isSetPositionZ_ (SetPositionZ _ _ _) = true
+
+isSetPositionZ_ _ = false
+
+isSetRefDistance_ :: Instruction -> Boolean
+isSetRefDistance_ (SetRefDistance _ _) = true
+
+isSetRefDistance_ _ = false
+
+isSetRolloffFactor_ :: Instruction -> Boolean
+isSetRolloffFactor_ (SetRolloffFactor _ _) = true
+
+isSetRolloffFactor_ _ = false
+
 type FFIPredicates
   = { justly :: forall a. a -> Maybe a
     , tupply :: forall a b. a -> b -> Tuple a b
@@ -3928,6 +4125,7 @@ type FFIPredicates
     , isSquareOsc :: (AudioUnit'' -> Boolean)
     , isSplitter :: (AudioUnit'' -> Boolean)
     , isStereoPanner :: (AudioUnit'' -> Boolean)
+    , isPanner :: (AudioUnit'' -> Boolean)
     , isMul :: (AudioUnit'' -> Boolean)
     , isAdd :: (AudioUnit'' -> Boolean)
     , isSwap :: (AudioUnit'' -> Boolean)
@@ -3963,6 +4161,20 @@ type FFIPredicates
     , isSetDelay :: (Instruction -> Boolean)
     , isSetOffset :: (Instruction -> Boolean)
     , isSetCustomParam :: (Instruction -> Boolean)
+    , isSetConeInnerAngle :: (Instruction -> Boolean)
+    , isSetConeOuterAngle :: (Instruction -> Boolean)
+    , isSetConeOuterGain :: (Instruction -> Boolean)
+    , isSetDistanceModel :: (Instruction -> Boolean)
+    , isSetMaxDistance :: (Instruction -> Boolean)
+    , isSetOrientationX :: (Instruction -> Boolean)
+    , isSetOrientationY :: (Instruction -> Boolean)
+    , isSetOrientationZ :: (Instruction -> Boolean)
+    , isSetPanningModel :: (Instruction -> Boolean)
+    , isSetPositionX :: (Instruction -> Boolean)
+    , isSetPositionY :: (Instruction -> Boolean)
+    , isSetPositionZ :: (Instruction -> Boolean)
+    , isSetRefDistance :: (Instruction -> Boolean)
+    , isSetRolloffFactor :: (Instruction -> Boolean)
     }
 
 toFFI =
@@ -3995,6 +4207,7 @@ toFFI =
   , isSquareOsc: isSquareOsc_
   , isSplitter: isSplitter_
   , isStereoPanner: isStereoPanner_
+  , isPanner: isPanner_
   , isMul: isMul_
   , isAdd: isAdd_
   , isSwap: isSwap_
@@ -4030,6 +4243,20 @@ toFFI =
   , isSetDelay: isSetDelay_
   , isSetOffset: isSetOffset_
   , isSetCustomParam: isSetCustomParam_
+  , isSetConeInnerAngle: isSetConeInnerAngle_
+  , isSetConeOuterAngle: isSetConeOuterAngle_
+  , isSetConeOuterGain: isSetConeOuterGain_
+  , isSetDistanceModel: isSetDistanceModel_
+  , isSetMaxDistance: isSetMaxDistance_
+  , isSetOrientationX: isSetOrientationX_
+  , isSetOrientationY: isSetOrientationY_
+  , isSetOrientationZ: isSetOrientationZ_
+  , isSetPanningModel: isSetPanningModel_
+  , isSetPositionX: isSetPositionX_
+  , isSetPositionY: isSetPositionY_
+  , isSetPositionZ: isSetPositionZ_
+  , isSetRefDistance: isSetRefDistance_
+  , isSetRolloffFactor: isSetRolloffFactor_
   } ::
     FFIPredicates
 
@@ -4341,6 +4568,93 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
     ]
 
   set' i (StereoPanner' n) (StereoPanner' nx) = pure $ if napeq n nx then Just $ SetPan i (apP n) (apT n) else Nothing
+
+  set' i (Panner' n) (Panner' nx) =
+    ( ( if napeq n.coneInnerAngle nx.coneInnerAngle then
+          [ Just $ SetConeInnerAngle i (apP n.coneInnerAngle)
+          ]
+        else
+          []
+      )
+        <> ( if napeq n.coneOuterAngle nx.coneOuterAngle then
+              [ Just $ SetConeOuterAngle i (apP n.coneOuterAngle)
+              ]
+            else
+              []
+          )
+        <> ( if napeq n.coneOuterGain nx.coneOuterGain then
+              [ Just $ SetConeOuterGain i (apP n.coneOuterGain)
+              ]
+            else
+              []
+          )
+        <> ( if n.distanceModel /= nx.distanceModel then
+              [ Just $ SetDistanceModel i (dm2str n.distanceModel)
+              ]
+            else
+              []
+          )
+        <> ( if napeq n.maxDistance nx.maxDistance then
+              [ Just $ SetMaxDistance i (apP n.maxDistance)
+              ]
+            else
+              []
+          )
+        <> ( if napeq n.orientationX nx.orientationX then
+              [ Just $ SetOrientationX i (apP n.orientationX) (apT n.orientationX)
+              ]
+            else
+              []
+          )
+        <> ( if napeq n.orientationY nx.orientationY then
+              [ Just $ SetOrientationY i (apP n.orientationY) (apT n.orientationY)
+              ]
+            else
+              []
+          )
+        <> ( if napeq n.orientationZ nx.orientationZ then
+              [ Just $ SetOrientationZ i (apP n.orientationZ) (apT n.orientationZ)
+              ]
+            else
+              []
+          )
+        <> ( if n.panningModel /= nx.panningModel then
+              [ Just $ SetPanningModel i (pm2str n.panningModel)
+              ]
+            else
+              []
+          )
+        <> ( if napeq n.positionX nx.positionX then
+              [ Just $ SetPositionX i (apP n.positionX) (apT n.positionX)
+              ]
+            else
+              []
+          )
+        <> ( if napeq n.positionY nx.positionY then
+              [ Just $ SetPositionY i (apP n.positionY) (apT n.positionY)
+              ]
+            else
+              []
+          )
+        <> ( if napeq n.positionZ nx.positionZ then
+              [ Just $ SetPositionZ i (apP n.positionZ) (apT n.positionZ)
+              ]
+            else
+              []
+          )
+        <> ( if napeq n.refDistance nx.refDistance then
+              [ Just $ SetRefDistance i (apP n.refDistance)
+              ]
+            else
+              []
+          )
+        <> ( if napeq n.rolloffFactor nx.rolloffFactor then
+              [ Just $ SetRolloffFactor i (apP n.rolloffFactor)
+              ]
+            else
+              []
+          )
+    )
 
   set' i (Constant' n) (Constant' nx) = pure $ if napeq n nx then Just $ SetOffset i (apP n) (apT n) else Nothing
 
