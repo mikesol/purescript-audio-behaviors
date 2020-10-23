@@ -9,7 +9,7 @@ import Data.Typelevel.Num (D1, D2)
 import Data.Vec ((+>), empty)
 import Effect (Effect)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AudioContext, AudioInfo, AudioUnit, EngineInfo, Exporter, Oversample(..), VisualInfo, allpass, bandpass, convolver, defaultExporter, delay, dup1, dynamicsCompressor, g'add, g'bandpass, g'delay, g'gain, gain', graph, highpass, highshelf, loopBuf, lowpass, lowshelf, merger, microphone, notch, panner, pannerVars', peaking, periodicOsc, play, playBuf, playBufWithOffset, playBuf_, play_, runInBrowser, sawtoothOsc, sinOsc, spatialPanner, speaker, speaker', squareOsc, triangleOsc, waveShaper)
+import FRP.Behavior.Audio (AudioContext, AudioInfo, AudioUnit, EngineInfo, Exporter, Oversample(..), VisualInfo, allpass, bandpass, convolver, defaultExporter, delay, dup1, dynamicsCompressor, g'add, g'bandpass, g'delay, g'gain, gain', graph, highpass, highshelf, loopBuf, lowpass, lowshelf, merger, microphone, notch, panner, pannerMono, pannerVars', peaking, periodicOsc, play, playBuf, playBufWithOffset, playBuf_, play_, runInBrowser, sawtoothOsc, sinOsc, spatialPanner, speaker, speaker', squareOsc, triangleOsc, waveShaper)
 import Foreign.Object (Object)
 import Math (pi, sin)
 import Record.Extra (SLProxy(..), SNil)
@@ -111,6 +111,18 @@ pan time =
   where
   rad = pi * time
 
+panMono :: Number -> Behavior (AudioUnit D2)
+panMono time =
+  pure
+    $ speaker'
+        ( pannerMono (sin rad)
+            ( (gain' 0.2 $ sinOsc 110.0)
+                + (gain' 0.1 $ sinOsc 220.0)
+            )
+        )
+  where
+  rad = pi * time
+
 -- spatialPanner
 span :: Number -> Behavior (AudioUnit D2)
 span t =
@@ -193,7 +205,7 @@ run ::
   VisualInfo ->
   Exporter Unit ->
   Effect (Effect Unit)
-run = runInBrowser span
+run = runInBrowser panMono
 
 exporter = defaultExporter :: Exporter Unit
 

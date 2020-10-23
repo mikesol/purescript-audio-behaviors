@@ -45,7 +45,9 @@ module FRP.Behavior.Audio
   , split4
   , split5
   , panner
+  , pannerMono
   , spatialPanner
+  , spatialPannerMono
   , mul
   , add
   , merger
@@ -88,7 +90,9 @@ module FRP.Behavior.Audio
   , split4_
   , split5_
   , panner_
+  , pannerMono_
   , spatialPanner_
+  , spatialPannerMono_
   , mul_
   , add_
   , merger_
@@ -116,7 +120,9 @@ module FRP.Behavior.Audio
   , triangleOscT
   , squareOscT
   , pannerT
+  , pannerMonoT
   , spatialPannerT
+  , spatialPannerMonoT
   , constantT
   , delayT
   , gainT
@@ -141,7 +147,9 @@ module FRP.Behavior.Audio
   , triangleOscT_
   , squareOscT_
   , pannerT_
+  , pannerMonoT_
   , spatialPannerT_
+  , spatialPannerMonoT_
   , constantT_
   , delayT_
   , gainT_
@@ -388,6 +396,7 @@ import Type.Data.Graph (class FlipDirection, class HasDuplicateEdges, class HasD
 import Type.Proxy (Proxy(..))
 import Type.Row.Homogeneous (class Homogeneous)
 import Type.RowList (class ListToRow, RLProxy(..))
+import Unsafe.Coerce (unsafeCoerce)
 
 foreign import data BrowserPeriodicWave :: Type
 
@@ -2844,6 +2853,18 @@ pannerT n = StereoPanner Nothing n
 pannerT_ :: String -> AudioParameter Number -> AudioUnit D2 -> AudioUnit D2
 pannerT_ s n = StereoPanner (Just s) n
 
+pannerMono :: Number -> AudioUnit D1 -> AudioUnit D2
+pannerMono n = panner n <<< unsafeCoerce
+
+pannerMono_ :: String -> Number -> AudioUnit D1 -> AudioUnit D2
+pannerMono_ s n = panner_ s n <<< unsafeCoerce
+
+pannerMonoT :: AudioParameter Number -> AudioUnit D1 -> AudioUnit D2
+pannerMonoT n = pannerT n <<< unsafeCoerce
+
+pannerMonoT_ :: String -> AudioParameter Number -> AudioUnit D1 -> AudioUnit D2
+pannerMonoT_ s n = pannerT_ s n <<< unsafeCoerce
+
 -- | A spatial panner.
 -- |
 -- | See [Panner](https://developer.mozilla.org/en-US/docs/Web/API/PannerNode) in the WebAudio API.
@@ -2876,6 +2897,18 @@ spatialPannerT = Panner Nothing
 
 spatialPannerT_ :: String -> PannerVars -> AudioUnit D2 -> AudioUnit D2
 spatialPannerT_ s = Panner (Just s)
+
+spatialPannerMono :: PannerVars' -> AudioUnit D1 -> AudioUnit D2
+spatialPannerMono v = spatialPanner v <<< unsafeCoerce
+
+spatialPannerMono_ :: String -> PannerVars' -> AudioUnit D1 -> AudioUnit D2
+spatialPannerMono_ s v = spatialPanner_ s v <<< unsafeCoerce
+
+spatialPannerMonoT :: PannerVars -> AudioUnit D1 -> AudioUnit D2
+spatialPannerMonoT v = spatialPannerT v <<< unsafeCoerce
+
+spatialPannerMonoT_ :: String -> PannerVars -> AudioUnit D1 -> AudioUnit D2
+spatialPannerMonoT_ s v = spatialPannerT_ s v <<< unsafeCoerce
 
 -- | Send sound to the speaker.
 -- |
