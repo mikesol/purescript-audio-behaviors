@@ -316,6 +316,11 @@ exports.touchAudio = function (predicates) {
                     ? context.createBufferSource()
                     : predicates.isLoopBuf(c.value1)
                     ? context.createBufferSource()
+                    : predicates.isIIRFilter(c.value1)
+                    ? context.createIIRFilter(
+                        c.value6.value0.value0,
+                        c.value6.value0.value1
+                      )
                     : predicates.isLowpass(c.value1)
                     ? context.createBiquadFilter()
                     : predicates.isBandpass(c.value1)

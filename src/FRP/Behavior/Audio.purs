@@ -17,6 +17,7 @@ module FRP.Behavior.Audio
   , playBuf
   , playBufWithOffset
   , loopBuf
+  , iirFilter
   , lowpass
   , highpass
   , bandpass
@@ -63,6 +64,7 @@ module FRP.Behavior.Audio
   , playBuf_
   , playBufWithOffset_
   , loopBuf_
+  , iirFilter_
   , lowpass_
   , highpass_
   , bandpass_
@@ -198,6 +200,7 @@ module FRP.Behavior.Audio
   , aggregators
   , reflectSymbols
   , g'dynamicsCompressorT_
+  , g'iirFilter_
   , g'lowpass_
   , g'lowpassT_
   , g'peakingT_
@@ -229,6 +232,7 @@ module FRP.Behavior.Audio
   , g'spatialPannerT_
   , g'audioWorkletProcessor_
   , g'delayT_
+  , g'iirFilter
   , g'lowpass
   , g'bandpass
   , g'notch_
@@ -364,7 +368,7 @@ import Data.String (Pattern(..), split, take)
 import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
 import Data.Traversable (sequence)
 import Data.Tuple (Tuple(..), fst, snd, swap, uncurry)
-import Data.Typelevel.Num (class Pos, D1, D2, D3, D4, D5, toInt')
+import Data.Typelevel.Num (class LtEq, class Pos, D1, D2, D3, D4, D5, D20, toInt')
 import Data.Unfoldable (class Unfoldable)
 import Data.Unfoldable1 as DU
 import Data.Vec (Vec, fill)
@@ -929,6 +933,7 @@ pannerVars = pannerVarsAsAudioParams pannerVars'
 
 data AudioGraphProcessor
   = GAudioWorkletProcessor MString String (Object (AudioParameter Number))
+  | GIIRFilter MString (Array Number) (Array Number)
   | GLowpass MString (AudioParameter Number) (AudioParameter Number)
   | GHighpass MString (AudioParameter Number) (AudioParameter Number)
   | GBandpass MString (AudioParameter Number) (AudioParameter Number)
@@ -964,6 +969,7 @@ data AudioUnit ch
   | Play MString String Number
   | PlayBuf MString String (AudioParameter Number) (AudioParameter Number)
   | LoopBuf MString String (AudioParameter Number) Number Number
+  | IIRFilter MString (Array Number) (Array Number) (AudioUnit ch)
   | Lowpass MString (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
   | Highpass MString (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
   | Bandpass MString (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
@@ -1012,6 +1018,7 @@ data AudioUnit'
   | Play' String Number
   | PlayBuf' String (AudioParameter Number) (AudioParameter Number)
   | LoopBuf' String (AudioParameter Number) Number Number
+  | IIRFilter' (Array Number) (Array Number)
   | Lowpass' (AudioParameter Number) (AudioParameter Number)
   | Highpass' (AudioParameter Number) (AudioParameter Number)
   | Bandpass' (AudioParameter Number) (AudioParameter Number)
@@ -1100,6 +1107,11 @@ isLoopBuf_ :: AudioUnit'' -> Boolean
 isLoopBuf_ LoopBuf'' = true
 
 isLoopBuf_ _ = false
+
+isIIRFilter_ :: AudioUnit'' -> Boolean
+isIIRFilter_ IIRFilter'' = true
+
+isIIRFilter_ _ = false
 
 isLowpass_ :: AudioUnit'' -> Boolean
 isLowpass_ Lowpass'' = true
@@ -1264,6 +1276,7 @@ data AudioUnit''
   | Play''
   | PlayBuf''
   | LoopBuf''
+  | IIRFilter''
   | Lowpass''
   | Highpass''
   | Bandpass''
@@ -1320,6 +1333,8 @@ agp2au' (GAudioWorkletProcessor name unit params) = { au: AudioWorkletProcessor'
 
 agp2au' (GLowpass name f q) = { au: Lowpass' f q, name }
 
+agp2au' (GIIRFilter name ff fb) = { au: IIRFilter' ff fb, name }
+
 agp2au' (GHighpass name f q) = { au: Highpass' f q, name }
 
 agp2au' (GBandpass name f q) = { au: Bandpass' f q, name }
@@ -1363,6 +1378,8 @@ au' (Play name file timingHack) = { au: Play' file timingHack, name }
 au' (PlayBuf name buf speed offsetInBuffer) = { au: PlayBuf' buf speed offsetInBuffer, name }
 
 au' (LoopBuf name buf speed start end) = { au: LoopBuf' buf speed start end, name }
+
+au' (IIRFilter name ff fb _) = { au: IIRFilter' ff fb, name }
 
 au' (Lowpass name f q _) = { au: Lowpass' f q, name }
 
@@ -1466,6 +1483,8 @@ au'' (PlayBuf' _ _ _) = PlayBuf''
 
 au'' (LoopBuf' _ _ _ _) = LoopBuf''
 
+au'' (IIRFilter' _ _) = IIRFilter''
+
 au'' (Lowpass' _ _) = Lowpass''
 
 au'' (Highpass' _ _) = Highpass''
@@ -1542,6 +1561,8 @@ tagToAU AudioWorkletAggregator'' = AudioWorkletAggregator' "" O.empty
 tagToAU PlayBuf'' = PlayBuf' "" (ap_ (-1.0)) (ap_ (-1.0))
 
 tagToAU LoopBuf'' = LoopBuf' "" (ap_ (-1.0)) (-1.0) (-1.0)
+
+tagToAU IIRFilter'' = IIRFilter' [] []
 
 tagToAU Lowpass'' = Lowpass' (ap_ (-1.0)) (ap_ (-1.0))
 
@@ -2015,6 +2036,8 @@ type PtrInfo
 
   go' ptr v@(LoopBuf _ _ _ _ _) = terminus ptr v
 
+  go' ptr v@(IIRFilter _ _ _ a) = passthrough ptr v a
+
   go' ptr v@(Lowpass _ _ _ a) = passthrough ptr v a
 
   go' ptr v@(Highpass _ _ _ a) = passthrough ptr v a
@@ -2424,7 +2447,33 @@ loopBufT_ ::
   AudioUnit ch
 loopBufT_ s handle a b c = LoopBuf (Just s) handle a b c
 
--- | A lowpass filter.
+-- | An IIR filter. See the [web audio API docs](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API/Using_IIR_filters) for more information.
+-- |
+-- | - ff: Feedforward coefficients.
+-- | - fb: Feedback coefficients
+iirFilter ::
+  forall ch len.
+  Pos ch =>
+  Pos len =>
+  LtEq len D20 =>
+  Vec len Number ->
+  Vec len Number ->
+  AudioUnit ch ->
+  AudioUnit ch
+iirFilter a b = IIRFilter Nothing (V.toArray a) (V.toArray b)
+
+iirFilter_ ::
+  forall ch len.
+  Pos ch =>
+  Pos len =>
+  LtEq len D20 =>
+  String ->
+  Vec len Number ->
+  Vec len Number ->
+  AudioUnit ch ->
+  AudioUnit ch
+iirFilter_ s a b = IIRFilter (Just s) (V.toArray a) (V.toArray b)
+
 -- |
 -- | - f:  The cutoff frequency.
 -- | - q:  The Q value in positive decibels. See [BiquadFilterNode](https://developer.mozilla.org/en-US/docs/Web/API/BiquadFilterNode) in the WebAudio documentation for more information on Q values.
@@ -3382,6 +3431,25 @@ g'audioWorkletProcessorT_ ::
   AudioGraphProcessor
 g'audioWorkletProcessorT_ s handle n = GAudioWorkletProcessor (Just s) handle n
 
+g'iirFilter ::
+  forall len.
+  Pos len =>
+  LtEq len D20 =>
+  Vec len Number ->
+  Vec len Number ->
+  AudioGraphProcessor
+g'iirFilter a b = GIIRFilter Nothing (V.toArray a) (V.toArray b)
+
+g'iirFilter_ ::
+  forall len.
+  Pos len =>
+  LtEq len D20 =>
+  String ->
+  Vec len Number ->
+  Vec len Number ->
+  AudioGraphProcessor
+g'iirFilter_ s a b = GIIRFilter (Just s) (V.toArray a) (V.toArray b)
+
 g'lowpass :: Number -> Number -> AudioGraphProcessor
 g'lowpass a b = GLowpass Nothing (ap_ a) (ap_ b)
 
@@ -3629,6 +3697,8 @@ ucomp (PlayBuf' s0 _ _) (PlayBuf' s1 _ _) = s0 == s1
 ucomp (LoopBuf' s0 _ _ _) (LoopBuf' s1 _ _ _) = s0 == s1
 
 ucomp (Lowpass' _ _) (Lowpass' _ _) = true
+
+ucomp (IIRFilter' a b) (IIRFilter' x y) = a == x && b == y
 
 ucomp (Highpass' _ _) (Highpass' _ _) = true
 
@@ -3903,7 +3973,7 @@ data Instruction
   | DisconnectFrom Int Int -- id id
   | ConnectTo Int Int (Maybe (Tuple Int Int)) -- id id channelConnections
   | Shuffle (Array (Tuple Int Int)) -- id id, shuffles the map
-  | NewUnit Int AudioUnit'' (Maybe Int) (Maybe String) (Maybe Number) (Maybe Number) -- new audio unit, maybe with channel info, maybe with a source, maybe with a start time, maybe with an offset
+  | NewUnit Int AudioUnit'' (Maybe Int) (Maybe String) (Maybe Number) (Maybe Number) (Maybe (Tuple (Array Number) (Array Number))) -- new audio unit, maybe with channel info, maybe with a source, maybe with a start time, maybe with an offset, maybe with FF and FB info for IIR filter
   | SetFrequency Int Number Number -- frequency
   | SetThreshold Int Number Number -- threshold
   | SetKnee Int Number Number -- knee
@@ -3959,7 +4029,7 @@ isShuffle_ (Shuffle _) = true
 isShuffle_ _ = false
 
 isNewUnit_ :: Instruction -> Boolean
-isNewUnit_ (NewUnit _ _ _ _ _ _) = true
+isNewUnit_ (NewUnit _ _ _ _ _ _ _) = true
 
 isNewUnit_ _ = false
 
@@ -4139,6 +4209,7 @@ type FFIPredicates
     , isPlay :: (AudioUnit'' -> Boolean)
     , isPlayBuf :: (AudioUnit'' -> Boolean)
     , isLoopBuf :: (AudioUnit'' -> Boolean)
+    , isIIRFilter :: (AudioUnit'' -> Boolean)
     , isLowpass :: (AudioUnit'' -> Boolean)
     , isHighpass :: (AudioUnit'' -> Boolean)
     , isBandpass :: (AudioUnit'' -> Boolean)
@@ -4221,6 +4292,7 @@ toFFI =
   , isPlay: isPlay_
   , isPlayBuf: isPlayBuf_
   , isLoopBuf: isLoopBuf_
+  , isIIRFilter: isIIRFilter_
   , isLowpass: isLowpass_
   , isHighpass: isHighpass_
   , isBandpass: isBandpass_
@@ -4332,6 +4404,11 @@ offsetConstructor :: AudioUnit' -> Maybe Number
 offsetConstructor (PlayBuf' _ _ o) = Just (apP o)
 
 offsetConstructor _ = Nothing
+
+iirCoefConstructor :: AudioUnit' -> Maybe (Tuple (Array Number) (Array Number))
+iirCoefConstructor (IIRFilter' x y) = Just (Tuple x y)
+
+iirCoefConstructor _ = Nothing
 
 startConstructor :: AudioUnit' -> Maybe Number
 startConstructor (Play' n timingHack) = Just timingHack
@@ -4492,6 +4569,7 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
                         (sourceConstructor ptr.au)
                         (startConstructor ptr.au)
                         (offsetConstructor ptr.au)
+                        (iirCoefConstructor ptr.au)
                   )
                   $ M.lookup i cur.flat
             )
