@@ -3962,7 +3962,7 @@ type Reconciled
   = { prev :: Reconcilable
     , cur :: Reconcilable
     , reconciliation :: Map Int Int
-    , instructionSet :: List Instruction
+    , instructionSet :: Array Instruction
     }
 
 -- "Assembly like" instruction
@@ -4440,9 +4440,9 @@ os2s o = case o of
 napeq :: forall a. Eq a => AudioParameter a -> AudioParameter a -> Boolean
 napeq (AudioParameter { param: a }) (AudioParameter { param: b }) = a /= b
 
-describeConnection :: Reconcilable -> Reconcilable -> Map Int Int -> List (Tuple Int Int)
+describeConnection :: Reconcilable -> Reconcilable -> Map Int Int -> Array (Tuple Int Int)
 describeConnection start end passage =
-  (DL.fromFoldable <<< M.keys)
+  (A.fromFoldable <<< M.keys)
     ( M.filter
         ( \(Tuple f s) ->
             fromMaybe false
@@ -4496,18 +4496,19 @@ isGen (Constant' _) = true
 
 isGen _ = false
 
-scp :: Int -> Object (AudioParameter Number) -> Object (AudioParameter Number) -> Array (Maybe Instruction)
+scp :: Int -> Object (AudioParameter Number) -> Object (AudioParameter Number) -> Array Instruction
 scp i n nx =
-  map
-    ( \(Tuple k0 v0) ->
-        if ( fromMaybe true
-            $ map (napeq v0) (O.lookup k0 nx)
-        ) then
-          Just $ SetCustomParam i k0 (apP v0) (apT v0)
-        else
-          Nothing
-    )
-    (O.toUnfoldable n)
+  join
+    $ map
+        ( \(Tuple k0 v0) ->
+            if ( fromMaybe true
+                $ map (napeq v0) (O.lookup k0 nx)
+            ) then
+              [ SetCustomParam i k0 (apP v0) (apT v0) ]
+            else
+              []
+        )
+        (O.toUnfoldable n)
 
 reconciliationToInstructionSet :: Reconciled' -> Reconciled
 reconciliationToInstructionSet { prev, cur, reconciliation } =
@@ -4548,19 +4549,22 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
     )
 
   -- turning off
+  stop :: Array Instruction
   stop =
     map (Stop <<< fst)
-      ( DL.filter
+      ( A.filter
           (maybe false (isGen <<< _.au) <<< flip M.lookup prev.flat <<< fst)
           $ statusChange (Just Off) (Just On)
       )
 
   -- shuffle instructions represent the new array that we will make out of the old
+  shuffle :: Instruction
   shuffle = Shuffle $ statusChange (Just On) (Just On)
 
   -- new units that were not in the old array
+  new :: Array Instruction
   new =
-    ( DL.catMaybes
+    ( A.catMaybes
         ( map
             ( \i ->
                 map
@@ -4573,12 +4577,12 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
                   )
                   $ M.lookup i cur.flat
             )
-            ( DL.catMaybes
+            ( A.catMaybes
                 ( map
                     ( \k ->
                         M.lookup k reconciliationAsMap
                     )
-                    $ (DL.fromFoldable <<< M.keys) (M.filter (\i -> i.status == Off) prev.flat)
+                    $ (A.fromFoldable <<< M.keys) (M.filter (\i -> i.status == Off) prev.flat)
                 )
             )
         )
@@ -4598,6 +4602,7 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
       <$> (M.lookup l cur.flat)
       <*> (M.lookup r cur.flat)
 
+  connect :: Array Instruction
   connect =
     let
       conn = describeConnection cur prev reversedAsMap
@@ -4605,20 +4610,17 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
       (map (uncurry $ uncurry ConnectTo) $ map (\i -> Tuple i (harmonizeCurrChannels i)) conn)
 
   setFQFilter i a b x y =
-    [ if napeq a x then Just $ SetFrequency i (apP a) (apT a) else Nothing
-    , if napeq b y then Just $ SetQ i (apP b) (apT b) else Nothing
-    ]
+    (if napeq a x then [ SetFrequency i (apP a) (apT a) ] else [])
+      <> (if napeq b y then [ SetQ i (apP b) (apT b) ] else [])
 
   setFilter i a b c x y z =
-    [ if napeq a x then Just $ SetFrequency i (apP a) (apT a) else Nothing
-    , if napeq b y then Just $ SetQ i (apP b) (apT b) else Nothing
-    , if napeq c z then Just $ SetGain i (apP c) (apT c) else Nothing
-    ]
+    (if napeq a x then [ SetFrequency i (apP a) (apT a) ] else [])
+      <> (if napeq b y then [ SetQ i (apP b) (apT b) ] else [])
+      <> (if napeq c z then [ SetGain i (apP c) (apT c) ] else [])
 
   setFGFilter i a c x z =
-    [ if napeq a x then Just $ SetFrequency i (apP a) (apT a) else Nothing
-    , if napeq c z then Just $ SetGain i (apP c) (apT c) else Nothing
-    ]
+    (if napeq a x then [ SetFrequency i (apP a) (apT a) ] else [])
+      <> (if napeq c z then [ SetGain i (apP c) (apT c) ] else [])
 
   set' i (AudioWorkletGenerator' _ n) (AudioWorkletGenerator' _ nx) = scp i n nx
 
@@ -4626,13 +4628,12 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
 
   set' i (AudioWorkletAggregator' _ n) (AudioWorkletAggregator' _ nx) = scp i n nx
 
-  set' i (PlayBuf' _ n _) (PlayBuf' _ nx _) = pure $ if napeq n nx then Just $ SetPlaybackRate i (apP n) (apT n) else Nothing
+  set' i (PlayBuf' _ n _) (PlayBuf' _ nx _) = if napeq n nx then [ SetPlaybackRate i (apP n) (apT n) ] else []
 
   set' i (LoopBuf' _ n s e) (LoopBuf' _ nx sx ex) =
-    [ if napeq n nx then Just $ SetPlaybackRate i (apP n) (apT n) else Nothing
-    , if s /= sx then Just $ SetLoopStart i s else Nothing
-    , if e /= ex then Just $ SetLoopEnd i e else Nothing
-    ]
+    (if napeq n nx then [ SetPlaybackRate i (apP n) (apT n) ] else [])
+      <> (if s /= sx then [ SetLoopStart i s ] else [])
+      <> (if e /= ex then [ SetLoopEnd i e ] else [])
 
   set' i (Lowpass' a b) (Lowpass' x y) = setFQFilter i a b x y
 
@@ -4651,144 +4652,138 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
   set' i (Notch' a b) (Notch' x y) = setFQFilter i a b x y
 
   set' i (DynamicsCompressor' a b c d e) (DynamicsCompressor' v w x y z) =
-    [ if napeq a v then Just $ SetThreshold i (apP a) (apT a) else Nothing
-    , if napeq b w then Just $ SetKnee i (apP b) (apT b) else Nothing
-    , if napeq c x then Just $ SetRatio i (apP c) (apT c) else Nothing
-    , if napeq d y then Just $ SetAttack i (apP d) (apT d) else Nothing
-    , if napeq e z then Just $ SetRelease i (apP e) (apT e) else Nothing
-    ]
+    (if napeq a v then [ SetThreshold i (apP a) (apT a) ] else [])
+      <> (if napeq b w then [ SetKnee i (apP b) (apT b) ] else [])
+      <> (if napeq c x then [ SetRatio i (apP c) (apT c) ] else [])
+      <> (if napeq d y then [ SetAttack i (apP d) (apT d) ] else [])
+      <> (if napeq e z then [ SetRelease i (apP e) (apT e) ] else [])
 
-  set' i (SinOsc' n) (SinOsc' nx) = pure $ if napeq n nx then Just $ SetFrequency i (apP n) (apT n) else Nothing
+  set' i (SinOsc' n) (SinOsc' nx) = if napeq n nx then [ SetFrequency i (apP n) (apT n) ] else []
 
-  set' i (SquareOsc' n) (SquareOsc' nx) = pure $ if napeq n nx then Just $ SetFrequency i (apP n) (apT n) else Nothing
+  set' i (SquareOsc' n) (SquareOsc' nx) = if napeq n nx then [ SetFrequency i (apP n) (apT n) ] else []
 
-  set' i (SawtoothOsc' n) (SawtoothOsc' nx) = pure $ if napeq n nx then Just $ SetFrequency i (apP n) (apT n) else Nothing
+  set' i (SawtoothOsc' n) (SawtoothOsc' nx) = if napeq n nx then [ SetFrequency i (apP n) (apT n) ] else []
 
-  set' i (TriangleOsc' n) (TriangleOsc' nx) = pure $ if napeq n nx then Just $ SetFrequency i (apP n) (apT n) else Nothing
+  set' i (TriangleOsc' n) (TriangleOsc' nx) = if napeq n nx then [ SetFrequency i (apP n) (apT n) ] else []
 
-  set' i (PeriodicOsc' n _) (PeriodicOsc' nx _) = pure $ if napeq n nx then Just $ SetFrequency i (apP n) (apT n) else Nothing
+  set' i (PeriodicOsc' n _) (PeriodicOsc' nx _) = if napeq n nx then [ SetFrequency i (apP n) (apT n) ] else []
 
   set' i (WaveShaper' _ o) (WaveShaper' _ ox) =
-    [ if o /= ox then
-        Just
-          ( SetOversample i
-              $ os2s o
-          )
-      else
-        Nothing
-    ]
+    if o /= ox then
+      [ SetOversample i
+          $ os2s o
+      ]
+    else
+      []
 
-  set' i (StereoPanner' n) (StereoPanner' nx) = pure $ if napeq n nx then Just $ SetPan i (apP n) (apT n) else Nothing
+  set' i (StereoPanner' n) (StereoPanner' nx) = if napeq n nx then [ SetPan i (apP n) (apT n) ] else []
 
   set' i (Panner' n) (Panner' nx) =
     ( ( if napeq n.coneInnerAngle nx.coneInnerAngle then
-          [ Just $ SetConeInnerAngle i (apP n.coneInnerAngle)
+          [ SetConeInnerAngle i (apP n.coneInnerAngle)
           ]
         else
           []
       )
         <> ( if napeq n.coneOuterAngle nx.coneOuterAngle then
-              [ Just $ SetConeOuterAngle i (apP n.coneOuterAngle)
+              [ SetConeOuterAngle i (apP n.coneOuterAngle)
               ]
             else
               []
           )
         <> ( if napeq n.coneOuterGain nx.coneOuterGain then
-              [ Just $ SetConeOuterGain i (apP n.coneOuterGain)
+              [ SetConeOuterGain i (apP n.coneOuterGain)
               ]
             else
               []
           )
         <> ( if n.distanceModel /= nx.distanceModel then
-              [ Just $ SetDistanceModel i (dm2str n.distanceModel)
+              [ SetDistanceModel i (dm2str n.distanceModel)
               ]
             else
               []
           )
         <> ( if napeq n.maxDistance nx.maxDistance then
-              [ Just $ SetMaxDistance i (apP n.maxDistance)
+              [ SetMaxDistance i (apP n.maxDistance)
               ]
             else
               []
           )
         <> ( if napeq n.orientationX nx.orientationX then
-              [ Just $ SetOrientationX i (apP n.orientationX) (apT n.orientationX)
+              [ SetOrientationX i (apP n.orientationX) (apT n.orientationX)
               ]
             else
               []
           )
         <> ( if napeq n.orientationY nx.orientationY then
-              [ Just $ SetOrientationY i (apP n.orientationY) (apT n.orientationY)
+              [ SetOrientationY i (apP n.orientationY) (apT n.orientationY)
               ]
             else
               []
           )
         <> ( if napeq n.orientationZ nx.orientationZ then
-              [ Just $ SetOrientationZ i (apP n.orientationZ) (apT n.orientationZ)
+              [ SetOrientationZ i (apP n.orientationZ) (apT n.orientationZ)
               ]
             else
               []
           )
         <> ( if n.panningModel /= nx.panningModel then
-              [ Just $ SetPanningModel i (pm2str n.panningModel)
+              [ SetPanningModel i (pm2str n.panningModel)
               ]
             else
               []
           )
         <> ( if napeq n.positionX nx.positionX then
-              [ Just $ SetPositionX i (apP n.positionX) (apT n.positionX)
+              [ SetPositionX i (apP n.positionX) (apT n.positionX)
               ]
             else
               []
           )
         <> ( if napeq n.positionY nx.positionY then
-              [ Just $ SetPositionY i (apP n.positionY) (apT n.positionY)
+              [ SetPositionY i (apP n.positionY) (apT n.positionY)
               ]
             else
               []
           )
         <> ( if napeq n.positionZ nx.positionZ then
-              [ Just $ SetPositionZ i (apP n.positionZ) (apT n.positionZ)
+              [ SetPositionZ i (apP n.positionZ) (apT n.positionZ)
               ]
             else
               []
           )
         <> ( if napeq n.refDistance nx.refDistance then
-              [ Just $ SetRefDistance i (apP n.refDistance)
+              [ SetRefDistance i (apP n.refDistance)
               ]
             else
               []
           )
         <> ( if napeq n.rolloffFactor nx.rolloffFactor then
-              [ Just $ SetRolloffFactor i (apP n.rolloffFactor)
+              [ SetRolloffFactor i (apP n.rolloffFactor)
               ]
             else
               []
           )
     )
 
-  set' i (Constant' n) (Constant' nx) = pure $ if napeq n nx then Just $ SetOffset i (apP n) (apT n) else Nothing
+  set' i (Constant' n) (Constant' nx) = if napeq n nx then [ SetOffset i (apP n) (apT n) ] else []
 
-  set' i (Delay' n) (Delay' nx) = pure $ if napeq n nx then Just $ SetDelay i (apP n) (apT n) else Nothing
+  set' i (Delay' n) (Delay' nx) = if napeq n nx then [ SetDelay i (apP n) (apT n) ] else []
 
-  set' i (Gain' n) (Gain' nx) = pure $ if napeq n nx then Just $ SetGain i (apP n) (apT n) else Nothing
+  set' i (Gain' n) (Gain' nx) = if napeq n nx then [ SetGain i (apP n) (apT n) ] else []
 
-  set' i _ _ = pure Nothing
+  set' i _ _ = []
 
-  -- NOTE:
-  -- roundtrip to array and back a little silly
-  -- makes it easier to type [] in set', though...
+  set :: Array Instruction
   set =
-    (DL.catMaybes <<< DL.fromFoldable)
-      ( join
-          ( map
-              ( \v ->
-                  set' v.ptr v.au
-                    (fromMaybe v.au $ (map _.au $ M.lookup v.ptr reversedAsMap >>= flip M.lookup prev.flat))
-              )
-              (A.filter (\{ status } -> status == On) (A.fromFoldable $ M.values cur.flat))
-          )
-      )
+    ( join
+        ( map
+            ( \v ->
+                set' v.ptr v.au
+                  (fromMaybe v.au $ (map _.au $ M.lookup v.ptr reversedAsMap >>= flip M.lookup prev.flat))
+            )
+            (A.filter (\{ status } -> status == On) (A.fromFoldable $ M.values cur.flat))
+        )
+    )
 
 type AudioInfo microphones tracks buffers floatArrays periodicWaves
   = { microphones :: microphones
@@ -5092,7 +5087,7 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
                             let
                               instructions =
                                 { t: clockNow_
-                                , i: (A.fromFoldable instr.instructionSet)
+                                , i: instr.instructionSet
                                 }
                             exporterQueueRef <- read __exporterQueueRef
                             launchAff
