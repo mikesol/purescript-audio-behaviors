@@ -262,6 +262,14 @@ exports.makeFloatArray = function (fa) {
   };
 };
 
+// gain needs to start at 0, otherwise the audio parameter
+// setting will result in a small pop
+var gainHack = function (context, timeToSet) {
+  var o = context.createGain();
+  o.gain.setValueAtTime(0.0, timeToSet);
+  return o;
+};
+
 exports.touchAudio = function (predicates) {
   return function (timeToSet) {
     return function (instructions) {
@@ -433,7 +441,7 @@ exports.touchAudio = function (predicates) {
                     : predicates.isConstant(c.value1)
                     ? context.createConstantSource()
                     : predicates.isGain(c.value1)
-                    ? context.createGain()
+                    ? gainHack(context, timeToSet)
                     : predicates.isSplitRes(c.value1)
                     ? context.createGain()
                     : predicates.isDupRes(c.value1)
@@ -528,10 +536,15 @@ exports.touchAudio = function (predicates) {
                     timeToSet + c.value2
                   );
                 } else if (predicates.isSetGain(c)) {
-                  generators[c.value0].gain.linearRampToValueAtTime(
-                    c.value1,
-                    timeToSet + c.value2
-                  );
+                  c.value3
+                    ? generators[c.value0].gain.setValueAtTime(
+                        c.value1,
+                        timeToSet + c.value2
+                      )
+                    : generators[c.value0].gain.linearRampToValueAtTime(
+                        c.value1,
+                        timeToSet + c.value2
+                      );
                 } else if (predicates.isSetQ(c)) {
                   generators[c.value0].Q.linearRampToValueAtTime(
                     c.value1,

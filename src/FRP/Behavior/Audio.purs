@@ -1547,6 +1547,9 @@ au'' (SplitRes' _) = SplitRes''
 
 au'' DupRes' = DupRes''
 
+-- awful gain hack
+awfulGainHack = 1051.43 :: Number
+
 tagToAU :: AudioUnit'' -> AudioUnit'
 tagToAU Microphone'' = Microphone'
 
@@ -1632,7 +1635,7 @@ tagToAU Constant'' = Constant' (ap_ 1000.0)
 
 tagToAU Delay'' = Delay' (ap_ 1000.0)
 
-tagToAU Gain'' = Gain' (ap_ 1000.0)
+tagToAU Gain'' = Gain' (ap_ awfulGainHack)
 
 tagToAU Speaker'' = Speaker'
 
@@ -3989,7 +3992,7 @@ data Instruction
   | SetLoopStart Int Number -- loop start
   | SetLoopEnd Int Number -- loop end
   | SetPan Int Number Number -- pan for pan node
-  | SetGain Int Number Number -- gain for gain node
+  | SetGain Int Number Number Boolean -- gain for gain node, boolean if is start
   | SetDelay Int Number Number -- delay for delay node
   | SetOffset Int Number Number -- offset for const node
   | SetCustomParam Int String Number Number -- for audio worklet nodes
@@ -4109,7 +4112,7 @@ isSetPan_ (SetPan _ _ _) = true
 isSetPan_ _ = false
 
 isSetGain_ :: Instruction -> Boolean
-isSetGain_ (SetGain _ _ _) = true
+isSetGain_ (SetGain _ _ _ _) = true
 
 isSetGain_ _ = false
 
@@ -4616,11 +4619,11 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
   setFilter i a b c x y z =
     (if napeq a x then [ SetFrequency i (apP a) (apT a) ] else [])
       <> (if napeq b y then [ SetQ i (apP b) (apT b) ] else [])
-      <> (if napeq c z then [ SetGain i (apP c) (apT c) ] else [])
+      <> (if napeq c z then [ SetGain i (apP c) (apT c) false ] else [])
 
   setFGFilter i a c x z =
     (if napeq a x then [ SetFrequency i (apP a) (apT a) ] else [])
-      <> (if napeq c z then [ SetGain i (apP c) (apT c) ] else [])
+      <> (if napeq c z then [ SetGain i (apP c) (apT c) false ] else [])
 
   set' i (AudioWorkletGenerator' _ n) (AudioWorkletGenerator' _ nx) = scp i n nx
 
@@ -4769,7 +4772,7 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
 
   set' i (Delay' n) (Delay' nx) = if napeq n nx then [ SetDelay i (apP n) (apT n) ] else []
 
-  set' i (Gain' n) (Gain' nx) = if napeq n nx then [ SetGain i (apP n) (apT n) ] else []
+  set' i (Gain' n) (Gain' nx) = if napeq n nx then [ SetGain i (apP n) (apT n) (apP nx == awfulGainHack) ] else []
 
   set' i _ _ = []
 
