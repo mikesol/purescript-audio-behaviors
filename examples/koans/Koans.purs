@@ -217,7 +217,7 @@ run ::
   VisualInfo ->
   Exporter Unit ->
   Effect (Effect Unit)
-run = runInBrowser iir
+run = runInBrowser lb
 
 exporter = defaultExporter :: Exporter Unit
 

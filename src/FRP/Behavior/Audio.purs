@@ -1547,8 +1547,60 @@ au'' (SplitRes' _) = SplitRes''
 
 au'' DupRes' = DupRes''
 
--- awful gain hack
-awfulGainHack = 1051.43 :: Number
+-- hackish system, convert to Maybe?
+speciousGain = -1051.43 :: Number
+
+speciousRate = -3.4545 :: Number
+
+speciousOffset = -3.4545 :: Number
+
+speciousStart = -4.5555 :: Number
+
+speciousEnd = -4.5555 :: Number
+
+speciousFreq = -1.1562 :: Number
+
+speciousQ = -1.1562 :: Number
+
+speciousThreshold = -1.0 :: Number
+
+speciousKnee = -1.0 :: Number
+
+speciousRatio = -1.0 :: Number
+
+speciousAttack = -1.0 :: Number
+
+speciousRelease = -1.0 :: Number
+
+speciousConeInnerAngle = -3.0 :: Number
+
+speciousConeOuterAngle = -3.0 :: Number
+
+speciousConeOuterGain = -3.0 :: Number
+
+speciousMaxDistance = -3.0 :: Number
+
+speciousOrientationX = -3.0 :: Number
+
+speciousOrientationY = -3.0 :: Number
+
+speciousOrientationZ = -3.0 :: Number
+
+speciousPositionX = -3.0 :: Number
+
+speciousPositionY = -3.0 :: Number
+
+speciousPositionZ = -3.0 :: Number
+
+speciousRefDistance = -3.0 :: Number
+
+speciousRolloffFactor = -3.0 :: Number
+
+speciousPanner = -3.0 :: Number
+
+speciousConstant = -9.181818281867 :: Number
+
+speciousDelay = -9.181818281867 :: Number
 
 tagToAU :: AudioUnit'' -> AudioUnit'
 tagToAU Microphone'' = Microphone'
@@ -1561,67 +1613,67 @@ tagToAU AudioWorkletProcessor'' = AudioWorkletProcessor' "" O.empty
 
 tagToAU AudioWorkletAggregator'' = AudioWorkletAggregator' "" O.empty
 
-tagToAU PlayBuf'' = PlayBuf' "" (ap_ (-1.0)) (ap_ (-1.0))
+tagToAU PlayBuf'' = PlayBuf' "" (ap_ (speciousRate)) (ap_ (speciousOffset))
 
-tagToAU LoopBuf'' = LoopBuf' "" (ap_ (-1.0)) (-1.0) (-1.0)
+tagToAU LoopBuf'' = LoopBuf' "" (ap_ (speciousRate)) (speciousStart) (speciousEnd)
 
 tagToAU IIRFilter'' = IIRFilter' [] []
 
-tagToAU Lowpass'' = Lowpass' (ap_ (-1.0)) (ap_ (-1.0))
+tagToAU Lowpass'' = Lowpass' (ap_ (speciousFreq)) (ap_ (speciousQ))
 
-tagToAU Highpass'' = Highpass' (ap_ (-1.0)) (ap_ (-1.0))
+tagToAU Highpass'' = Highpass' (ap_ (speciousFreq)) (ap_ (speciousQ))
 
-tagToAU Bandpass'' = Bandpass' (ap_ (-1.0)) (ap_ (-1.0))
+tagToAU Bandpass'' = Bandpass' (ap_ (speciousFreq)) (ap_ (speciousQ))
 
-tagToAU Lowshelf'' = Lowshelf' (ap_ (-1.0)) (ap_ (-1.0))
+tagToAU Lowshelf'' = Lowshelf' (ap_ (speciousFreq)) (ap_ (speciousGain))
 
-tagToAU Highshelf'' = Highshelf' (ap_ (-1.0)) (ap_ (-1.0))
+tagToAU Highshelf'' = Highshelf' (ap_ (speciousFreq)) (ap_ (speciousGain))
 
-tagToAU Peaking'' = Peaking' (ap_ (-1.0)) (ap_ (-1.0)) (ap_ (-1.0))
+tagToAU Peaking'' = Peaking' (ap_ (speciousFreq)) (ap_ (speciousQ)) (ap_ (speciousGain))
 
-tagToAU Notch'' = Notch' (ap_ (-1.0)) (ap_ (-1.0))
+tagToAU Notch'' = Notch' (ap_ (speciousFreq)) (ap_ (speciousQ))
 
-tagToAU Allpass'' = Allpass' (ap_ (-1.0)) (ap_ (-1.0))
+tagToAU Allpass'' = Allpass' (ap_ (speciousFreq)) (ap_ (speciousQ))
 
 tagToAU Convolver'' = Convolver' ""
 
-tagToAU DynamicsCompressor'' = DynamicsCompressor' (ap_ (-1.0)) (ap_ (-1.0)) (ap_ (-1.0)) (ap_ (-1.0)) (ap_ (-1.0))
+tagToAU DynamicsCompressor'' = DynamicsCompressor' (ap_ (speciousThreshold)) (ap_ (speciousKnee)) (ap_ (speciousRatio)) (ap_ (speciousAttack)) (ap_ (speciousRelease))
 
-tagToAU SawtoothOsc'' = SawtoothOsc' (ap_ 50000.0)
+tagToAU SawtoothOsc'' = SawtoothOsc' (ap_ speciousFreq)
 
-tagToAU TriangleOsc'' = TriangleOsc' (ap_ 50000.0)
+tagToAU TriangleOsc'' = TriangleOsc' (ap_ speciousFreq)
 
-tagToAU PeriodicOsc'' = PeriodicOsc' (ap_ 50000.0) ""
+tagToAU PeriodicOsc'' = PeriodicOsc' (ap_ speciousFreq) ""
 
 tagToAU WaveShaper'' = WaveShaper' "" None
 
 tagToAU Dup'' = Dup'
 
-tagToAU SinOsc'' = SinOsc' (ap_ 50000.0)
+tagToAU SinOsc'' = SinOsc' (ap_ speciousFreq)
 
-tagToAU SquareOsc'' = SquareOsc' (ap_ 50000.0)
+tagToAU SquareOsc'' = SquareOsc' (ap_ speciousFreq)
 
 tagToAU Splitter'' = Splitter' (-1)
 
 tagToAU Panner'' =
   Panner'
-    { coneInnerAngle: (ap_ (-3.0))
-    , coneOuterAngle: (ap_ (-3.0))
-    , coneOuterGain: (ap_ (-3.0))
+    { coneInnerAngle: (ap_ (speciousConeInnerAngle))
+    , coneOuterAngle: (ap_ (speciousConeOuterAngle))
+    , coneOuterGain: (ap_ (speciousConeOuterGain))
     , distanceModel: Inverse
-    , maxDistance: (ap_ (-3.0))
-    , orientationX: (ap_ (-3.0))
-    , orientationY: (ap_ (-3.0))
-    , orientationZ: (ap_ (-3.0))
+    , maxDistance: (ap_ (speciousMaxDistance))
+    , orientationX: (ap_ (speciousOrientationX))
+    , orientationY: (ap_ (speciousOrientationY))
+    , orientationZ: (ap_ (speciousOrientationZ))
     , panningModel: EqualPower
-    , positionX: (ap_ (-3.0))
-    , positionY: (ap_ (-3.0))
-    , positionZ: (ap_ (-3.0))
-    , refDistance: (ap_ (-3.0))
-    , rolloffFactor: (ap_ (-3.0))
+    , positionX: (ap_ (speciousPositionX))
+    , positionY: (ap_ (speciousPositionY))
+    , positionZ: (ap_ (speciousPositionZ))
+    , refDistance: (ap_ (speciousRefDistance))
+    , rolloffFactor: (ap_ (speciousRolloffFactor))
     }
 
-tagToAU StereoPanner'' = (StereoPanner' (ap_ 3.0))
+tagToAU StereoPanner'' = (StereoPanner' (ap_ speciousPanner))
 
 tagToAU Mul'' = Mul'
 
@@ -1631,11 +1683,11 @@ tagToAU Swap'' = Swap'
 
 tagToAU Merger'' = Merger' Nil
 
-tagToAU Constant'' = Constant' (ap_ 1000.0)
+tagToAU Constant'' = Constant' (ap_ speciousConstant)
 
-tagToAU Delay'' = Delay' (ap_ 1000.0)
+tagToAU Delay'' = Delay' (ap_ speciousDelay)
 
-tagToAU Gain'' = Gain' (ap_ awfulGainHack)
+tagToAU Gain'' = Gain' (ap_ speciousGain)
 
 tagToAU Speaker'' = Speaker'
 
@@ -3977,37 +4029,39 @@ data Instruction
   | ConnectTo Int Int (Maybe (Tuple Int Int)) -- id id channelConnections
   | Shuffle (Array (Tuple Int Int)) -- id id, shuffles the map
   | NewUnit Int AudioUnit'' (Maybe Int) (Maybe String) (Maybe Number) (Maybe Number) (Maybe (Tuple (Array Number) (Array Number))) -- new audio unit, maybe with channel info, maybe with a source, maybe with a start time, maybe with an offset, maybe with FF and FB info for IIR filter
-  | SetFrequency Int Number Number -- frequency
-  | SetThreshold Int Number Number -- threshold
-  | SetKnee Int Number Number -- knee
-  | SetRatio Int Number Number -- ratio
-  | SetAttack Int Number Number -- attack
-  | SetRelease Int Number Number -- release
+  | SetFrequency Int Number Number Boolean -- frequency
+  | SetThreshold Int Number Number Boolean -- threshold
+  | SetKnee Int Number Number Boolean -- knee
+  | SetRatio Int Number Number Boolean -- ratio
+  | SetAttack Int Number Number Boolean -- attack
+  | SetRelease Int Number Number Boolean -- release
   | SetBuffer Int Int (Array (Array Number)) -- buffer
-  | SetQ Int Number Number -- q
-  | SetPlaybackRate Int Number Number -- playback rate
+  | SetQ Int Number Number Boolean -- q
+  | SetPlaybackRate Int Number Number Boolean -- playback rate
   | SetPeriodicWave Int (Array Number) (Array Number) -- periodic wave
   | SetCurve Int (Array Number) -- curve
   | SetOversample Int String -- oversample
-  | SetLoopStart Int Number -- loop start
-  | SetLoopEnd Int Number -- loop end
-  | SetPan Int Number Number -- pan for pan node
+  | SetLoopStart Int Number Boolean -- loop start
+  | SetLoopEnd Int Number Boolean -- loop end
+  | SetPan Int Number Number Boolean -- pan for pan node
   | SetGain Int Number Number Boolean -- gain for gain node, boolean if is start
-  | SetDelay Int Number Number -- delay for delay node
-  | SetOffset Int Number Number -- offset for const node
+  | SetDelay Int Number Number Boolean -- delay for delay node
+  | SetOffset Int Number Number Boolean -- offset for const node
+  -- would be nice to have specious custom parameters
+  -- for a next version?
   | SetCustomParam Int String Number Number -- for audio worklet nodes
   | SetConeInnerAngle Int Number
   | SetConeOuterAngle Int Number
   | SetConeOuterGain Int Number
   | SetDistanceModel Int String
   | SetMaxDistance Int Number
-  | SetOrientationX Int Number Number
-  | SetOrientationY Int Number Number
-  | SetOrientationZ Int Number Number
+  | SetOrientationX Int Number Number Boolean
+  | SetOrientationY Int Number Number Boolean
+  | SetOrientationZ Int Number Number Boolean
   | SetPanningModel Int String
-  | SetPositionX Int Number Number
-  | SetPositionY Int Number Number
-  | SetPositionZ Int Number Number
+  | SetPositionX Int Number Number Boolean
+  | SetPositionY Int Number Number Boolean
+  | SetPositionZ Int Number Number Boolean
   | SetRefDistance Int Number
   | SetRolloffFactor Int Number
 
@@ -4037,32 +4091,32 @@ isNewUnit_ (NewUnit _ _ _ _ _ _ _) = true
 isNewUnit_ _ = false
 
 isSetFrequency_ :: Instruction -> Boolean
-isSetFrequency_ (SetFrequency _ _ _) = true
+isSetFrequency_ (SetFrequency _ _ _ _) = true
 
 isSetFrequency_ _ = false
 
 isSetThreshold_ :: Instruction -> Boolean
-isSetThreshold_ (SetThreshold _ _ _) = true
+isSetThreshold_ (SetThreshold _ _ _ _) = true
 
 isSetThreshold_ _ = false
 
 isSetKnee_ :: Instruction -> Boolean
-isSetKnee_ (SetKnee _ _ _) = true
+isSetKnee_ (SetKnee _ _ _ _) = true
 
 isSetKnee_ _ = false
 
 isSetRatio_ :: Instruction -> Boolean
-isSetRatio_ (SetRatio _ _ _) = true
+isSetRatio_ (SetRatio _ _ _ _) = true
 
 isSetRatio_ _ = false
 
 isSetAttack_ :: Instruction -> Boolean
-isSetAttack_ (SetAttack _ _ _) = true
+isSetAttack_ (SetAttack _ _ _ _) = true
 
 isSetAttack_ _ = false
 
 isSetRelease_ :: Instruction -> Boolean
-isSetRelease_ (SetRelease _ _ _) = true
+isSetRelease_ (SetRelease _ _ _ _) = true
 
 isSetRelease_ _ = false
 
@@ -4072,12 +4126,12 @@ isSetBuffer_ (SetBuffer _ _ _) = true
 isSetBuffer_ _ = false
 
 isSetQ_ :: Instruction -> Boolean
-isSetQ_ (SetQ _ _ _) = true
+isSetQ_ (SetQ _ _ _ _) = true
 
 isSetQ_ _ = false
 
 isSetPlaybackRate_ :: Instruction -> Boolean
-isSetPlaybackRate_ (SetPlaybackRate _ _ _) = true
+isSetPlaybackRate_ (SetPlaybackRate _ _ _ _) = true
 
 isSetPlaybackRate_ _ = false
 
@@ -4097,17 +4151,17 @@ isSetOversample_ (SetOversample _ _) = true
 isSetOversample_ _ = false
 
 isSetLoopStart_ :: Instruction -> Boolean
-isSetLoopStart_ (SetLoopStart _ _) = true
+isSetLoopStart_ (SetLoopStart _ _ _) = true
 
 isSetLoopStart_ _ = false
 
 isSetLoopEnd_ :: Instruction -> Boolean
-isSetLoopEnd_ (SetLoopEnd _ _) = true
+isSetLoopEnd_ (SetLoopEnd _ _ _) = true
 
 isSetLoopEnd_ _ = false
 
 isSetPan_ :: Instruction -> Boolean
-isSetPan_ (SetPan _ _ _) = true
+isSetPan_ (SetPan _ _ _ _) = true
 
 isSetPan_ _ = false
 
@@ -4117,12 +4171,12 @@ isSetGain_ (SetGain _ _ _ _) = true
 isSetGain_ _ = false
 
 isSetDelay_ :: Instruction -> Boolean
-isSetDelay_ (SetDelay _ _ _) = true
+isSetDelay_ (SetDelay _ _ _ _) = true
 
 isSetDelay_ _ = false
 
 isSetOffset_ :: Instruction -> Boolean
-isSetOffset_ (SetOffset _ _ _) = true
+isSetOffset_ (SetOffset _ _ _ _) = true
 
 isSetOffset_ _ = false
 
@@ -4157,17 +4211,17 @@ isSetMaxDistance_ (SetMaxDistance _ _) = true
 isSetMaxDistance_ _ = false
 
 isSetOrientationX_ :: Instruction -> Boolean
-isSetOrientationX_ (SetOrientationX _ _ _) = true
+isSetOrientationX_ (SetOrientationX _ _ _ _) = true
 
 isSetOrientationX_ _ = false
 
 isSetOrientationY_ :: Instruction -> Boolean
-isSetOrientationY_ (SetOrientationY _ _ _) = true
+isSetOrientationY_ (SetOrientationY _ _ _ _) = true
 
 isSetOrientationY_ _ = false
 
 isSetOrientationZ_ :: Instruction -> Boolean
-isSetOrientationZ_ (SetOrientationZ _ _ _) = true
+isSetOrientationZ_ (SetOrientationZ _ _ _ _) = true
 
 isSetOrientationZ_ _ = false
 
@@ -4177,17 +4231,17 @@ isSetPanningModel_ (SetPanningModel _ _) = true
 isSetPanningModel_ _ = false
 
 isSetPositionX_ :: Instruction -> Boolean
-isSetPositionX_ (SetPositionX _ _ _) = true
+isSetPositionX_ (SetPositionX _ _ _ _) = true
 
 isSetPositionX_ _ = false
 
 isSetPositionY_ :: Instruction -> Boolean
-isSetPositionY_ (SetPositionY _ _ _) = true
+isSetPositionY_ (SetPositionY _ _ _ _) = true
 
 isSetPositionY_ _ = false
 
 isSetPositionZ_ :: Instruction -> Boolean
-isSetPositionZ_ (SetPositionZ _ _ _) = true
+isSetPositionZ_ (SetPositionZ _ _ _ _) = true
 
 isSetPositionZ_ _ = false
 
@@ -4613,30 +4667,32 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
       (map (uncurry $ uncurry ConnectTo) $ map (\i -> Tuple i (harmonizeCurrChannels i)) conn)
 
   setFQFilter i a b x y =
-    (if napeq a x then [ SetFrequency i (apP a) (apT a) ] else [])
-      <> (if napeq b y then [ SetQ i (apP b) (apT b) ] else [])
+    (if napeq a x then [ SetFrequency i (apP a) (apT a) (apP x == speciousFreq) ] else [])
+      <> (if napeq b y then [ SetQ i (apP b) (apT b) (apP y == speciousQ) ] else [])
 
   setFilter i a b c x y z =
-    (if napeq a x then [ SetFrequency i (apP a) (apT a) ] else [])
-      <> (if napeq b y then [ SetQ i (apP b) (apT b) ] else [])
-      <> (if napeq c z then [ SetGain i (apP c) (apT c) false ] else [])
+    (if napeq a x then [ SetFrequency i (apP a) (apT a) (apP z == speciousFreq) ] else [])
+      <> (if napeq b y then [ SetQ i (apP b) (apT b) (apP y == speciousQ) ] else [])
+      <> (if napeq c z then [ SetGain i (apP c) (apT c) (apP z == speciousGain) ] else [])
 
   setFGFilter i a c x z =
-    (if napeq a x then [ SetFrequency i (apP a) (apT a) ] else [])
-      <> (if napeq c z then [ SetGain i (apP c) (apT c) false ] else [])
+    (if napeq a x then [ SetFrequency i (apP a) (apT a) (apP x == speciousFreq) ] else [])
+      <> (if napeq c z then [ SetGain i (apP c) (apT c) (apP z == speciousGain) ] else [])
 
+  -- uncomment!
+  set' :: Int -> AudioUnit' -> AudioUnit' -> Array Instruction
   set' i (AudioWorkletGenerator' _ n) (AudioWorkletGenerator' _ nx) = scp i n nx
 
   set' i (AudioWorkletProcessor' _ n) (AudioWorkletProcessor' _ nx) = scp i n nx
 
   set' i (AudioWorkletAggregator' _ n) (AudioWorkletAggregator' _ nx) = scp i n nx
 
-  set' i (PlayBuf' _ n _) (PlayBuf' _ nx _) = if napeq n nx then [ SetPlaybackRate i (apP n) (apT n) ] else []
+  set' i (PlayBuf' _ n _) (PlayBuf' _ nx _) = if napeq n nx then [ SetPlaybackRate i (apP n) (apT n) (apP nx == speciousRate) ] else []
 
   set' i (LoopBuf' _ n s e) (LoopBuf' _ nx sx ex) =
-    (if napeq n nx then [ SetPlaybackRate i (apP n) (apT n) ] else [])
-      <> (if s /= sx then [ SetLoopStart i s ] else [])
-      <> (if e /= ex then [ SetLoopEnd i e ] else [])
+    (if napeq n nx then [ SetPlaybackRate i (apP n) (apT n) (apP nx == speciousRate) ] else [])
+      <> (if s /= sx then [ SetLoopStart i s (sx == speciousStart) ] else [])
+      <> (if e /= ex then [ SetLoopEnd i e (ex == speciousEnd) ] else [])
 
   set' i (Lowpass' a b) (Lowpass' x y) = setFQFilter i a b x y
 
@@ -4655,21 +4711,21 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
   set' i (Notch' a b) (Notch' x y) = setFQFilter i a b x y
 
   set' i (DynamicsCompressor' a b c d e) (DynamicsCompressor' v w x y z) =
-    (if napeq a v then [ SetThreshold i (apP a) (apT a) ] else [])
-      <> (if napeq b w then [ SetKnee i (apP b) (apT b) ] else [])
-      <> (if napeq c x then [ SetRatio i (apP c) (apT c) ] else [])
-      <> (if napeq d y then [ SetAttack i (apP d) (apT d) ] else [])
-      <> (if napeq e z then [ SetRelease i (apP e) (apT e) ] else [])
+    (if napeq a v then [ SetThreshold i (apP a) (apT a) (apP v == speciousThreshold) ] else [])
+      <> (if napeq b w then [ SetKnee i (apP b) (apT b) (apP w == speciousKnee) ] else [])
+      <> (if napeq c x then [ SetRatio i (apP c) (apT c) (apP x == speciousRatio) ] else [])
+      <> (if napeq d y then [ SetAttack i (apP d) (apT d) (apP y == speciousAttack) ] else [])
+      <> (if napeq e z then [ SetRelease i (apP e) (apT e) (apP z == speciousRelease) ] else [])
 
-  set' i (SinOsc' n) (SinOsc' nx) = if napeq n nx then [ SetFrequency i (apP n) (apT n) ] else []
+  set' i (SinOsc' n) (SinOsc' nx) = if napeq n nx then [ SetFrequency i (apP n) (apT n) (apP nx == speciousFreq) ] else []
 
-  set' i (SquareOsc' n) (SquareOsc' nx) = if napeq n nx then [ SetFrequency i (apP n) (apT n) ] else []
+  set' i (SquareOsc' n) (SquareOsc' nx) = if napeq n nx then [ SetFrequency i (apP n) (apT n) (apP nx == speciousFreq) ] else []
 
-  set' i (SawtoothOsc' n) (SawtoothOsc' nx) = if napeq n nx then [ SetFrequency i (apP n) (apT n) ] else []
+  set' i (SawtoothOsc' n) (SawtoothOsc' nx) = if napeq n nx then [ SetFrequency i (apP n) (apT n) (apP nx == speciousFreq) ] else []
 
-  set' i (TriangleOsc' n) (TriangleOsc' nx) = if napeq n nx then [ SetFrequency i (apP n) (apT n) ] else []
+  set' i (TriangleOsc' n) (TriangleOsc' nx) = if napeq n nx then [ SetFrequency i (apP n) (apT n) (apP nx == speciousFreq) ] else []
 
-  set' i (PeriodicOsc' n _) (PeriodicOsc' nx _) = if napeq n nx then [ SetFrequency i (apP n) (apT n) ] else []
+  set' i (PeriodicOsc' n _) (PeriodicOsc' nx _) = if napeq n nx then [ SetFrequency i (apP n) (apT n) (apP nx == speciousFreq) ] else []
 
   set' i (WaveShaper' _ o) (WaveShaper' _ ox) =
     if o /= ox then
@@ -4679,7 +4735,7 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
     else
       []
 
-  set' i (StereoPanner' n) (StereoPanner' nx) = if napeq n nx then [ SetPan i (apP n) (apT n) ] else []
+  set' i (StereoPanner' n) (StereoPanner' nx) = if napeq n nx then [ SetPan i (apP n) (apT n) (apP nx == speciousPanner) ] else []
 
   set' i (Panner' n) (Panner' nx) =
     ( ( if napeq n.coneInnerAngle nx.coneInnerAngle then
@@ -4713,19 +4769,19 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
               []
           )
         <> ( if napeq n.orientationX nx.orientationX then
-              [ SetOrientationX i (apP n.orientationX) (apT n.orientationX)
+              [ SetOrientationX i (apP n.orientationX) (apT n.orientationX) (apP nx.orientationX == speciousOrientationX)
               ]
             else
               []
           )
         <> ( if napeq n.orientationY nx.orientationY then
-              [ SetOrientationY i (apP n.orientationY) (apT n.orientationY)
+              [ SetOrientationY i (apP n.orientationY) (apT n.orientationY) (apP nx.orientationY == speciousOrientationY)
               ]
             else
               []
           )
         <> ( if napeq n.orientationZ nx.orientationZ then
-              [ SetOrientationZ i (apP n.orientationZ) (apT n.orientationZ)
+              [ SetOrientationZ i (apP n.orientationZ) (apT n.orientationZ) (apP nx.orientationZ == speciousOrientationZ)
               ]
             else
               []
@@ -4737,19 +4793,19 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
               []
           )
         <> ( if napeq n.positionX nx.positionX then
-              [ SetPositionX i (apP n.positionX) (apT n.positionX)
+              [ SetPositionX i (apP n.positionX) (apT n.positionX) (apP nx.positionX == speciousPositionX)
               ]
             else
               []
           )
         <> ( if napeq n.positionY nx.positionY then
-              [ SetPositionY i (apP n.positionY) (apT n.positionY)
+              [ SetPositionY i (apP n.positionY) (apT n.positionY) (apP nx.positionY == speciousPositionY)
               ]
             else
               []
           )
         <> ( if napeq n.positionZ nx.positionZ then
-              [ SetPositionZ i (apP n.positionZ) (apT n.positionZ)
+              [ SetPositionZ i (apP n.positionZ) (apT n.positionZ) (apP nx.positionZ == speciousPositionZ)
               ]
             else
               []
@@ -4768,11 +4824,11 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
           )
     )
 
-  set' i (Constant' n) (Constant' nx) = if napeq n nx then [ SetOffset i (apP n) (apT n) ] else []
+  set' i (Constant' n) (Constant' nx) = if napeq n nx then [ SetOffset i (apP n) (apT n) (apP nx == speciousOffset) ] else []
 
-  set' i (Delay' n) (Delay' nx) = if napeq n nx then [ SetDelay i (apP n) (apT n) ] else []
+  set' i (Delay' n) (Delay' nx) = if napeq n nx then [ SetDelay i (apP n) (apT n) (apP nx == speciousDelay) ] else []
 
-  set' i (Gain' n) (Gain' nx) = if napeq n nx then [ SetGain i (apP n) (apT n) (apP nx == awfulGainHack) ] else []
+  set' i (Gain' n) (Gain' nx) = if napeq n nx then [ SetGain i (apP n) (apT n) (apP nx == speciousGain) ] else []
 
   set' i _ _ = []
 
