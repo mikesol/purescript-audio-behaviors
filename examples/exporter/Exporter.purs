@@ -25,16 +25,6 @@ scene time =
               : Nil
           )
 
-{-
-accumulator ->
-    Int ->
-    Int ->
-    AudioContext ->
-    AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
-    VisualInfo ->
-    Exporter env exportable ->
-    Effect (Effect Unit)
-    -}
 run ::
   forall microphone track buffer floatArray periodicWave.
   Unit ->
@@ -42,21 +32,22 @@ run ::
   EngineInfo ->
   AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
   VisualInfo ->
-  Exporter String ->
+  Exporter String Unit ->
   Effect (Effect Unit)
 run = runInBrowser scene
 
-exporter :: Exporter String
+exporter :: Exporter String Unit
 exporter =
   { acquire: pure "hello"
   -- this prints to the log, but it can be used for sending audio instructions
   -- anywhere, ie to an external MIDI device
   , use:
-      \env ({ id, timeStamp, audio }) -> do
+      \env ({ id, timeStamp, accumulator, audio }) -> do
         log env
         log $ show id
         log $ show timeStamp
         log $ show audio
+        log $ show accumulator
   , release: \env -> log ("releasing " <> env)
   }
 

@@ -55,7 +55,7 @@ run ::
     (Object floatArray)
     (Object periodicWave) ->
   VisualInfo ->
-  Exporter Unit ->
+  Exporter Unit Unit ->
   Effect (Effect Unit)
 run max =
   runInBrowser_ do
@@ -64,7 +64,7 @@ run max =
 
 macc = midiAccess :: (Effect (Promise MIDIAccess))
 
-exporter = defaultExporter :: Exporter Unit
+exporter = defaultExporter :: Exporter Unit Unit
 
 main :: Effect Unit
 main = pure unit
