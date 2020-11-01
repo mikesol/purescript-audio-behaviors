@@ -387,14 +387,14 @@ run ::
   EngineInfo ->
   AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
   VisualInfo ->
-  Exporter Unit ->
+  Exporter Unit { onset :: Maybe Number } ->
   Effect (Effect Unit)
 run =
   runInBrowser_ do
     mouse <- getMouse
     pure (scene8 mouse)
 
-exporter = defaultExporter :: Exporter Unit
+exporter = defaultExporter :: Exporter Unit { onset :: Maybe Number }
 
 main :: Effect Unit
 main = pure unit

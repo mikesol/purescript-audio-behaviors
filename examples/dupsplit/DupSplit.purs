@@ -19,11 +19,11 @@ run ::
   EngineInfo ->
   AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
   VisualInfo ->
-  Exporter Unit ->
+  Exporter Unit Unit ->
   Effect (Effect Unit)
 run = runInBrowser sceneDup
 
-exporter = defaultExporter :: Exporter Unit
+exporter = defaultExporter :: Exporter Unit Unit
 
 main :: Effect Unit
 main = pure unit

@@ -4909,7 +4909,7 @@ type RunInBrowser callback accumulator env
     EngineInfo ->
     AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
     VisualInfo ->
-    Exporter env ->
+    Exporter env accumulator ->
     Effect (Effect Unit)
 
 type RunInBrowser_ callback accumulator env
@@ -4920,16 +4920,16 @@ type RunInBrowser_ callback accumulator env
     EngineInfo ->
     AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
     VisualInfo ->
-    Exporter env ->
+    Exporter env accumulator ->
     Effect (Effect Unit)
 
-type Exporter env
+type Exporter env accumulator
   = { acquire :: Aff env
-    , use :: env -> BuildingBlocks -> Aff Unit
+    , use :: env -> (BuildingBlocks accumulator) -> Aff Unit
     , release :: env -> Aff Unit
     }
 
-defaultExporter :: Exporter Unit
+defaultExporter :: forall accumulator. Exporter Unit accumulator
 defaultExporter =
   { acquire: pure unit
   , use: \_ _ -> pure unit
@@ -4954,17 +4954,18 @@ class RunnableMedia callback accumulator env where
     EngineInfo ->
     AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
     VisualInfo ->
-    Exporter env ->
+    Exporter env accumulator ->
     Effect (Effect Unit)
 
 data AV ch accumulator
   = AV (Maybe (AudioUnit ch)) (Maybe Drawing) accumulator
 
-type BuildingBlocks
+type BuildingBlocks accumulator
   = { id :: Int
     , timeStamp :: Number
     , audio :: Maybe (Array Instruction)
     , canvas :: Maybe Drawing
+    , accumulator :: accumulator
     }
 
 data Time'AudioInstructions
@@ -4985,13 +4986,13 @@ data IAudioUnit ch accumulator
 getFirstCanvas :: Object (Effect CanvasElement) -> Maybe (Effect CanvasElement)
 getFirstCanvas = map snd <<< A.head <<< O.toUnfoldable
 
-instance soundscapeRunnableMedia :: Pos ch => RunnableMedia (Number -> ABehavior Event (AudioUnit ch)) accumulator env where
+instance soundscapeRunnableMedia :: Pos ch => RunnableMedia (Number -> ABehavior Event (AudioUnit ch)) Unit env where
   runInBrowser f a ac ei ai vi ex = runInBrowser ((\z wh s -> map (\x -> AV (Just x) Nothing unit) (f s)) :: (Unit -> CanvasInfo -> Number -> ABehavior Event (AV ch Unit))) unit ac ei ai vi ex
 
 instance iSoundscapeRunnableMedia :: Pos ch => RunnableMedia (accumulator -> Number -> ABehavior Event (IAudioUnit ch accumulator)) accumulator env where
   runInBrowser f a ac ei ai vi ex = runInBrowser ((\z wh s -> map (\(IAudioUnit xa xz) -> AV (Just xa) Nothing xz) (f z s)) :: (accumulator -> CanvasInfo -> Number -> ABehavior Event (AV ch accumulator))) a ac ei ai vi ex
 
-instance animationRunnable :: RunnableMedia (CanvasInfo -> Number -> ABehavior Event Animation) accumulator env where
+instance animationRunnable :: RunnableMedia (CanvasInfo -> Number -> ABehavior Event Animation) Unit env where
   runInBrowser f a ac ei ai vi ex =
     runInBrowser
       ((\z wh s -> map (\(Animation x) -> (AV (Nothing :: Maybe (AudioUnit D1)) (Just x) z)) (f wh s)) :: (Unit -> CanvasInfo -> Number -> ABehavior Event (AV D1 Unit)))
@@ -5156,6 +5157,7 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
                                   exporter.use
                                     env
                                     { id: curIt
+                                    , accumulator: accumulator
                                     , timeStamp: timeInSeconds
                                     , audio: (ava >>= (const $ Just instructions.i))
                                     , canvas: avv
@@ -5213,7 +5215,7 @@ runInBrowser_ ::
   EngineInfo ->
   AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
   VisualInfo ->
-  Exporter env ->
+  Exporter env accumulator ->
   Effect (Effect Unit)
 runInBrowser_ scene' accumulator ctx engineInfo audioInfo visualInfo exporter = do
   scene <- scene'

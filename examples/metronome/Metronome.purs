@@ -1,7 +1,6 @@
 module FRP.Behavior.Audio.Example.Metronome where
 
 import Prelude
-
 import Data.Array (head, last, range, span)
 import Data.Int (toNumber)
 import Data.Maybe (fromMaybe)
@@ -65,11 +64,11 @@ run ::
   EngineInfo ->
   AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
   VisualInfo ->
-  Exporter Unit ->
+  Exporter Unit Unit ->
   Effect (Effect Unit)
 run = runInBrowser scene
 
-exporter = defaultExporter :: Exporter Unit
+exporter = defaultExporter :: Exporter Unit Unit
 
 main :: Effect Unit
 main = pure unit
