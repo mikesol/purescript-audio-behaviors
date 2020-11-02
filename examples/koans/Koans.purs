@@ -176,8 +176,8 @@ tran transition time =
             ( loopBufT
                 "moo"
                 (defaultParam { param = 1.0 + 0.3 * (sin (0.2 * pi * time)), transition = transition })
-                0.0
-                0.0
+                2.0
+                3.0
             )
         )
 

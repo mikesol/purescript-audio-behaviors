@@ -294,6 +294,8 @@ exports.touchAudio = function (predicates) {
                 );
                 timeToSet = context.currentTime;
               }
+              var nu = [];
+              var lb = {};
               var generators = g;
               for (var i = 0; i < instructions.length; i++) {
                 var c = instructions[i];
@@ -316,6 +318,7 @@ exports.touchAudio = function (predicates) {
                     generators[c.value0[j].value1] = old[c.value0[j].value0];
                   }
                 } else if (predicates.isNewUnit(c)) {
+                  nu.push(c);
                   generators[c.value0] = predicates.isSpeaker(c.value1)
                     ? context.destination
                     : predicates.isMicrophone(c.value1)
@@ -459,80 +462,6 @@ exports.touchAudio = function (predicates) {
                     : predicates.isMerger(c.value1)
                     ? context.createChannelMerger(c.value2.value0)
                     : null;
-                  if (predicates.isSinOsc(c.value1)) {
-                    generators[c.value0].type = "sine";
-                    generators[c.value0].start(timeToSet + c.value4.value0);
-                  } else if (predicates.isLoopBuf(c.value1)) {
-                    generators[c.value0].loop = true;
-                    generators[c.value0].buffer =
-                      audioInfo.buffers[c.value3.value0];
-                    generators[c.value0].start(timeToSet + c.value4.value0);
-                  } else if (predicates.isWaveShaper(c.value1)) {
-                    generators[c.value0].curve =
-                      audioInfo.floatArrays[c.value3.value0];
-                  } else if (predicates.isConvolver(c.value1)) {
-                    generators[c.value0].buffer =
-                      audioInfo.buffers[c.value3.value0];
-                  } else if (predicates.isPlayBuf(c.value1)) {
-                    generators[c.value0].loop = false;
-                    generators[c.value0].buffer =
-                      audioInfo.buffers[c.value3.value0];
-                    generators[c.value0].start(
-                      timeToSet + c.value4.value0,
-                      c.value5.value0
-                    );
-                  } else if (predicates.isPlay(c.value1)) {
-                    // todo - if the same element is resumed via play it won't
-                    // work in the current setup
-                    // this is because there is a 1-to-1 relationship between source
-                    // and media element
-                    // the current workaround is to create multiple media elements.
-                    // todo - add delay somehow...
-                    audioInfo.tracks[c.value3.value0].play();
-                  } else if (predicates.isConstant(c.value1)) {
-                    generators[c.value0].start(timeToSet + c.value4.value0);
-                  } else if (predicates.isLowpass(c.value1)) {
-                    generators[c.value0].type = "lowpass";
-                  } else if (predicates.isBandpass(c.value1)) {
-                    generators[c.value0].type = "bandpass";
-                  } else if (predicates.isLowshelf(c.value1)) {
-                    generators[c.value0].type = "lowshelf";
-                  } else if (predicates.isHighshelf(c.value1)) {
-                    generators[c.value0].type = "highshelf";
-                  } else if (predicates.isNotch(c.value1)) {
-                    generators[c.value0].type = "notch";
-                  } else if (predicates.isAllpass(c.value1)) {
-                    generators[c.value0].type = "allpass";
-                  } else if (predicates.isPeaking(c.value1)) {
-                    generators[c.value0].type = "peaking";
-                  } else if (predicates.isHighpass(c.value1)) {
-                    generators[c.value0].type = "highpass";
-                  } else if (predicates.isSquareOsc(c.value1)) {
-                    generators[c.value0].type = "square";
-                    generators[c.value0].start(timeToSet + c.value4.value0);
-                  } else if (predicates.isTriangleOsc(c.value1)) {
-                    generators[c.value0].type = "triangle";
-                    generators[c.value0].start(timeToSet + c.value4.value0);
-                  } else if (predicates.isSawtoothOsc(c.value1)) {
-                    generators[c.value0].type = "sawtooth";
-                    generators[c.value0].start(timeToSet + c.value4.value0);
-                  } else if (predicates.isPeriodicOsc(c.value1)) {
-                    // generators[c.value0].type = "custom";
-                    generators[c.value0].setPeriodicWave(
-                      audioInfo.periodicWaves[c.value3.value0]
-                    );
-                    generators[c.value0].start(timeToSet + c.value4.value0);
-                  } else if (predicates.isSplitRes(c.value1)) {
-                    generators[c.value0].gain.linearRampToValueAtTime(
-                      1.0,
-                      timeToSet
-                    );
-                  } else if (predicates.isDupRes(c.value1)) {
-                    generators[c.value0].gain.linearRampToValueAtTime(
-                      1.0,
-                      timeToSet
-                    );
-                  }
                 } else if (predicates.isSetFrequency(c)) {
                   genericSetter(
                     predicates,
@@ -575,6 +504,7 @@ exports.touchAudio = function (predicates) {
                 } else if (predicates.isSetOffset(c)) {
                   genericSetter(predicates, generators, c, "offset", timeToSet);
                 } else if (predicates.isSetLoopStart(c)) {
+                  lb[c.value0] = c.value1;
                   generators[c.value0].loopStart = c.value1;
                 } else if (predicates.isSetLoopEnd(c)) {
                   generators[c.value0].loopEnd = c.value1;
@@ -687,6 +617,86 @@ exports.touchAudio = function (predicates) {
                   generators[c.value0].refDistance = c.value1;
                 } else if (predicates.isSetRolloffFactor(c)) {
                   generators[c.value0].rolloffFactor = c.value1;
+                }
+              }
+              for (var i = 0; i < nu.length; i++) {
+                var c = nu[i];
+                if (predicates.isSinOsc(c.value1)) {
+                  generators[c.value0].type = "sine";
+                  generators[c.value0].start(timeToSet + c.value4.value0);
+                } else if (predicates.isLoopBuf(c.value1)) {
+                  generators[c.value0].loop = true;
+                  generators[c.value0].buffer =
+                    audioInfo.buffers[c.value3.value0];
+                  generators[c.value0].start(
+                    timeToSet + c.value4.value0,
+                    lb[c.value0]
+                  );
+                } else if (predicates.isWaveShaper(c.value1)) {
+                  generators[c.value0].curve =
+                    audioInfo.floatArrays[c.value3.value0];
+                } else if (predicates.isConvolver(c.value1)) {
+                  generators[c.value0].buffer =
+                    audioInfo.buffers[c.value3.value0];
+                } else if (predicates.isPlayBuf(c.value1)) {
+                  generators[c.value0].loop = false;
+                  generators[c.value0].buffer =
+                    audioInfo.buffers[c.value3.value0];
+                  generators[c.value0].start(
+                    timeToSet + c.value4.value0,
+                    c.value5.value0
+                  );
+                } else if (predicates.isPlay(c.value1)) {
+                  // todo - if the same element is resumed via play it won't
+                  // work in the current setup
+                  // this is because there is a 1-to-1 relationship between source
+                  // and media element
+                  // the current workaround is to create multiple media elements.
+                  // todo - add delay somehow...
+                  audioInfo.tracks[c.value3.value0].play();
+                } else if (predicates.isConstant(c.value1)) {
+                  generators[c.value0].start(timeToSet + c.value4.value0);
+                } else if (predicates.isLowpass(c.value1)) {
+                  generators[c.value0].type = "lowpass";
+                } else if (predicates.isBandpass(c.value1)) {
+                  generators[c.value0].type = "bandpass";
+                } else if (predicates.isLowshelf(c.value1)) {
+                  generators[c.value0].type = "lowshelf";
+                } else if (predicates.isHighshelf(c.value1)) {
+                  generators[c.value0].type = "highshelf";
+                } else if (predicates.isNotch(c.value1)) {
+                  generators[c.value0].type = "notch";
+                } else if (predicates.isAllpass(c.value1)) {
+                  generators[c.value0].type = "allpass";
+                } else if (predicates.isPeaking(c.value1)) {
+                  generators[c.value0].type = "peaking";
+                } else if (predicates.isHighpass(c.value1)) {
+                  generators[c.value0].type = "highpass";
+                } else if (predicates.isSquareOsc(c.value1)) {
+                  generators[c.value0].type = "square";
+                  generators[c.value0].start(timeToSet + c.value4.value0);
+                } else if (predicates.isTriangleOsc(c.value1)) {
+                  generators[c.value0].type = "triangle";
+                  generators[c.value0].start(timeToSet + c.value4.value0);
+                } else if (predicates.isSawtoothOsc(c.value1)) {
+                  generators[c.value0].type = "sawtooth";
+                  generators[c.value0].start(timeToSet + c.value4.value0);
+                } else if (predicates.isPeriodicOsc(c.value1)) {
+                  // generators[c.value0].type = "custom";
+                  generators[c.value0].setPeriodicWave(
+                    audioInfo.periodicWaves[c.value3.value0]
+                  );
+                  generators[c.value0].start(timeToSet + c.value4.value0);
+                } else if (predicates.isSplitRes(c.value1)) {
+                  generators[c.value0].gain.linearRampToValueAtTime(
+                    1.0,
+                    timeToSet
+                  );
+                } else if (predicates.isDupRes(c.value1)) {
+                  generators[c.value0].gain.linearRampToValueAtTime(
+                    1.0,
+                    timeToSet
+                  );
                 }
               }
               return generators;
