@@ -9,7 +9,7 @@ import Data.Typelevel.Num (D1, D2)
 import Data.Vec ((+>), empty)
 import Effect (Effect)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AudioContext, AudioInfo, AudioParameterTransition(..), AudioUnit, EngineInfo, Exporter, Oversample(..), VisualInfo, allpass, bandpass, convolver, defaultExporter, defaultParam, delay, dup1, dynamicsCompressor, g'add, g'bandpass, g'delay, g'gain, gain', graph, highpass, highshelf, iirFilter, loopBuf, loopBufT, lowpass, lowshelf, merger, microphone, notch, panner, pannerMono, pannerVars', peaking, periodicOsc, play, playBuf, playBufWithOffset, playBuf_, play_, runInBrowser, sawtoothOsc, sinOsc, spatialPanner, speaker, speaker', squareOsc, triangleOsc, waveShaper)
+import FRP.Behavior.Audio (AudioContext, AudioInfo, AudioParameterTransition, AudioUnit, EngineInfo, Exporter, Oversample(..), VisualInfo, allpass, bandpass, convolver, defaultExporter, defaultParam, delay, dup1, dynamicsCompressor, evalPiecewise, g'add, g'bandpass, g'delay, g'gain, gain', gainT_', graph, highpass, highshelf, iirFilter, loopBuf, loopBufT, lowpass, lowshelf, merger, microphone, notch, panner, pannerMono, pannerVars', peaking, periodicOsc, play, playBuf, playBufWithOffset, playBuf_, play_, runInBrowser, sawtoothOsc, sinOsc, sinOsc_, spatialPanner, speaker, speaker', squareOsc, triangleOsc, waveShaper)
 import Foreign.Object (Object)
 import Math (pi, sin)
 import Record.Extra (SLProxy(..), SNil)
@@ -70,6 +70,24 @@ ringMod _ =
         ( (gain' 0.5 $ sinOsc (440.0))
             * (gain' 0.5 $ sinOsc (30.0))
         )
+
+-- sharp attack
+pwfA :: Array (Tuple Number Number)
+pwfA =
+  [ Tuple 1.0 0.0
+  , Tuple (1.06) 0.1
+  , Tuple (1.1) 0.1
+  , Tuple (1.15) 0.0
+  ]
+
+atx :: Number -> Behavior (AudioUnit D1)
+atx t =
+  pure
+    ( speaker'
+        ( gainT_' ("g0") (evalPiecewise 0.02 (pwfA) t)
+            $ sinOsc_ ("s0") 100.0
+        )
+    )
 
 -- filters
 f0 :: Number -> Behavior (AudioUnit D1)
@@ -232,9 +250,11 @@ run ::
   VisualInfo ->
   Exporter Unit Unit ->
   Effect (Effect Unit)
-run = runInBrowser (tran ExponentialRamp)
+run = runInBrowser (atx)
 
-exporter = defaultExporter :: Exporter Unit Unit
+exporter =
+  defaultExporter ::
+    Exporter Unit Unit
 
 main :: Effect Unit
 main = pure unit
