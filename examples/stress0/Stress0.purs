@@ -12,7 +12,7 @@ import Data.Tuple (Tuple(..), fst, snd)
 import Data.Typelevel.Num (D1)
 import Effect (Effect)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AudioContext, AudioInfo, AudioParameter(..), AudioUnit, EngineInfo, VisualInfo, Exporter, defaultExporter, gain', gainT', gainT_', gain_', runInBrowser, sinOsc, sinOsc_, speaker, speaker_)
+import FRP.Behavior.Audio (AudioContext, AudioInfo, AudioParameter, AudioUnit, EngineInfo, Exporter, VisualInfo, defaultExporter, defaultParam, gain', gainT', gainT_', gain_', runInBrowser, sinOsc, sinOsc_, speaker, speaker_)
 import Foreign.Object (Object)
 
 pwf0 :: Array (Tuple Number Number)
@@ -72,7 +72,7 @@ kr = 20.0 / 1000.0 :: Number -- the control rate in seconds, or 66.66667 Hz
 split :: ∀ t12 t13. Ord t12 ⇒ t12 → Array (Tuple t12 t13) → { init ∷ Array (Tuple t12 t13), rest ∷ Array (Tuple t12 t13) }
 split s p = span ((s >= _) <<< fst) p
 
-gn :: Number → Array (Tuple Number Number) → AudioParameter Number
+gn :: Number → Array (Tuple Number Number) → AudioParameter
 gn s p =
   let
     ht = split s p
@@ -87,7 +87,7 @@ gn s p =
         -- we lock to that
         -- otherwise, we interpolate
         if (fst right - s) < kr then
-          AudioParameter { param: (snd right), timeOffset: (fst right - s) }
+          defaultParam { param = (snd right), timeOffset = (fst right - s) }
         else
           let
             m = (snd right - snd left) / (fst right - fst left)
@@ -95,7 +95,7 @@ gn s p =
             let
               b = (snd right - (m * fst right))
             in
-              AudioParameter { param: (m * s + b), timeOffset: 0.0 }
+              defaultParam { param = (m * s + b), timeOffset = 0.0 }
 
 sceneThatHitsDeadline :: Behavior Number -> Behavior (AudioUnit D1)
 sceneThatHitsDeadline time = f <$> time

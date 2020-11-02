@@ -278,7 +278,9 @@ module FRP.Behavior.Audio
   , AudioUnit'(..)
   , SampleFrame
   , AudioProcessor
-  , AudioParameter(..)
+  , defaultParam
+  , AudioParameter
+  , AudioParameterTransition(..)
   , AudioBuffer
   , AudioUnit
   , AudioContext
@@ -862,35 +864,45 @@ data Oversample
 
 derive instance genericOversample :: Generic Oversample _
 
-instance showOversampler :: Show Oversample where
+instance showOversample :: Show Oversample where
   show s = genericShow s
 
 derive instance eqOversample :: Eq Oversample
 
-newtype AudioParameter a
-  = AudioParameter
-  { param :: a
-  , timeOffset :: Number
-  }
+data AudioParameterTransition
+  = LinearRamp
 
-instance audioParameterFunctor :: Functor AudioParameter where
-  map f (AudioParameter { param, timeOffset }) = AudioParameter { param: f param, timeOffset }
+derive instance genericAudioParameterTransition :: Generic AudioParameterTransition _
+
+instance showAudioParameterTransition :: Show AudioParameterTransition where
+  show s = genericShow s
+
+derive instance eqAudioParameterTransition :: Eq AudioParameterTransition
+
+type AudioParameter
+  = { param :: Number
+    , timeOffset :: Number
+    , transition :: AudioParameterTransition
+    }
+
+defaultParam :: AudioParameter
+defaultParam = { param: 0.0, timeOffset: 0.0, transition: LinearRamp }
 
 type PannerVars
-  = { coneInnerAngle :: (AudioParameter Number)
-    , coneOuterAngle :: (AudioParameter Number)
-    , coneOuterGain :: (AudioParameter Number)
+  = { coneInnerAngle :: (AudioParameter)
+    , coneOuterAngle :: (AudioParameter)
+    , coneOuterGain :: (AudioParameter)
     , distanceModel :: DistanceModel
-    , maxDistance :: (AudioParameter Number)
-    , orientationX :: (AudioParameter Number)
-    , orientationY :: (AudioParameter Number)
-    , orientationZ :: (AudioParameter Number)
+    , maxDistance :: (AudioParameter)
+    , orientationX :: (AudioParameter)
+    , orientationY :: (AudioParameter)
+    , orientationZ :: (AudioParameter)
     , panningModel :: PanningModel
-    , positionX :: (AudioParameter Number)
-    , positionY :: (AudioParameter Number)
-    , positionZ :: (AudioParameter Number)
-    , refDistance :: (AudioParameter Number)
-    , rolloffFactor :: (AudioParameter Number)
+    , positionX :: (AudioParameter)
+    , positionY :: (AudioParameter)
+    , positionZ :: (AudioParameter)
+    , refDistance :: (AudioParameter)
+    , rolloffFactor :: (AudioParameter)
     }
 
 type PannerVars'
@@ -932,28 +944,28 @@ pannerVars :: PannerVars
 pannerVars = pannerVarsAsAudioParams pannerVars'
 
 data AudioGraphProcessor
-  = GAudioWorkletProcessor MString String (Object (AudioParameter Number))
+  = GAudioWorkletProcessor MString String (Object (AudioParameter))
   | GIIRFilter MString (Array Number) (Array Number)
-  | GLowpass MString (AudioParameter Number) (AudioParameter Number)
-  | GHighpass MString (AudioParameter Number) (AudioParameter Number)
-  | GBandpass MString (AudioParameter Number) (AudioParameter Number)
-  | GLowshelf MString (AudioParameter Number) (AudioParameter Number)
-  | GHighshelf MString (AudioParameter Number) (AudioParameter Number)
-  | GPeaking MString (AudioParameter Number) (AudioParameter Number) (AudioParameter Number)
-  | GNotch MString (AudioParameter Number) (AudioParameter Number)
-  | GAllpass MString (AudioParameter Number) (AudioParameter Number)
+  | GLowpass MString (AudioParameter) (AudioParameter)
+  | GHighpass MString (AudioParameter) (AudioParameter)
+  | GBandpass MString (AudioParameter) (AudioParameter)
+  | GLowshelf MString (AudioParameter) (AudioParameter)
+  | GHighshelf MString (AudioParameter) (AudioParameter)
+  | GPeaking MString (AudioParameter) (AudioParameter) (AudioParameter)
+  | GNotch MString (AudioParameter) (AudioParameter)
+  | GAllpass MString (AudioParameter) (AudioParameter)
   | GConvolver MString String
-  | GDynamicsCompressor MString (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioParameter Number)
+  | GDynamicsCompressor MString (AudioParameter) (AudioParameter) (AudioParameter) (AudioParameter) (AudioParameter)
   | GWaveShaper MString String Oversample
-  | GStereoPanner MString (AudioParameter Number)
+  | GStereoPanner MString (AudioParameter)
   | GPanner MString PannerVars
-  | GDelay MString (AudioParameter Number)
+  | GDelay MString (AudioParameter)
 
 data AudioGraphAggregator
-  = GAudioWorkletAggregator MString String (Object (AudioParameter Number))
+  = GAudioWorkletAggregator MString String (Object (AudioParameter))
   | GMul MString
   | GAdd MString
-  | GGain MString (AudioParameter Number)
+  | GGain MString (AudioParameter)
 
 type AudioGraph ch
   = { generators :: O.Object (AudioUnit ch)
@@ -963,47 +975,47 @@ type AudioGraph ch
 
 data AudioUnit ch
   = Microphone MString
-  | AudioWorkletGenerator MString String (Object (AudioParameter Number))
-  | AudioWorkletProcessor MString String (Object (AudioParameter Number)) (AudioUnit ch)
-  | AudioWorkletAggregator MString String (Object (AudioParameter Number)) (NonEmpty List (AudioUnit ch))
+  | AudioWorkletGenerator MString String (Object (AudioParameter))
+  | AudioWorkletProcessor MString String (Object (AudioParameter)) (AudioUnit ch)
+  | AudioWorkletAggregator MString String (Object (AudioParameter)) (NonEmpty List (AudioUnit ch))
   | Play MString String Number
-  | PlayBuf MString String (AudioParameter Number) (AudioParameter Number)
-  | LoopBuf MString String (AudioParameter Number) Number Number
+  | PlayBuf MString String (AudioParameter) (AudioParameter)
+  | LoopBuf MString String (AudioParameter) Number Number
   | IIRFilter MString (Array Number) (Array Number) (AudioUnit ch)
-  | Lowpass MString (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
-  | Highpass MString (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
-  | Bandpass MString (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
-  | Lowshelf MString (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
-  | Highshelf MString (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
-  | Peaking MString (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
-  | Notch MString (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
-  | Allpass MString (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
+  | Lowpass MString (AudioParameter) (AudioParameter) (AudioUnit ch)
+  | Highpass MString (AudioParameter) (AudioParameter) (AudioUnit ch)
+  | Bandpass MString (AudioParameter) (AudioParameter) (AudioUnit ch)
+  | Lowshelf MString (AudioParameter) (AudioParameter) (AudioUnit ch)
+  | Highshelf MString (AudioParameter) (AudioParameter) (AudioUnit ch)
+  | Peaking MString (AudioParameter) (AudioParameter) (AudioParameter) (AudioUnit ch)
+  | Notch MString (AudioParameter) (AudioParameter) (AudioUnit ch)
+  | Allpass MString (AudioParameter) (AudioParameter) (AudioUnit ch)
   | Convolver MString String (AudioUnit ch)
-  | DynamicsCompressor MString (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioUnit ch)
-  | SawtoothOsc MString (AudioParameter Number)
-  | TriangleOsc MString (AudioParameter Number)
-  | PeriodicOsc MString (AudioParameter Number) String
+  | DynamicsCompressor MString (AudioParameter) (AudioParameter) (AudioParameter) (AudioParameter) (AudioParameter) (AudioUnit ch)
+  | SawtoothOsc MString (AudioParameter)
+  | TriangleOsc MString (AudioParameter)
+  | PeriodicOsc MString (AudioParameter) String
   | WaveShaper MString String Oversample (AudioUnit ch)
   | Dup1 MString (AudioUnit D1) (AudioUnit D1 -> AudioUnit ch)
   | Dup2 MString (AudioUnit D2) (AudioUnit D2 -> AudioUnit ch)
   | Dup3 MString (AudioUnit D3) (AudioUnit D3 -> AudioUnit ch)
   | Dup4 MString (AudioUnit D4) (AudioUnit D4 -> AudioUnit ch)
   | Dup5 MString (AudioUnit D5) (AudioUnit D5 -> AudioUnit ch)
-  | SinOsc MString (AudioParameter Number)
-  | SquareOsc MString (AudioParameter Number)
+  | SinOsc MString (AudioParameter)
+  | SquareOsc MString (AudioParameter)
   | Split1 MString (AudioUnit D1) (Vec D1 (AudioUnit D1) -> AudioUnit ch)
   | Split2 MString (AudioUnit D2) (Vec D2 (AudioUnit D1) -> AudioUnit ch)
   | Split3 MString (AudioUnit D3) (Vec D3 (AudioUnit D1) -> AudioUnit ch)
   | Split4 MString (AudioUnit D4) (Vec D4 (AudioUnit D1) -> AudioUnit ch)
   | Split5 MString (AudioUnit D5) (Vec D5 (AudioUnit D1) -> AudioUnit ch)
   | Panner MString PannerVars (AudioUnit ch)
-  | StereoPanner MString (AudioParameter Number) (AudioUnit ch)
+  | StereoPanner MString (AudioParameter) (AudioUnit ch)
   | Mul MString (NonEmpty List (AudioUnit ch))
   | Add MString (NonEmpty List (AudioUnit ch))
   | Merger MString (Vec ch (AudioUnit D1))
-  | Constant MString (AudioParameter Number)
-  | Delay MString (AudioParameter Number) (AudioUnit ch)
-  | Gain MString (AudioParameter Number) (NonEmpty List (AudioUnit ch))
+  | Constant MString (AudioParameter)
+  | Delay MString (AudioParameter) (AudioUnit ch)
+  | Gain MString (AudioParameter) (NonEmpty List (AudioUnit ch))
   | Speaker MString (NonEmpty List (AudioUnit ch))
   | NoSound MString
   | Graph MString (AudioGraph ch)
@@ -1012,55 +1024,55 @@ data AudioUnit ch
 
 data AudioUnit'
   = Microphone'
-  | AudioWorkletGenerator' String (Object (AudioParameter Number))
-  | AudioWorkletProcessor' String (Object (AudioParameter Number))
-  | AudioWorkletAggregator' String (Object (AudioParameter Number))
+  | AudioWorkletGenerator' String (Object (AudioParameter))
+  | AudioWorkletProcessor' String (Object (AudioParameter))
+  | AudioWorkletAggregator' String (Object (AudioParameter))
   | Play' String Number
-  | PlayBuf' String (AudioParameter Number) (AudioParameter Number)
-  | LoopBuf' String (AudioParameter Number) Number Number
+  | PlayBuf' String (AudioParameter) (AudioParameter)
+  | LoopBuf' String (AudioParameter) Number Number
   | IIRFilter' (Array Number) (Array Number)
-  | Lowpass' (AudioParameter Number) (AudioParameter Number)
-  | Highpass' (AudioParameter Number) (AudioParameter Number)
-  | Bandpass' (AudioParameter Number) (AudioParameter Number)
-  | Lowshelf' (AudioParameter Number) (AudioParameter Number)
-  | Highshelf' (AudioParameter Number) (AudioParameter Number)
-  | Peaking' (AudioParameter Number) (AudioParameter Number) (AudioParameter Number)
-  | Notch' (AudioParameter Number) (AudioParameter Number)
-  | Allpass' (AudioParameter Number) (AudioParameter Number)
+  | Lowpass' (AudioParameter) (AudioParameter)
+  | Highpass' (AudioParameter) (AudioParameter)
+  | Bandpass' (AudioParameter) (AudioParameter)
+  | Lowshelf' (AudioParameter) (AudioParameter)
+  | Highshelf' (AudioParameter) (AudioParameter)
+  | Peaking' (AudioParameter) (AudioParameter) (AudioParameter)
+  | Notch' (AudioParameter) (AudioParameter)
+  | Allpass' (AudioParameter) (AudioParameter)
   | Convolver' String
-  | DynamicsCompressor' (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioParameter Number) (AudioParameter Number)
-  | SawtoothOsc' (AudioParameter Number)
-  | TriangleOsc' (AudioParameter Number)
-  | PeriodicOsc' (AudioParameter Number) String
+  | DynamicsCompressor' (AudioParameter) (AudioParameter) (AudioParameter) (AudioParameter) (AudioParameter)
+  | SawtoothOsc' (AudioParameter)
+  | TriangleOsc' (AudioParameter)
+  | PeriodicOsc' (AudioParameter) String
   | WaveShaper' String Oversample
   | Dup'
-  | SinOsc' (AudioParameter Number)
-  | SquareOsc' (AudioParameter Number)
+  | SinOsc' (AudioParameter)
+  | SquareOsc' (AudioParameter)
   | Splitter' Int
-  | StereoPanner' (AudioParameter Number)
+  | StereoPanner' (AudioParameter)
   | Panner'
-    { coneInnerAngle :: (AudioParameter Number)
-    , coneOuterAngle :: (AudioParameter Number)
-    , coneOuterGain :: (AudioParameter Number)
+    { coneInnerAngle :: (AudioParameter)
+    , coneOuterAngle :: (AudioParameter)
+    , coneOuterGain :: (AudioParameter)
     , distanceModel :: DistanceModel
-    , maxDistance :: (AudioParameter Number)
-    , orientationX :: (AudioParameter Number)
-    , orientationY :: (AudioParameter Number)
-    , orientationZ :: (AudioParameter Number)
+    , maxDistance :: (AudioParameter)
+    , orientationX :: (AudioParameter)
+    , orientationY :: (AudioParameter)
+    , orientationZ :: (AudioParameter)
     , panningModel :: PanningModel
-    , positionX :: (AudioParameter Number)
-    , positionY :: (AudioParameter Number)
-    , positionZ :: (AudioParameter Number)
-    , refDistance :: (AudioParameter Number)
-    , rolloffFactor :: (AudioParameter Number)
+    , positionX :: (AudioParameter)
+    , positionY :: (AudioParameter)
+    , positionZ :: (AudioParameter)
+    , refDistance :: (AudioParameter)
+    , rolloffFactor :: (AudioParameter)
     }
   | Mul'
   | Add'
   | Swap'
   | Merger' (List Int)
-  | Constant' (AudioParameter Number)
-  | Delay' (AudioParameter Number)
-  | Gain' (AudioParameter Number)
+  | Constant' (AudioParameter)
+  | Delay' (AudioParameter)
+  | Gain' (AudioParameter)
   | Speaker'
   | NoSound'
   | SplitRes' Int
@@ -1947,7 +1959,7 @@ audioToPtr = go (-1) DS.empty
         merge ptr
           { head: ptr.ptr
           , prev: DS.empty :: Set Int
-          , au: (Constant' (AudioParameter { param: 0.0, timeOffset: 0.0 }))
+          , au: (Constant' ({ param: 0.0, timeOffset: 0.0, transition: LinearRamp }))
           , name: auHack.name
           }
     in
@@ -2171,42 +2183,18 @@ type PtrInfo
 
   go' ptr v@(Graph name g) = graphthrough ptr v g
 
-apP :: forall a. AudioParameter a -> a
-apP (AudioParameter { param }) = param
+apP :: AudioParameter -> Number
+apP ({ param }) = param
 
-apT :: forall a. AudioParameter a -> Number
-apT (AudioParameter { timeOffset }) = timeOffset
+apT :: AudioParameter -> Number
+apT ({ timeOffset }) = timeOffset
 
-ap_ :: forall a. a -> AudioParameter a
+ap_ :: Number -> AudioParameter
 ap_ a =
-  AudioParameter
-    { param: a
-    , timeOffset: 0.0
-    }
-
-instance showAPNum :: Show (AudioParameter Number) where
-  show (AudioParameter s) = show s
-
-instance showAPANum :: Show (AudioParameter (Array Number)) where
-  show (AudioParameter s) = show s
-
-instance showAPB :: Show (AudioParameter AudioBuffer) where
-  show (AudioParameter s) = show s
-
-instance showAPO :: Show (AudioParameter Oversample) where
-  show (AudioParameter s) = show s
-
-instance eqAPNum :: Eq (AudioParameter Number) where
-  eq (AudioParameter s) (AudioParameter r) = s == r
-
-instance eqAPANum :: Eq (AudioParameter (Array Number)) where
-  eq (AudioParameter s) (AudioParameter r) = s == r
-
-instance eqAPB :: Eq (AudioParameter AudioBuffer) where
-  eq (AudioParameter s) (AudioParameter r) = s == r
-
-instance eqAPO :: Eq (AudioParameter Oversample) where
-  eq (AudioParameter s) (AudioParameter r) = s == r
+  { param: a
+  , timeOffset: 0.0
+  , transition: LinearRamp
+  }
 
 -- | The microphone.
 -- |
@@ -2277,7 +2265,7 @@ audioWorkletGeneratorT ::
   forall ch.
   Pos ch =>
   String ->
-  Object (AudioParameter Number) ->
+  Object (AudioParameter) ->
   AudioUnit ch
 audioWorkletGeneratorT handle n = AudioWorkletGenerator Nothing handle n
 
@@ -2286,7 +2274,7 @@ audioWorkletGeneratorT_ ::
   Pos ch =>
   String ->
   String ->
-  Object (AudioParameter Number) ->
+  Object (AudioParameter) ->
   AudioUnit ch
 audioWorkletGeneratorT_ s handle n = AudioWorkletGenerator (Just s) handle n
 
@@ -2317,7 +2305,7 @@ audioWorkletProcessorT ::
   forall ch.
   Pos ch =>
   String ->
-  Object (AudioParameter Number) ->
+  Object (AudioParameter) ->
   AudioUnit ch ->
   AudioUnit ch
 audioWorkletProcessorT handle n = AudioWorkletProcessor Nothing handle n
@@ -2327,7 +2315,7 @@ audioWorkletProcessorT_ ::
   Pos ch =>
   String ->
   String ->
-  Object (AudioParameter Number) ->
+  Object (AudioParameter) ->
   AudioUnit ch ->
   AudioUnit ch
 audioWorkletProcessorT_ s handle n = AudioWorkletProcessor (Just s) handle n
@@ -2361,7 +2349,7 @@ audioWorkletAggregatorT ::
   forall ch.
   Pos ch =>
   String ->
-  Object (AudioParameter Number) ->
+  Object (AudioParameter) ->
   AudioUnit ch ->
   AudioUnit ch ->
   AudioUnit ch
@@ -2372,7 +2360,7 @@ audioWorkletAggregatorT_ ::
   Pos ch =>
   String ->
   String ->
-  Object (AudioParameter Number) ->
+  Object (AudioParameter) ->
   AudioUnit ch ->
   AudioUnit ch ->
   AudioUnit ch
@@ -2403,7 +2391,7 @@ playBufT ::
   forall ch.
   Pos ch =>
   String ->
-  AudioParameter Number ->
+  (AudioParameter) ->
   AudioUnit ch
 playBufT handle n = PlayBuf Nothing handle n (ap_ 0.0)
 
@@ -2412,7 +2400,7 @@ playBufT_ ::
   Pos ch =>
   String ->
   String ->
-  AudioParameter Number ->
+  (AudioParameter) ->
   AudioUnit ch
 playBufT_ s handle n = PlayBuf (Just s) handle n (ap_ 0.0)
 
@@ -2439,8 +2427,8 @@ playBufWithOffsetT ::
   forall ch.
   Pos ch =>
   String ->
-  AudioParameter Number ->
-  AudioParameter Number ->
+  (AudioParameter) ->
+  (AudioParameter) ->
   AudioUnit ch
 playBufWithOffsetT handle n o = PlayBuf Nothing handle n o
 
@@ -2449,8 +2437,8 @@ playBufWithOffsetT_ ::
   Pos ch =>
   String ->
   String ->
-  AudioParameter Number ->
-  AudioParameter Number ->
+  (AudioParameter) ->
+  (AudioParameter) ->
   AudioUnit ch
 playBufWithOffsetT_ s handle n o = PlayBuf (Just s) handle n o
 
@@ -2485,7 +2473,7 @@ loopBufT ::
   forall ch.
   Pos ch =>
   String ->
-  AudioParameter Number ->
+  (AudioParameter) ->
   Number ->
   Number ->
   AudioUnit ch
@@ -2496,7 +2484,7 @@ loopBufT_ ::
   Pos ch =>
   String ->
   String ->
-  AudioParameter Number ->
+  (AudioParameter) ->
   Number ->
   Number ->
   AudioUnit ch
@@ -2538,10 +2526,10 @@ lowpass a b = Lowpass Nothing (ap_ a) (ap_ b)
 lowpass_ :: forall ch. Pos ch => String -> Number -> Number -> AudioUnit ch -> AudioUnit ch
 lowpass_ s a b = Lowpass (Just s) (ap_ a) (ap_ b)
 
-lowpassT :: forall ch. Pos ch => AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+lowpassT :: forall ch. Pos ch => (AudioParameter) -> (AudioParameter) -> AudioUnit ch -> AudioUnit ch
 lowpassT a b = Lowpass Nothing a b
 
-lowpassT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+lowpassT_ :: forall ch. Pos ch => String -> (AudioParameter) -> (AudioParameter) -> AudioUnit ch -> AudioUnit ch
 lowpassT_ s a b = Lowpass (Just s) a b
 
 -- | A highpass filter.
@@ -2554,10 +2542,10 @@ highpass a b = Highpass Nothing (ap_ a) (ap_ b)
 highpass_ :: forall ch. Pos ch => String -> Number -> Number -> AudioUnit ch -> AudioUnit ch
 highpass_ s a b = Highpass (Just s) (ap_ a) (ap_ b)
 
-highpassT :: forall ch. Pos ch => AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+highpassT :: forall ch. Pos ch => (AudioParameter) -> (AudioParameter) -> AudioUnit ch -> AudioUnit ch
 highpassT a b = Highpass Nothing a b
 
-highpassT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+highpassT_ :: forall ch. Pos ch => String -> (AudioParameter) -> (AudioParameter) -> AudioUnit ch -> AudioUnit ch
 highpassT_ s a b = Highpass (Just s) a b
 
 -- | A bandpass filter.
@@ -2570,10 +2558,10 @@ bandpass a b = Bandpass Nothing (ap_ a) (ap_ b)
 bandpass_ :: forall ch. Pos ch => String -> Number -> Number -> AudioUnit ch -> AudioUnit ch
 bandpass_ s a b = Bandpass (Just s) (ap_ a) (ap_ b)
 
-bandpassT :: forall ch. Pos ch => AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+bandpassT :: forall ch. Pos ch => (AudioParameter) -> (AudioParameter) -> AudioUnit ch -> AudioUnit ch
 bandpassT a b = Bandpass Nothing a b
 
-bandpassT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+bandpassT_ :: forall ch. Pos ch => String -> (AudioParameter) -> (AudioParameter) -> AudioUnit ch -> AudioUnit ch
 bandpassT_ s a b = Bandpass (Just s) a b
 
 -- | A lowshelf filter.
@@ -2586,10 +2574,10 @@ lowshelf a b = Lowshelf Nothing (ap_ a) (ap_ b)
 lowshelf_ :: forall ch. Pos ch => String -> Number -> Number -> AudioUnit ch -> AudioUnit ch
 lowshelf_ s a b = Lowshelf (Just s) (ap_ a) (ap_ b)
 
-lowshelfT :: forall ch. Pos ch => AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+lowshelfT :: forall ch. Pos ch => (AudioParameter) -> (AudioParameter) -> AudioUnit ch -> AudioUnit ch
 lowshelfT a b = Lowshelf Nothing a b
 
-lowshelfT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+lowshelfT_ :: forall ch. Pos ch => String -> (AudioParameter) -> (AudioParameter) -> AudioUnit ch -> AudioUnit ch
 lowshelfT_ s a b = Lowshelf (Just s) a b
 
 -- | A highshelf filter.
@@ -2602,10 +2590,10 @@ highshelf a b = Highshelf Nothing (ap_ a) (ap_ b)
 highshelf_ :: forall ch. Pos ch => String -> Number -> Number -> AudioUnit ch -> AudioUnit ch
 highshelf_ s a b = Highshelf (Just s) (ap_ a) (ap_ b)
 
-highshelfT :: forall ch. Pos ch => AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+highshelfT :: forall ch. Pos ch => (AudioParameter) -> (AudioParameter) -> AudioUnit ch -> AudioUnit ch
 highshelfT a b = Highshelf Nothing a b
 
-highshelfT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+highshelfT_ :: forall ch. Pos ch => String -> (AudioParameter) -> (AudioParameter) -> AudioUnit ch -> AudioUnit ch
 highshelfT_ s a b = Highshelf (Just s) a b
 
 -- | A peaking filter.
@@ -2620,10 +2608,10 @@ peaking a b c = Peaking Nothing (ap_ a) (ap_ b) (ap_ c)
 peaking_ :: forall ch. Pos ch => String -> Number -> Number -> Number -> AudioUnit ch -> AudioUnit ch
 peaking_ s a b c = Peaking (Just s) (ap_ a) (ap_ b) (ap_ c)
 
-peakingT :: forall ch. Pos ch => AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+peakingT :: forall ch. Pos ch => (AudioParameter) -> (AudioParameter) -> (AudioParameter) -> AudioUnit ch -> AudioUnit ch
 peakingT a b c = Peaking Nothing a b c
 
-peakingT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+peakingT_ :: forall ch. Pos ch => String -> (AudioParameter) -> (AudioParameter) -> (AudioParameter) -> AudioUnit ch -> AudioUnit ch
 peakingT_ s a b c = Peaking (Just s) a b c
 
 -- | A notch filter.
@@ -2637,10 +2625,10 @@ notch a b = Notch Nothing (ap_ a) (ap_ b)
 notch_ :: forall ch. Pos ch => String -> Number -> Number -> AudioUnit ch -> AudioUnit ch
 notch_ s a b = Notch (Just s) (ap_ a) (ap_ b)
 
-notchT :: forall ch. Pos ch => AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+notchT :: forall ch. Pos ch => (AudioParameter) -> (AudioParameter) -> AudioUnit ch -> AudioUnit ch
 notchT a b = Notch Nothing a b
 
-notchT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+notchT_ :: forall ch. Pos ch => String -> (AudioParameter) -> (AudioParameter) -> AudioUnit ch -> AudioUnit ch
 notchT_ s a b = Notch (Just s) a b
 
 -- | An allpass filter.
@@ -2654,10 +2642,10 @@ allpass a b = Allpass Nothing (ap_ a) (ap_ b)
 allpass_ :: forall ch. Pos ch => String -> Number -> Number -> AudioUnit ch -> AudioUnit ch
 allpass_ s a b = Allpass (Just s) (ap_ a) (ap_ b)
 
-allpassT :: forall ch. Pos ch => AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+allpassT :: forall ch. Pos ch => (AudioParameter) -> (AudioParameter) -> AudioUnit ch -> AudioUnit ch
 allpassT a b = Allpass Nothing a b
 
-allpassT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+allpassT_ :: forall ch. Pos ch => String -> (AudioParameter) -> (AudioParameter) -> AudioUnit ch -> AudioUnit ch
 allpassT_ s a b = Allpass (Just s) a b
 
 -- | A convolver (reverb)
@@ -2702,14 +2690,14 @@ dynamicsCompressor_ s a b c d e = DynamicsCompressor (Just s) (ap_ a) (ap_ b) (a
 dynamicsCompressorT ::
   forall ch.
   Pos ch =>
-  AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+  (AudioParameter) -> (AudioParameter) -> (AudioParameter) -> (AudioParameter) -> (AudioParameter) -> AudioUnit ch -> AudioUnit ch
 dynamicsCompressorT a b c d e = DynamicsCompressor Nothing a b c d e
 
 dynamicsCompressorT_ ::
   forall ch.
   Pos ch =>
   String ->
-  AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+  (AudioParameter) -> (AudioParameter) -> (AudioParameter) -> (AudioParameter) -> (AudioParameter) -> AudioUnit ch -> AudioUnit ch
 dynamicsCompressorT_ s a b c d e = DynamicsCompressor (Just s) a b c d e
 
 -- | Duplicate a mono sound.
@@ -2815,14 +2803,14 @@ periodicOsc_ s handle n = PeriodicOsc (Just s) (ap_ n) handle
 
 periodicOscT ::
   String ->
-  AudioParameter Number ->
+  (AudioParameter) ->
   AudioUnit D1
 periodicOscT handle n = PeriodicOsc Nothing n handle
 
 periodicOscT_ ::
   String ->
   String ->
-  AudioParameter Number ->
+  (AudioParameter) ->
   AudioUnit D1
 periodicOscT_ s handle n = PeriodicOsc (Just s) n handle
 
@@ -2835,10 +2823,10 @@ sinOsc n = SinOsc Nothing (ap_ n)
 sinOsc_ :: String -> Number -> AudioUnit D1
 sinOsc_ s n = SinOsc (Just s) (ap_ n)
 
-sinOscT :: AudioParameter Number -> AudioUnit D1
+sinOscT :: (AudioParameter) -> AudioUnit D1
 sinOscT n = SinOsc Nothing n
 
-sinOscT_ :: String -> AudioParameter Number -> AudioUnit D1
+sinOscT_ :: String -> (AudioParameter) -> AudioUnit D1
 sinOscT_ s n = SinOsc (Just s) n
 
 -- | A sawtooth oscillator.
@@ -2850,10 +2838,10 @@ sawtoothOsc n = SawtoothOsc Nothing (ap_ n)
 sawtoothOsc_ :: String -> Number -> AudioUnit D1
 sawtoothOsc_ s n = SawtoothOsc (Just s) (ap_ n)
 
-sawtoothOscT :: AudioParameter Number -> AudioUnit D1
+sawtoothOscT :: (AudioParameter) -> AudioUnit D1
 sawtoothOscT n = SawtoothOsc Nothing n
 
-sawtoothOscT_ :: String -> AudioParameter Number -> AudioUnit D1
+sawtoothOscT_ :: String -> (AudioParameter) -> AudioUnit D1
 sawtoothOscT_ s n = SawtoothOsc (Just s) n
 
 -- | A triangle oscillator.
@@ -2865,10 +2853,10 @@ triangleOsc n = TriangleOsc Nothing (ap_ n)
 triangleOsc_ :: String -> Number -> AudioUnit D1
 triangleOsc_ s n = TriangleOsc (Just s) (ap_ n)
 
-triangleOscT :: AudioParameter Number -> AudioUnit D1
+triangleOscT :: (AudioParameter) -> AudioUnit D1
 triangleOscT n = TriangleOsc Nothing n
 
-triangleOscT_ :: String -> AudioParameter Number -> AudioUnit D1
+triangleOscT_ :: String -> (AudioParameter) -> AudioUnit D1
 triangleOscT_ s n = TriangleOsc (Just s) n
 
 -- | A square oscillator.
@@ -2880,10 +2868,10 @@ squareOsc n = SquareOsc Nothing (ap_ n)
 squareOsc_ :: String -> Number -> AudioUnit D1
 squareOsc_ s n = SquareOsc (Just s) (ap_ n)
 
-squareOscT :: AudioParameter Number -> AudioUnit D1
+squareOscT :: (AudioParameter) -> AudioUnit D1
 squareOscT n = SquareOsc Nothing n
 
-squareOscT_ :: String -> AudioParameter Number -> AudioUnit D1
+squareOscT_ :: String -> (AudioParameter) -> AudioUnit D1
 squareOscT_ s n = SquareOsc (Just s) n
 
 -- | A splitter for a mono sound.
@@ -2951,10 +2939,10 @@ panner n = StereoPanner Nothing (ap_ n)
 panner_ :: String -> Number -> AudioUnit D2 -> AudioUnit D2
 panner_ s n = StereoPanner (Just s) (ap_ n)
 
-pannerT :: AudioParameter Number -> AudioUnit D2 -> AudioUnit D2
+pannerT :: (AudioParameter) -> AudioUnit D2 -> AudioUnit D2
 pannerT n = StereoPanner Nothing n
 
-pannerT_ :: String -> AudioParameter Number -> AudioUnit D2 -> AudioUnit D2
+pannerT_ :: String -> (AudioParameter) -> AudioUnit D2 -> AudioUnit D2
 pannerT_ s n = StereoPanner (Just s) n
 
 pannerMono :: Number -> AudioUnit D1 -> AudioUnit D2
@@ -2963,10 +2951,10 @@ pannerMono n = panner n <<< unsafeCoerce
 pannerMono_ :: String -> Number -> AudioUnit D1 -> AudioUnit D2
 pannerMono_ s n = panner_ s n <<< unsafeCoerce
 
-pannerMonoT :: AudioParameter Number -> AudioUnit D1 -> AudioUnit D2
+pannerMonoT :: (AudioParameter) -> AudioUnit D1 -> AudioUnit D2
 pannerMonoT n = pannerT n <<< unsafeCoerce
 
-pannerMonoT_ :: String -> AudioParameter Number -> AudioUnit D1 -> AudioUnit D2
+pannerMonoT_ :: String -> (AudioParameter) -> AudioUnit D1 -> AudioUnit D2
 pannerMonoT_ s n = pannerT_ s n <<< unsafeCoerce
 
 -- | A spatial panner.
@@ -3068,10 +3056,10 @@ constant n = Constant Nothing (ap_ n)
 constant_ :: String -> Number -> AudioUnit D1
 constant_ s n = Constant (Just s) (ap_ n)
 
-constantT :: AudioParameter Number -> AudioUnit D1
+constantT :: (AudioParameter) -> AudioUnit D1
 constantT n = Constant Nothing n
 
-constantT_ :: String -> AudioParameter Number -> AudioUnit D1
+constantT_ :: String -> (AudioParameter) -> AudioUnit D1
 constantT_ s n = Constant (Just s) n
 
 -- | A delayed signal.
@@ -3083,10 +3071,10 @@ delay n = Delay Nothing (ap_ n)
 delay_ :: forall ch. Pos ch => String -> Number -> AudioUnit ch -> AudioUnit ch
 delay_ s n = Delay (Just s) (ap_ n)
 
-delayT :: forall ch. Pos ch => AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+delayT :: forall ch. Pos ch => (AudioParameter) -> AudioUnit ch -> AudioUnit ch
 delayT n = Delay Nothing n
 
-delayT_ :: forall ch. Pos ch => String -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+delayT_ :: forall ch. Pos ch => String -> (AudioParameter) -> AudioUnit ch -> AudioUnit ch
 delayT_ s n = Delay (Just s) n
 
 -- | A volume control.
@@ -3098,23 +3086,23 @@ gain n = Gain Nothing (ap_ n)
 gain_ :: forall ch. Pos ch => String -> Number -> NonEmpty List (AudioUnit ch) -> AudioUnit ch
 gain_ s n = Gain (Just s) (ap_ n)
 
-gainT :: forall ch. Pos ch => AudioParameter Number -> NonEmpty List (AudioUnit ch) -> AudioUnit ch
+gainT :: forall ch. Pos ch => (AudioParameter) -> NonEmpty List (AudioUnit ch) -> AudioUnit ch
 gainT n = Gain Nothing n
 
-gainT_ :: forall ch. Pos ch => String -> AudioParameter Number -> NonEmpty List (AudioUnit ch) -> AudioUnit ch
+gainT_ :: forall ch. Pos ch => String -> (AudioParameter) -> NonEmpty List (AudioUnit ch) -> AudioUnit ch
 gainT_ s n = Gain (Just s) n
 
 -- | A variant of gain that accepts a single audio unit instead of a non-empty list.
 gain' :: forall ch. Pos ch => Number -> AudioUnit ch -> AudioUnit ch
 gain' n = Gain Nothing (ap_ n) <<< NE.singleton
 
-gainT' :: forall ch. Pos ch => AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+gainT' :: forall ch. Pos ch => (AudioParameter) -> AudioUnit ch -> AudioUnit ch
 gainT' n = Gain Nothing n <<< NE.singleton
 
 gain_' :: forall ch. Pos ch => String -> Number -> AudioUnit ch -> AudioUnit ch
 gain_' s n = Gain (Just s) (ap_ n) <<< NE.singleton
 
-gainT_' :: forall ch. Pos ch => String -> AudioParameter Number -> AudioUnit ch -> AudioUnit ch
+gainT_' :: forall ch. Pos ch => String -> (AudioParameter) -> AudioUnit ch -> AudioUnit ch
 gainT_' s n = Gain (Just s) n <<< NE.singleton
 
 class AggregatorsToGraphInternal (aggregators :: RowList) (graph :: RowList) | aggregators -> graph
@@ -3449,14 +3437,14 @@ g'audioWorkletAggregator_ s handle n = GAudioWorkletAggregator (Just s) handle (
 
 g'audioWorkletAggregatorT ::
   String ->
-  Object (AudioParameter Number) ->
+  Object (AudioParameter) ->
   AudioGraphAggregator
 g'audioWorkletAggregatorT handle n = GAudioWorkletAggregator Nothing handle n
 
 g'audioWorkletAggregatorT_ ::
   String ->
   String ->
-  Object (AudioParameter Number) ->
+  Object (AudioParameter) ->
   AudioGraphAggregator
 g'audioWorkletAggregatorT_ s handle n = GAudioWorkletAggregator (Just s) handle n
 
@@ -3475,14 +3463,14 @@ g'audioWorkletProcessor_ s handle n = GAudioWorkletProcessor (Just s) handle (ma
 
 g'audioWorkletProcessorT ::
   String ->
-  Object (AudioParameter Number) ->
+  Object (AudioParameter) ->
   AudioGraphProcessor
 g'audioWorkletProcessorT handle n = GAudioWorkletProcessor Nothing handle n
 
 g'audioWorkletProcessorT_ ::
   String ->
   String ->
-  Object (AudioParameter Number) ->
+  Object (AudioParameter) ->
   AudioGraphProcessor
 g'audioWorkletProcessorT_ s handle n = GAudioWorkletProcessor (Just s) handle n
 
@@ -3511,10 +3499,10 @@ g'lowpass a b = GLowpass Nothing (ap_ a) (ap_ b)
 g'lowpass_ :: String -> Number -> Number -> AudioGraphProcessor
 g'lowpass_ s a b = GLowpass (Just s) (ap_ a) (ap_ b)
 
-g'lowpassT :: AudioParameter Number -> AudioParameter Number -> AudioGraphProcessor
+g'lowpassT :: (AudioParameter) -> (AudioParameter) -> AudioGraphProcessor
 g'lowpassT a b = GLowpass Nothing a b
 
-g'lowpassT_ :: String -> AudioParameter Number -> AudioParameter Number -> AudioGraphProcessor
+g'lowpassT_ :: String -> (AudioParameter) -> (AudioParameter) -> AudioGraphProcessor
 g'lowpassT_ s a b = GLowpass (Just s) a b
 
 g'highpass :: Number -> Number -> AudioGraphProcessor
@@ -3523,10 +3511,10 @@ g'highpass a b = GHighpass Nothing (ap_ a) (ap_ b)
 g'highpass_ :: String -> Number -> Number -> AudioGraphProcessor
 g'highpass_ s a b = GHighpass (Just s) (ap_ a) (ap_ b)
 
-g'highpassT :: AudioParameter Number -> AudioParameter Number -> AudioGraphProcessor
+g'highpassT :: (AudioParameter) -> (AudioParameter) -> AudioGraphProcessor
 g'highpassT a b = GHighpass Nothing a b
 
-g'highpassT_ :: String -> AudioParameter Number -> AudioParameter Number -> AudioGraphProcessor
+g'highpassT_ :: String -> (AudioParameter) -> (AudioParameter) -> AudioGraphProcessor
 g'highpassT_ s a b = GHighpass (Just s) a b
 
 g'bandpass :: Number -> Number -> AudioGraphProcessor
@@ -3535,10 +3523,10 @@ g'bandpass a b = GBandpass Nothing (ap_ a) (ap_ b)
 g'bandpass_ :: String -> Number -> Number -> AudioGraphProcessor
 g'bandpass_ s a b = GBandpass (Just s) (ap_ a) (ap_ b)
 
-g'bandpassT :: AudioParameter Number -> AudioParameter Number -> AudioGraphProcessor
+g'bandpassT :: (AudioParameter) -> (AudioParameter) -> AudioGraphProcessor
 g'bandpassT a b = GBandpass Nothing a b
 
-g'bandpassT_ :: String -> AudioParameter Number -> AudioParameter Number -> AudioGraphProcessor
+g'bandpassT_ :: String -> (AudioParameter) -> (AudioParameter) -> AudioGraphProcessor
 g'bandpassT_ s a b = GBandpass (Just s) a b
 
 g'lowshelf :: Number -> Number -> AudioGraphProcessor
@@ -3547,10 +3535,10 @@ g'lowshelf a b = GLowshelf Nothing (ap_ a) (ap_ b)
 g'lowshelf_ :: String -> Number -> Number -> AudioGraphProcessor
 g'lowshelf_ s a b = GLowshelf (Just s) (ap_ a) (ap_ b)
 
-g'lowshelfT :: AudioParameter Number -> AudioParameter Number -> AudioGraphProcessor
+g'lowshelfT :: (AudioParameter) -> (AudioParameter) -> AudioGraphProcessor
 g'lowshelfT a b = GLowshelf Nothing a b
 
-g'lowshelfT_ :: String -> AudioParameter Number -> AudioParameter Number -> AudioGraphProcessor
+g'lowshelfT_ :: String -> (AudioParameter) -> (AudioParameter) -> AudioGraphProcessor
 g'lowshelfT_ s a b = GLowshelf (Just s) a b
 
 g'highshelf :: Number -> Number -> AudioGraphProcessor
@@ -3559,10 +3547,10 @@ g'highshelf a b = GHighshelf Nothing (ap_ a) (ap_ b)
 g'highshelf_ :: String -> Number -> Number -> AudioGraphProcessor
 g'highshelf_ s a b = GHighshelf (Just s) (ap_ a) (ap_ b)
 
-g'highshelfT :: AudioParameter Number -> AudioParameter Number -> AudioGraphProcessor
+g'highshelfT :: (AudioParameter) -> (AudioParameter) -> AudioGraphProcessor
 g'highshelfT a b = GHighshelf Nothing a b
 
-g'highshelfT_ :: String -> AudioParameter Number -> AudioParameter Number -> AudioGraphProcessor
+g'highshelfT_ :: String -> (AudioParameter) -> (AudioParameter) -> AudioGraphProcessor
 g'highshelfT_ s a b = GHighshelf (Just s) a b
 
 g'peaking :: Number -> Number -> Number -> AudioGraphProcessor
@@ -3571,10 +3559,10 @@ g'peaking a b c = GPeaking Nothing (ap_ a) (ap_ b) (ap_ c)
 g'peaking_ :: String -> Number -> Number -> Number -> AudioGraphProcessor
 g'peaking_ s a b c = GPeaking (Just s) (ap_ a) (ap_ b) (ap_ c)
 
-g'peakingT :: AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioGraphProcessor
+g'peakingT :: (AudioParameter) -> (AudioParameter) -> (AudioParameter) -> AudioGraphProcessor
 g'peakingT a b c = GPeaking Nothing a b c
 
-g'peakingT_ :: String -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioGraphProcessor
+g'peakingT_ :: String -> (AudioParameter) -> (AudioParameter) -> (AudioParameter) -> AudioGraphProcessor
 g'peakingT_ s a b c = GPeaking (Just s) a b c
 
 g'notch :: Number -> Number -> AudioGraphProcessor
@@ -3583,10 +3571,10 @@ g'notch a b = GNotch Nothing (ap_ a) (ap_ b)
 g'notch_ :: String -> Number -> Number -> AudioGraphProcessor
 g'notch_ s a b = GNotch (Just s) (ap_ a) (ap_ b)
 
-g'notchT :: AudioParameter Number -> AudioParameter Number -> AudioGraphProcessor
+g'notchT :: (AudioParameter) -> (AudioParameter) -> AudioGraphProcessor
 g'notchT a b = GNotch Nothing a b
 
-g'notchT_ :: String -> AudioParameter Number -> AudioParameter Number -> AudioGraphProcessor
+g'notchT_ :: String -> (AudioParameter) -> (AudioParameter) -> AudioGraphProcessor
 g'notchT_ s a b = GNotch (Just s) a b
 
 g'allpass :: Number -> Number -> AudioGraphProcessor
@@ -3595,10 +3583,10 @@ g'allpass a b = GAllpass Nothing (ap_ a) (ap_ b)
 g'allpass_ :: String -> Number -> Number -> AudioGraphProcessor
 g'allpass_ s a b = GAllpass (Just s) (ap_ a) (ap_ b)
 
-g'allpassT :: AudioParameter Number -> AudioParameter Number -> AudioGraphProcessor
+g'allpassT :: (AudioParameter) -> (AudioParameter) -> AudioGraphProcessor
 g'allpassT a b = GAllpass Nothing a b
 
-g'allpassT_ :: String -> AudioParameter Number -> AudioParameter Number -> AudioGraphProcessor
+g'allpassT_ :: String -> (AudioParameter) -> (AudioParameter) -> AudioGraphProcessor
 g'allpassT_ s a b = GAllpass (Just s) a b
 
 g'convolver ::
@@ -3631,14 +3619,14 @@ g'dynamicsCompressor_ s a b c d e = GDynamicsCompressor (Just s) (ap_ a) (ap_ b)
 g'dynamicsCompressorT ::
   forall ch.
   Pos ch =>
-  AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioGraphProcessor
+  (AudioParameter) -> (AudioParameter) -> (AudioParameter) -> (AudioParameter) -> (AudioParameter) -> AudioGraphProcessor
 g'dynamicsCompressorT a b c d e = GDynamicsCompressor Nothing a b c d e
 
 g'dynamicsCompressorT_ ::
   forall ch.
   Pos ch =>
   String ->
-  AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioParameter Number -> AudioGraphProcessor
+  (AudioParameter) -> (AudioParameter) -> (AudioParameter) -> (AudioParameter) -> (AudioParameter) -> AudioGraphProcessor
 g'dynamicsCompressorT_ s a b c d e = GDynamicsCompressor (Just s) a b c d e
 
 g'waveShaper ::
@@ -3664,10 +3652,10 @@ g'panner n = GStereoPanner Nothing (ap_ n)
 g'panner_ :: String -> Number -> AudioGraphProcessor
 g'panner_ s n = GStereoPanner (Just s) (ap_ n)
 
-g'pannerT :: AudioParameter Number -> AudioGraphProcessor
+g'pannerT :: (AudioParameter) -> AudioGraphProcessor
 g'pannerT n = GStereoPanner Nothing n
 
-g'pannerT_ :: String -> AudioParameter Number -> AudioGraphProcessor
+g'pannerT_ :: String -> (AudioParameter) -> AudioGraphProcessor
 g'pannerT_ s n = GStereoPanner (Just s) n
 
 g'spatialPanner :: PannerVars' -> AudioGraphProcessor
@@ -3700,10 +3688,10 @@ g'delay n = GDelay Nothing (ap_ n)
 g'delay_ :: String -> Number -> AudioGraphProcessor
 g'delay_ s n = GDelay (Just s) (ap_ n)
 
-g'delayT :: AudioParameter Number -> AudioGraphProcessor
+g'delayT :: (AudioParameter) -> AudioGraphProcessor
 g'delayT n = GDelay Nothing n
 
-g'delayT_ :: String -> AudioParameter Number -> AudioGraphProcessor
+g'delayT_ :: String -> (AudioParameter) -> AudioGraphProcessor
 g'delayT_ s n = GDelay (Just s) n
 
 g'gain :: Number -> AudioGraphAggregator
@@ -3712,10 +3700,10 @@ g'gain n = GGain Nothing (ap_ n)
 g'gain_ :: String -> Number -> AudioGraphAggregator
 g'gain_ s n = GGain (Just s) (ap_ n)
 
-g'gainT :: AudioParameter Number -> AudioGraphAggregator
+g'gainT :: (AudioParameter) -> AudioGraphAggregator
 g'gainT n = GGain Nothing n
 
-g'gainT_ :: String -> AudioParameter Number -> AudioGraphAggregator
+g'gainT_ :: String -> (AudioParameter) -> AudioGraphAggregator
 g'gainT_ s n = GGain (Just s) n
 
 --------------------------------------------
@@ -4494,8 +4482,8 @@ os2s o = case o of
   TwoX -> "2x"
   FourX -> "4x"
 
-napeq :: forall a. Eq a => AudioParameter a -> AudioParameter a -> Boolean
-napeq (AudioParameter { param: a }) (AudioParameter { param: b }) = a /= b
+napeq :: AudioParameter -> AudioParameter -> Boolean
+napeq ({ param: a }) ({ param: b }) = a /= b
 
 describeConnection :: Reconcilable -> Reconcilable -> Map Int Int -> Array (Tuple Int Int)
 describeConnection start end passage =
@@ -4553,7 +4541,7 @@ isGen (Constant' _) = true
 
 isGen _ = false
 
-scp :: Int -> Object (AudioParameter Number) -> Object (AudioParameter Number) -> Array Instruction
+scp :: Int -> Object (AudioParameter) -> Object (AudioParameter) -> Array Instruction
 scp i n nx =
   join
     $ map

@@ -15,7 +15,7 @@ import Data.Typelevel.Num (D1, D2)
 import Data.Vec ((+>), empty)
 import Effect (Effect)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AV(..), AudioContext, AudioInfo, AudioParameter(..), AudioUnit, CanvasInfo(..), EngineInfo, Exporter, IAudioUnit(..), VisualInfo, defaultExporter, dup1, g'add, g'bandpass, g'delay, g'gain, gain', gainT', graph, merger, microphone, panner, play, runInBrowser_, sinOsc, speaker, speaker')
+import FRP.Behavior.Audio (AV(..), AudioContext, AudioInfo, AudioParameterTransition(..), AudioUnit, CanvasInfo(..), EngineInfo, Exporter, IAudioUnit(..), VisualInfo, defaultExporter, dup1, g'add, g'bandpass, g'delay, g'gain, gain', gainT', graph, merger, microphone, panner, play, runInBrowser_, sinOsc, speaker, speaker')
 import FRP.Behavior.Mouse (buttons, position)
 import FRP.Event.Mouse (Mouse, getMouse)
 import Foreign.Object (Object)
@@ -140,14 +140,14 @@ scene6 mouse time = f time <$> click
       -- we lock to that
       -- otherwise, we interpolate
       if (fst right - s) < kr then
-        AudioParameter { param: (snd right), timeOffset: (fst right - s) }
+        { param: (snd right), timeOffset: (fst right - s), transition: LinearRamp }
       else
         let
           m = (snd right - snd left) / (fst right - fst left)
 
           b = (snd right - (m * fst right))
         in
-          AudioParameter { param: (m * s + b), timeOffset: 0.0 }
+          { param: (m * s + b), timeOffset: 0.0, transition: LinearRamp }
 
   f s cl =
     let
@@ -191,14 +191,14 @@ scene7 mouse acc@{ onset } time = f time <$> click
       -- we lock to that
       -- otherwise, we interpolate
       if (fst right - s) < kr then
-        AudioParameter { param: (snd right), timeOffset: (fst right - s) }
+        { param: (snd right), timeOffset: (fst right - s), transition: LinearRamp }
       else
         let
           m = (snd right - snd left) / (fst right - fst left)
 
           b = (snd right - (m * fst right))
         in
-          AudioParameter { param: (m * s + b), timeOffset: 0.0 }
+          { param: (m * s + b), timeOffset: 0.0, transition: LinearRamp }
 
   f s cl =
     IAudioUnit
@@ -247,14 +247,14 @@ scene7_1 mouse acc@{ onset } time = f time <$> click
       -- we lock to that
       -- otherwise, we interpolate
       if (fst right - s) < kr then
-        AudioParameter { param: (snd right), timeOffset: (fst right - s) }
+        { param: (snd right), timeOffset: (fst right - s), transition: LinearRamp }
       else
         let
           m = (snd right - snd left) / (fst right - fst left)
 
           b = (snd right - (m * fst right))
         in
-          AudioParameter { param: (m * s + b), timeOffset: 0.0 }
+          { param: (m * s + b), timeOffset: 0.0, transition: LinearRamp }
 
   f s cl =
     IAudioUnit
@@ -318,14 +318,14 @@ scene8 mouse acc@{ onset } (CanvasInfo { w, h, boundingClientRect: { x, y } }) t
       -- we lock to that
       -- otherwise, we interpolate
       if (fst right - s) < kr then
-        AudioParameter { param: (snd right), timeOffset: (fst right - s) }
+        { param: (snd right), timeOffset: (fst right - s), transition: LinearRamp }
       else
         let
           m = (snd right - snd left) / (fst right - fst left)
 
           b = (snd right - (m * fst right))
         in
-          AudioParameter { param: (m * s + b), timeOffset: 0.0 }
+          { param: (m * s + b), timeOffset: 0.0, transition: LinearRamp }
 
   f s cl ps =
     AV
