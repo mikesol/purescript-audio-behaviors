@@ -208,7 +208,7 @@ For example, let's say the control rate is `66Hz` and you want a sound to trigge
 
 Let's add a small metronome on the inside of our sound. We will have it beat every `0.9` seconds, and we use the function `gainT'` instead of `gain` to accept an `AudioParameter`.
 
-[Try me on klank.dev](https://link.klank.dev/yRmb7EC1zGLqQANn8)
+[Try me on klank.dev](https://link.klank.dev/oLNp3z2vXnvvmj3L9)
 
 ```haskell
 -- a piecewise function that creates an attack/release/sustain envelope
@@ -245,14 +245,14 @@ scene mouse time = f time <$> click
       -- we lock to that
       -- otherwise, we interpolate
       if (fst right - s) < kr then
-        AudioParameter { param: (snd right), timeOffset: (fst right - s) }
+        defaultParam { param = (snd right), timeOffset = (fst right - s) }
       else
         let
           m = (snd right - snd left) / (fst right - fst left)
 
           b = (snd right - (m * fst right))
         in
-          AudioParameter { param: (m * s + b), timeOffset: 0.0 }
+          defaultParam { param = (m * s + b), timeOffset = 0.0 }
 
   f s cl =
     let
@@ -282,7 +282,7 @@ To accomplish this, or anything where memory needs to be retained, the scene acc
 
 To make the accumulator useful, the scene should return the accumulator as well. The constructor `IAudioUnit` allows for this: it accepts an audio unit as well as an accumulator.
 
-[Try me on klank.dev](https://link.klank.dev/mw6KayjtZnDWcqFU7)
+[Try me on klank.dev](https://link.klank.dev/CiT8fQAAK5v1fSE58)
 
 ```haskell
 pwf :: Array (Tuple Number Number)
@@ -321,14 +321,14 @@ scene mouse acc@{ onset } time = f time <$> click
       right = fromMaybe (Tuple 201.0 0.0) $ head ht.rest
     in
       if (fst right - s) < kr then
-        AudioParameter { param: (snd right), timeOffset: (fst right - s) }
+        defaultParam { param = (snd right), timeOffset = (fst right - s) }
       else
         let
           m = (snd right - snd left) / (fst right - fst left)
 
           b = (snd right - (m * fst right))
         in
-          AudioParameter { param: (m * s + b), timeOffset: 0.0 }
+          defaultParam { param = (m * s + b), timeOffset = 0.0 }
 
   f s cl =
     IAudioUnit
@@ -373,7 +373,7 @@ The audio graph must respect certain rules: it must be fully connected, it must 
 
 The graph structure is represented using _incoming_ edges, so processors have only one incoming edge whereas accumulators have an arbitrary number of incoming edges, as we see below. Play it and you'll hear an echo effect!
 
-[Try me on klank.dev](https://link.klank.dev/soK6Z2guc4XRuRNm8)
+[Try me on klank.dev](https://link.klank.dev/qTfne4zQjj8xH7Xf9)
 
 ```haskell
 pwf :: Array (Tuple Number Number)
@@ -412,14 +412,14 @@ scene mouse acc@{ onset } time = f time <$> click
       right = fromMaybe (Tuple 201.0 0.0) $ head ht.rest
     in
       if (fst right - s) < kr then
-        AudioParameter { param: (snd right), timeOffset: (fst right - s) }
+        defaultParam { param = (snd right), timeOffset = (fst right - s) }
       else
         let
           m = (snd right - snd left) / (fst right - fst left)
 
           b = (snd right - (m * fst right))
         in
-          AudioParameter { param: (m * s + b), timeOffset: 0.0 }
+          defaultParam { param = (m * s + b), timeOffset = 0.0 }
 
   f s cl =
     IAudioUnit
@@ -466,7 +466,7 @@ scene mouse acc@{ onset } time = f time <$> click
 
 Let's add a little dot that gets bigger when we click. We'll do that using the `AV` constructor that accepts a [Drawing](https://pursuit.purescript.org/packages/purescript-drawing/4.0.0/docs/Graphics.Drawing#t:Drawing).
 
-[Try me on klank.dev](https://klank.dev/?k&ec&url=https://klank-share.s3.eu-west-1.amazonaws.com/K16029054664258658.purs)
+[Try me on klank.dev](https://klank.dev/?k&ec&url=https://klank-share.s3.eu-west-1.amazonaws.com/K16042993758317541.purs)
 
 ```haskell
 pwf :: Array (Tuple Number Number)
@@ -506,14 +506,14 @@ scene mouse acc@{ onset } (CanvasInfo { w, h }) time = f time <$> click
       right = fromMaybe (Tuple 201.0 0.0) $ head ht.rest
     in
       if (fst right - s) < kr then
-        AudioParameter { param: (snd right), timeOffset: (fst right - s) }
+        defaultParam { param = (snd right), timeOffset = (fst right - s) }
       else
         let
           m = (snd right - snd left) / (fst right - fst left)
 
           b = (snd right - (m * fst right))
         in
-          AudioParameter { param: (m * s + b), timeOffset: 0.0 }
+          defaultParam { param = (m * s + b), timeOffset = 0.0 }
 
   f s cl =
     AV
