@@ -907,6 +907,8 @@ type AudioParameter
 defaultParam :: AudioParameter
 defaultParam = { param: 0.0, timeOffset: 0.0, transition: LinearRamp }
 
+_epsilon = 0.0001 :: Number
+
 evalPiecewise :: Number -> Array (Tuple Number Number) -> Number -> AudioParameter
 evalPiecewise kr p s =
   let
@@ -926,7 +928,9 @@ evalPiecewise kr p s =
         }
     else
       let
-        m = (snd right - snd left) / (fst right - fst left)
+        dnm = (fst (right) - fst (left))
+
+        m = if dnm < _epsilon then 0.0 else (snd right - snd left) / dnm
 
         b = (snd right - (m * fst right))
       in
