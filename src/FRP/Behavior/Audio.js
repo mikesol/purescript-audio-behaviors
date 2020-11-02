@@ -262,14 +262,19 @@ exports.makeFloatArray = function (fa) {
   };
 };
 
-var genericSetter = function (generators, c, n, timeToSet) {
+var genericSetter = function (predicates, generators, c, n, timeToSet) {
   if (c.value3) {
     generators[c.value0][n].value = c.value1;
   } else {
-    generators[c.value0][n].linearRampToValueAtTime(
-      c.value1,
-      timeToSet + c.value2
-    );
+    generators[c.value0][n][
+      predicates.isImmediate(c.value4)
+        ? "setValueAtTime"
+        : predicates.isLinearRamp(c.value4)
+        ? "linearRampToValueAtTime"
+        : predicates.isExponentialRamp(c.value4)
+        ? "exponentialRampToValueAtTime"
+        : "linearRampToValueAtTime"
+    ](c.value1, timeToSet + c.value2);
   }
 };
 
@@ -529,13 +534,19 @@ exports.touchAudio = function (predicates) {
                     );
                   }
                 } else if (predicates.isSetFrequency(c)) {
-                  genericSetter(generators, c, "frequency", timeToSet);
+                  genericSetter(
+                    predicates,
+                    generators,
+                    c,
+                    "frequency",
+                    timeToSet
+                  );
                 } else if (predicates.isSetPan(c)) {
-                  genericSetter(generators, c, "pan", timeToSet);
+                  genericSetter(predicates, generators, c, "pan", timeToSet);
                 } else if (predicates.isSetGain(c)) {
-                  genericSetter(generators, c, "gain", timeToSet);
+                  genericSetter(predicates, generators, c, "gain", timeToSet);
                 } else if (predicates.isSetQ(c)) {
-                  genericSetter(generators, c, "Q", timeToSet);
+                  genericSetter(predicates, generators, c, "Q", timeToSet);
                 } else if (predicates.isSetBuffer(c)) {
                   var myArrayBuffer = context.createBuffer(
                     c.value2.length,
@@ -554,9 +565,15 @@ exports.touchAudio = function (predicates) {
                   }
                   generators[c.value0].buffer = myArrayBuffer;
                 } else if (predicates.isSetDelay(c)) {
-                  genericSetter(generators, c, "delayTime", timeToSet);
+                  genericSetter(
+                    predicates,
+                    generators,
+                    c,
+                    "delayTime",
+                    timeToSet
+                  );
                 } else if (predicates.isSetOffset(c)) {
-                  genericSetter(generators, c, "offset", timeToSet);
+                  genericSetter(predicates, generators, c, "offset", timeToSet);
                 } else if (predicates.isSetLoopStart(c)) {
                   generators[c.value0].loopStart = c.value1;
                 } else if (predicates.isSetLoopEnd(c)) {
@@ -571,17 +588,35 @@ exports.touchAudio = function (predicates) {
 
                   generators[c.value0].curve = curve;
                 } else if (predicates.isSetPlaybackRate(c)) {
-                  genericSetter(generators, c, "playbackRate", timeToSet);
+                  genericSetter(
+                    predicates,
+                    generators,
+                    c,
+                    "playbackRate",
+                    timeToSet
+                  );
                 } else if (predicates.isSetThreshold(c)) {
-                  genericSetter(generators, c, "threshold", timeToSet);
+                  genericSetter(
+                    predicates,
+                    generators,
+                    c,
+                    "threshold",
+                    timeToSet
+                  );
                 } else if (predicates.isSetKnee(c)) {
-                  genericSetter(generators, c, "knee", timeToSet);
+                  genericSetter(predicates, generators, c, "knee", timeToSet);
                 } else if (predicates.isSetRatio(c)) {
-                  genericSetter(generators, c, "ratio", timeToSet);
+                  genericSetter(predicates, generators, c, "ratio", timeToSet);
                 } else if (predicates.isSetAttack(c)) {
-                  genericSetter(generators, c, "attack", timeToSet);
+                  genericSetter(predicates, generators, c, "attack", timeToSet);
                 } else if (predicates.isSetRelease(c)) {
-                  genericSetter(generators, c, "release", timeToSet);
+                  genericSetter(
+                    predicates,
+                    generators,
+                    c,
+                    "release",
+                    timeToSet
+                  );
                 } else if (predicates.isSetCustomParam(c)) {
                   generators[c.value0].parameters
                     .get(c.value1)
@@ -599,19 +634,55 @@ exports.touchAudio = function (predicates) {
                 } else if (predicates.isSetMaxDistance(c)) {
                   generators[c.value0].maxDistance = c.value1;
                 } else if (predicates.isSetOrientationX(c)) {
-                  genericSetter(generators, c, "orientationX", timeToSet);
+                  genericSetter(
+                    predicates,
+                    generators,
+                    c,
+                    "orientationX",
+                    timeToSet
+                  );
                 } else if (predicates.isSetOrientationY(c)) {
-                  genericSetter(generators, c, "orientationY", timeToSet);
+                  genericSetter(
+                    predicates,
+                    generators,
+                    c,
+                    "orientationY",
+                    timeToSet
+                  );
                 } else if (predicates.isSetOrientationZ(c)) {
-                  genericSetter(generators, c, "orientationZ", timeToSet);
+                  genericSetter(
+                    predicates,
+                    generators,
+                    c,
+                    "orientationZ",
+                    timeToSet
+                  );
                 } else if (predicates.isSetPanningModel(c)) {
                   generators[c.value0].panningModel = c.value1;
                 } else if (predicates.isSetPositionX(c)) {
-                  genericSetter(generators, c, "positionX", timeToSet);
+                  genericSetter(
+                    predicates,
+                    generators,
+                    c,
+                    "positionX",
+                    timeToSet
+                  );
                 } else if (predicates.isSetPositionY(c)) {
-                  genericSetter(generators, c, "positionY", timeToSet);
+                  genericSetter(
+                    predicates,
+                    generators,
+                    c,
+                    "positionY",
+                    timeToSet
+                  );
                 } else if (predicates.isSetPositionZ(c)) {
-                  genericSetter(generators, c, "positionZ", timeToSet);
+                  genericSetter(
+                    predicates,
+                    generators,
+                    c,
+                    "positionZ",
+                    timeToSet
+                  );
                 } else if (predicates.isSetRefDistance(c)) {
                   generators[c.value0].refDistance = c.value1;
                 } else if (predicates.isSetRolloffFactor(c)) {
