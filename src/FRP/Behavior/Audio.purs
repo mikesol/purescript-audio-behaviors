@@ -280,6 +280,7 @@ module FRP.Behavior.Audio
   , AudioProcessor
   , defaultParam
   , AudioParameter
+  , evalPiecewise
   , AudioParameterTransition(..)
   , AudioBuffer
   , AudioUnit
@@ -357,6 +358,7 @@ import Data.Generic.Rep.Show (genericShow)
 import Data.Int (floor, toNumber)
 import Data.Int.Parse (parseInt, toRadix)
 import Data.JSDate (getTime, now)
+import Data.Lens (_1, over)
 import Data.List (List(..), fromFoldable, partition, (:))
 import Data.List as DL
 import Data.Map (Map)
@@ -904,6 +906,31 @@ type AudioParameter
 
 defaultParam :: AudioParameter
 defaultParam = { param: 0.0, timeOffset: 0.0, transition: LinearRamp }
+
+evalPiecewise :: Number -> Array (Tuple Number Number) -> Number -> AudioParameter
+evalPiecewise kr p s =
+  let
+    ht = A.span ((s >= _) <<< fst) p
+
+    left = fromMaybe (fromMaybe (Tuple 0.0 0.0) $ A.head ht.rest) $ A.last ht.init
+
+    right =
+      fromMaybe
+        (maybe (Tuple 10000.0 0.0) (over _1 (_ + 1.0)) $ A.last p)
+        $ A.head ht.rest
+  in
+    if (fst right - s) < kr then
+      defaultParam
+        { param = (snd right)
+        , timeOffset = (fst right - s)
+        }
+    else
+      let
+        m = (snd right - snd left) / (fst right - fst left)
+
+        b = (snd right - (m * fst right))
+      in
+        defaultParam { param = (m * s + b), timeOffset = 0.0 }
 
 type PannerVars
   = { coneInnerAngle :: (AudioParameter)

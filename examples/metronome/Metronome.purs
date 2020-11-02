@@ -1,14 +1,13 @@
 module FRP.Behavior.Audio.Example.Metronome where
 
 import Prelude
-import Data.Array (head, last, range, span)
+import Data.Array (range)
 import Data.Int (toNumber)
-import Data.Maybe (fromMaybe)
-import Data.Tuple (Tuple(..), fst, snd)
+import Data.Tuple (Tuple(..))
 import Data.Typelevel.Num (D1)
 import Effect (Effect)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AudioContext, AudioInfo, AudioParameterTransition(..), AudioUnit, EngineInfo, Exporter, VisualInfo, defaultExporter, gain', gainT', runInBrowser, sinOsc, speaker')
+import FRP.Behavior.Audio (AudioContext, AudioInfo, AudioUnit, EngineInfo, Exporter, VisualInfo, defaultExporter, evalPiecewise, gain', gainT', runInBrowser, sinOsc, speaker')
 import Foreign.Object (Object)
 
 -- a piecewise function that creates an attack/release/sustain envelope
@@ -29,33 +28,10 @@ pwf =
 kr = 20.0 / 1000.0 :: Number -- the control rate in seconds, or 66.66667 Hz
 
 scene :: Number -> Behavior (AudioUnit D1)
-scene time = pure $ speaker' (gain' 0.1 (gainT' (gn time) $ sinOsc 440.0))
-  where
-  split s = span ((s >= _) <<< fst) pwf
-
-  gn s =
-    let
-      ht = split s
-    in
-      let
-        left = fromMaybe (Tuple 0.0 0.0) $ last ht.init
-      in
-        let
-          right = fromMaybe (Tuple 101.0 0.0) $ head ht.rest
-        in
-          -- if we are in a control cycle with a peak or trough
-          -- we lock to that
-          -- otherwise, we interpolate
-          if (fst right - s) < kr then
-            { param: (snd right), timeOffset: (fst right - s), transition: LinearRamp }
-          else
-            let
-              m = (snd right - snd left) / (fst right - fst left)
-            in
-              let
-                b = (snd right - (m * fst right))
-              in
-                { param: (m * s + b), timeOffset: 0.0, transition: LinearRamp }
+scene time =
+  pure
+    $ speaker'
+        (gain' 0.1 (gainT' (evalPiecewise kr pwf time) $ sinOsc 440.0))
 
 run ::
   forall microphone track buffer floatArray periodicWave.
