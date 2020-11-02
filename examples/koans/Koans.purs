@@ -8,7 +8,6 @@ import Data.Tuple (Tuple(..))
 import Data.Typelevel.Num (D1, D2)
 import Data.Vec ((+>), empty)
 import Effect (Effect)
-import Effect.Class.Console (log)
 import FRP.Behavior (Behavior)
 import FRP.Behavior.Audio (AudioContext, AudioInfo, AudioParameterTransition, AudioUnit, EngineInfo, Exporter, Oversample(..), VisualInfo, allpass, bandpass, convolver, defaultExporter, defaultParam, delay, dup1, dynamicsCompressor, evalPiecewise, g'add, g'bandpass, g'delay, g'gain, gain', gainT_', graph, highpass, highshelf, iirFilter, loopBuf, loopBufT, lowpass, lowshelf, merger, microphone, notch, panner, pannerMono, pannerVars', peaking, periodicOsc, play, playBuf, playBufWithOffset, playBuf_, play_, runInBrowser, sawtoothOsc, sinOsc, sinOsc_, spatialPanner, speaker, speaker', squareOsc, triangleOsc, waveShaper)
 import Foreign.Object (Object)
@@ -254,11 +253,7 @@ run ::
 run = runInBrowser (atx)
 
 exporter =
-  defaultExporter
-    { use =
-      \_ a -> do
-        log $ show a.audio
-    } ::
+  defaultExporter ::
     Exporter Unit Unit
 
 main :: Effect Unit
