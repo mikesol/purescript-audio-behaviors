@@ -16,7 +16,7 @@ import Data.Typelevel.Num (D1, d3)
 import Data.Vec as V
 import Effect.Aff (Error)
 import Effect.Class (class MonadEffect)
-import FRP.Behavior.Audio (class AsProcessorObject, class IsValidAudioGraph, AudioGraph, AudioGraphProcessor, AudioParameter(..), AudioProcessor, AudioUnit, AudioUnit'(..), SampleFrame, Status(..), asProcessor, asProcessorObject, audioToPtr, dup1, g'add, g'bandpass, g'delay, gain, gain', graph, merger, microphone, sinOsc, speaker', split3, toObject)
+import FRP.Behavior.Audio (class AsProcessorObject, class IsValidAudioGraph, AudioGraph, AudioGraphProcessor, AudioParameterTransition(..), AudioProcessor, AudioUnit, AudioUnit'(..), SampleFrame, Status(..), asProcessor, asProcessorObject, audioToPtr, dup1, g'add, g'bandpass, g'delay, gain, gain', graph, merger, microphone, sinOsc, speaker', split3, toObject)
 import Foreign.Object as O
 import Prim.Boolean (False, True)
 import Prim.RowList (class RowToList)
@@ -45,7 +45,8 @@ isValidAudioGraph1 =
     forall b ch.
     IsValidAudioGraph
       ( generators :: Record ( hello :: AudioUnit ch )
-      ) ch
+      )
+      ch
       b =>
     BProxy b
 
@@ -54,7 +55,8 @@ isValidAudioGraph2 =
   BProxy ::
     forall b ch.
     IsValidAudioGraph
-      () ch
+      ()
+      ch
       b =>
     BProxy b
 
@@ -65,7 +67,8 @@ isValidAudioGraph3 =
     IsValidAudioGraph
       ( processors :: Record ( goodbye :: Tuple (AudioGraphProcessor) (SProxy "hello") )
       , generators :: Record ( hello :: AudioUnit ch )
-      ) ch
+      )
+      ch
       b =>
     BProxy b
 
@@ -76,7 +79,8 @@ isValidAudioGraph4 =
     IsValidAudioGraph
       ( processors :: Record ( goodbye :: Tuple (AudioGraphProcessor) (SProxy "notThere") )
       , generators :: Record ( hello :: AudioUnit ch )
-      ) ch
+      )
+      ch
       b =>
     BProxy b
 
@@ -129,7 +133,7 @@ basicTestSuite = do
                         }
                     )
                   , ( Tuple 1
-                        { au: (Gain' $ AudioParameter { param: 0.5, timeOffset: 0.0 })
+                        { au: (Gain' $ { transition: LinearRamp, param: 0.5, timeOffset: 0.0 })
                         , chan: 3
                         , head: 1
                         , name: Nothing
@@ -155,7 +159,7 @@ basicTestSuite = do
                         }
                     )
                   , ( Tuple 3
-                        { au: (Gain' $ AudioParameter { param: 0.3, timeOffset: 0.0 })
+                        { au: (Gain' $ { transition: LinearRamp, param: 0.3, timeOffset: 0.0 })
                         , chan: 1
                         , head: 3
                         , name: Nothing
@@ -183,7 +187,7 @@ basicTestSuite = do
                         }
                     )
                   , ( Tuple 5
-                        { au: (Gain' $ AudioParameter { param: 0.3, timeOffset: 0.0 })
+                        { au: (Gain' $ { transition: LinearRamp, param: 0.3, timeOffset: 0.0 })
                         , chan: 1
                         , head: 5
                         , name: Nothing
@@ -197,7 +201,7 @@ basicTestSuite = do
                         }
                     )
                   , (Tuple 6 { au: (SplitRes' 1), chan: 1, head: 6, name: Nothing, next: (fromFoldable (5 : Nil)), prev: (fromFoldable Nil), ptr: 6, status: On })
-                  , (Tuple 7 { au: (Gain' $ AudioParameter { param: 0.3, timeOffset: 0.0 }), chan: 1, head: 7, name: Nothing, next: (fromFoldable (2 : Nil)), prev: (fromFoldable (8 : Nil)), ptr: 7, status: On })
+                  , (Tuple 7 { au: (Gain' $ { transition: LinearRamp, param: 0.3, timeOffset: 0.0 }), chan: 1, head: 7, name: Nothing, next: (fromFoldable (2 : Nil)), prev: (fromFoldable (8 : Nil)), ptr: 7, status: On })
                   , ( Tuple 8
                         { au: (SplitRes' 2)
                         , chan: 1
@@ -224,17 +228,17 @@ basicTestSuite = do
                     )
                   , (Tuple 10 { au: (Merger' (29 : 20 : 11 : Nil)), chan: 3, head: 10, name: Nothing, next: (fromFoldable (9 : Nil)), prev: (fromFoldable (11 : 20 : 29 : Nil)), ptr: 10, status: On })
                   , (Tuple 11 { au: Add', chan: 1, head: 11, name: Nothing, next: (fromFoldable (10 : Nil)), prev: (fromFoldable (12 : 16 : Nil)), ptr: 11, status: On })
-                  , (Tuple 12 { au: (Gain' $ AudioParameter { param: 1.0, timeOffset: 0.0 }), chan: 1, head: 12, name: Nothing, next: (fromFoldable (11 : Nil)), prev: (fromFoldable (13 : 14 : 15 : Nil)), ptr: 12, status: On })
-                  , (Tuple 13 { au: (SinOsc' $ AudioParameter { param: 440.0, timeOffset: 0.0 }), chan: 1, head: 13, name: Nothing, next: (fromFoldable (12 : Nil)), prev: (fromFoldable Nil), ptr: 13, status: On })
-                  , (Tuple 14 { au: (SinOsc' $ AudioParameter { param: 441.0, timeOffset: 0.0 }), chan: 1, head: 14, name: Nothing, next: (fromFoldable (12 : Nil)), prev: (fromFoldable Nil), ptr: 14, status: On })
-                  , (Tuple 15 { au: (SinOsc' $ AudioParameter { param: 441.0, timeOffset: 0.0 }), chan: 1, head: 15, name: Nothing, next: (fromFoldable (12 : Nil)), prev: (fromFoldable Nil), ptr: 15, status: On })
+                  , (Tuple 12 { au: (Gain' $ { transition: LinearRamp, param: 1.0, timeOffset: 0.0 }), chan: 1, head: 12, name: Nothing, next: (fromFoldable (11 : Nil)), prev: (fromFoldable (13 : 14 : 15 : Nil)), ptr: 12, status: On })
+                  , (Tuple 13 { au: (SinOsc' $ { transition: LinearRamp, param: 440.0, timeOffset: 0.0 }), chan: 1, head: 13, name: Nothing, next: (fromFoldable (12 : Nil)), prev: (fromFoldable Nil), ptr: 13, status: On })
+                  , (Tuple 14 { au: (SinOsc' $ { transition: LinearRamp, param: 441.0, timeOffset: 0.0 }), chan: 1, head: 14, name: Nothing, next: (fromFoldable (12 : Nil)), prev: (fromFoldable Nil), ptr: 14, status: On })
+                  , (Tuple 15 { au: (SinOsc' $ { transition: LinearRamp, param: 441.0, timeOffset: 0.0 }), chan: 1, head: 15, name: Nothing, next: (fromFoldable (12 : Nil)), prev: (fromFoldable Nil), ptr: 15, status: On })
                   , ( Tuple 16
                         { au:
                             ( Gain'
-                                $ AudioParameter
-                                    { param: 0.9
-                                    , timeOffset: 0.0
-                                    }
+                                $ { param: 0.9
+                                  , timeOffset: 0.0
+                                  , transition: LinearRamp
+                                  }
                             )
                         , chan: 1
                         , head: 16
@@ -245,12 +249,12 @@ basicTestSuite = do
                         , status: On
                         }
                     )
-                  , (Tuple 17 { au: (SinOsc' $ AudioParameter { param: 442.0, timeOffset: 0.0 }), chan: 1, head: 17, name: Nothing, next: (fromFoldable (16 : Nil)), prev: (fromFoldable Nil), ptr: 17, status: On })
-                  , (Tuple 18 { au: (SinOsc' $ AudioParameter { param: 443.0, timeOffset: 0.0 }), chan: 1, head: 18, name: Nothing, next: (fromFoldable (16 : Nil)), prev: (fromFoldable Nil), ptr: 18, status: On })
-                  , (Tuple 19 { au: (SinOsc' $ AudioParameter { param: 443.0, timeOffset: 0.0 }), chan: 1, head: 19, name: Nothing, next: (fromFoldable (16 : Nil)), prev: (fromFoldable Nil), ptr: 19, status: On })
+                  , (Tuple 17 { au: (SinOsc' $ { transition: LinearRamp, param: 442.0, timeOffset: 0.0 }), chan: 1, head: 17, name: Nothing, next: (fromFoldable (16 : Nil)), prev: (fromFoldable Nil), ptr: 17, status: On })
+                  , (Tuple 18 { au: (SinOsc' $ { transition: LinearRamp, param: 443.0, timeOffset: 0.0 }), chan: 1, head: 18, name: Nothing, next: (fromFoldable (16 : Nil)), prev: (fromFoldable Nil), ptr: 18, status: On })
+                  , (Tuple 19 { au: (SinOsc' $ { transition: LinearRamp, param: 443.0, timeOffset: 0.0 }), chan: 1, head: 19, name: Nothing, next: (fromFoldable (16 : Nil)), prev: (fromFoldable Nil), ptr: 19, status: On })
                   , (Tuple 20 { au: Add', chan: 1, head: 20, name: Nothing, next: (fromFoldable (10 : Nil)), prev: (fromFoldable (21 : 25 : Nil)), ptr: 20, status: On })
                   , ( Tuple 21
-                        { au: (Gain' $ AudioParameter { param: 1.0, timeOffset: 0.0 })
+                        { au: (Gain' $ { transition: LinearRamp, param: 1.0, timeOffset: 0.0 })
                         , chan: 1
                         , head: 21
                         , name: Nothing
@@ -260,13 +264,13 @@ basicTestSuite = do
                         , status: On
                         }
                     )
-                  , (Tuple 22 { au: (SinOsc' $ AudioParameter { param: 440.0, timeOffset: 0.0 }), chan: 1, head: 22, name: Nothing, next: (fromFoldable (21 : Nil)), prev: (fromFoldable Nil), ptr: 22, status: On })
-                  , (Tuple 23 { au: (SinOsc' $ AudioParameter { param: 441.0, timeOffset: 0.0 }), chan: 1, head: 23, name: Nothing, next: (fromFoldable (21 : Nil)), prev: (fromFoldable Nil), ptr: 23, status: On })
-                  , (Tuple 24 { au: (SinOsc' $ AudioParameter { param: 441.0, timeOffset: 0.0 }), chan: 1, head: 24, name: Nothing, next: (fromFoldable (21 : Nil)), prev: (fromFoldable Nil), ptr: 24, status: On })
-                  , (Tuple 25 { au: (Gain' $ AudioParameter { param: 0.9, timeOffset: 0.0 }), chan: 1, head: 25, name: Nothing, next: (fromFoldable (20 : Nil)), prev: (fromFoldable (26 : 27 : 28 : Nil)), ptr: 25, status: On })
-                  , (Tuple 26 { au: (SinOsc' $ AudioParameter { param: 442.0, timeOffset: 0.0 }), chan: 1, head: 26, name: Nothing, next: (fromFoldable (25 : Nil)), prev: (fromFoldable Nil), ptr: 26, status: On })
+                  , (Tuple 22 { au: (SinOsc' $ { transition: LinearRamp, param: 440.0, timeOffset: 0.0 }), chan: 1, head: 22, name: Nothing, next: (fromFoldable (21 : Nil)), prev: (fromFoldable Nil), ptr: 22, status: On })
+                  , (Tuple 23 { au: (SinOsc' $ { transition: LinearRamp, param: 441.0, timeOffset: 0.0 }), chan: 1, head: 23, name: Nothing, next: (fromFoldable (21 : Nil)), prev: (fromFoldable Nil), ptr: 23, status: On })
+                  , (Tuple 24 { au: (SinOsc' $ { transition: LinearRamp, param: 441.0, timeOffset: 0.0 }), chan: 1, head: 24, name: Nothing, next: (fromFoldable (21 : Nil)), prev: (fromFoldable Nil), ptr: 24, status: On })
+                  , (Tuple 25 { au: (Gain' $ { transition: LinearRamp, param: 0.9, timeOffset: 0.0 }), chan: 1, head: 25, name: Nothing, next: (fromFoldable (20 : Nil)), prev: (fromFoldable (26 : 27 : 28 : Nil)), ptr: 25, status: On })
+                  , (Tuple 26 { au: (SinOsc' $ { transition: LinearRamp, param: 442.0, timeOffset: 0.0 }), chan: 1, head: 26, name: Nothing, next: (fromFoldable (25 : Nil)), prev: (fromFoldable Nil), ptr: 26, status: On })
                   , ( Tuple 27
-                        { au: (SinOsc' $ AudioParameter { param: 443.0, timeOffset: 0.0 })
+                        { au: (SinOsc' $ { transition: LinearRamp, param: 443.0, timeOffset: 0.0 })
                         , chan: 1
                         , head: 27
                         , name: Nothing
@@ -279,11 +283,11 @@ basicTestSuite = do
                         , status: On
                         }
                     )
-                  , (Tuple 28 { au: (SinOsc' $ AudioParameter { param: 443.0, timeOffset: 0.0 }), chan: 1, head: 28, name: Nothing, next: (fromFoldable (25 : Nil)), prev: (fromFoldable Nil), ptr: 28, status: On })
+                  , (Tuple 28 { au: (SinOsc' $ { transition: LinearRamp, param: 443.0, timeOffset: 0.0 }), chan: 1, head: 28, name: Nothing, next: (fromFoldable (25 : Nil)), prev: (fromFoldable Nil), ptr: 28, status: On })
                   , (Tuple 29 { au: Add', chan: 1, head: 29, name: Nothing, next: (fromFoldable (10 : Nil)), prev: (fromFoldable (30 : 34 : Nil)), ptr: 29, status: On })
-                  , (Tuple 30 { au: (Gain' $ AudioParameter { param: 1.0, timeOffset: 0.0 }), chan: 1, head: 30, name: Nothing, next: (fromFoldable (29 : Nil)), prev: (fromFoldable (31 : 32 : 33 : Nil)), ptr: 30, status: On })
+                  , (Tuple 30 { au: (Gain' $ { transition: LinearRamp, param: 1.0, timeOffset: 0.0 }), chan: 1, head: 30, name: Nothing, next: (fromFoldable (29 : Nil)), prev: (fromFoldable (31 : 32 : 33 : Nil)), ptr: 30, status: On })
                   , ( Tuple 31
-                        { au: (SinOsc' $ AudioParameter { param: 440.0, timeOffset: 0.0 })
+                        { au: (SinOsc' $ { transition: LinearRamp, param: 440.0, timeOffset: 0.0 })
                         , chan: 1
                         , head: 31
                         , name: Nothing
@@ -293,12 +297,12 @@ basicTestSuite = do
                         , status: On
                         }
                     )
-                  , (Tuple 32 { au: (SinOsc' $ AudioParameter { param: 441.0, timeOffset: 0.0 }), chan: 1, head: 32, name: Nothing, next: (fromFoldable (30 : Nil)), prev: (fromFoldable Nil), ptr: 32, status: On })
-                  , (Tuple 33 { au: (SinOsc' $ AudioParameter { param: 441.0, timeOffset: 0.0 }), chan: 1, head: 33, name: Nothing, next: (fromFoldable (30 : Nil)), prev: (fromFoldable Nil), ptr: 33, status: On })
-                  , (Tuple 34 { au: (Gain' $ AudioParameter { param: 0.9, timeOffset: 0.0 }), chan: 1, head: 34, name: Nothing, next: (fromFoldable (29 : Nil)), prev: (fromFoldable (35 : 36 : 37 : Nil)), ptr: 34, status: On })
-                  , (Tuple 35 { au: (SinOsc' $ AudioParameter { param: 442.0, timeOffset: 0.0 }), chan: 1, head: 35, name: Nothing, next: (fromFoldable (34 : Nil)), prev: (fromFoldable Nil), ptr: 35, status: On })
+                  , (Tuple 32 { au: (SinOsc' $ { transition: LinearRamp, param: 441.0, timeOffset: 0.0 }), chan: 1, head: 32, name: Nothing, next: (fromFoldable (30 : Nil)), prev: (fromFoldable Nil), ptr: 32, status: On })
+                  , (Tuple 33 { au: (SinOsc' $ { transition: LinearRamp, param: 441.0, timeOffset: 0.0 }), chan: 1, head: 33, name: Nothing, next: (fromFoldable (30 : Nil)), prev: (fromFoldable Nil), ptr: 33, status: On })
+                  , (Tuple 34 { au: (Gain' $ { transition: LinearRamp, param: 0.9, timeOffset: 0.0 }), chan: 1, head: 34, name: Nothing, next: (fromFoldable (29 : Nil)), prev: (fromFoldable (35 : 36 : 37 : Nil)), ptr: 34, status: On })
+                  , (Tuple 35 { au: (SinOsc' $ { transition: LinearRamp, param: 442.0, timeOffset: 0.0 }), chan: 1, head: 35, name: Nothing, next: (fromFoldable (34 : Nil)), prev: (fromFoldable Nil), ptr: 35, status: On })
                   , ( Tuple 36
-                        { au: (SinOsc' $ AudioParameter { param: 443.0, timeOffset: 0.0 })
+                        { au: (SinOsc' $ { transition: LinearRamp, param: 443.0, timeOffset: 0.0 })
                         , chan: 1
                         , head: 36
                         , name: Nothing
@@ -308,7 +312,7 @@ basicTestSuite = do
                         , status: On
                         }
                     )
-                  , (Tuple 37 { au: (SinOsc' $ AudioParameter { param: 443.0, timeOffset: 0.0 }), chan: 1, head: 37, name: Nothing, next: (fromFoldable (34 : Nil)), prev: (fromFoldable Nil), ptr: 37, status: On })
+                  , (Tuple 37 { au: (SinOsc' $ { transition: LinearRamp, param: 443.0, timeOffset: 0.0 }), chan: 1, head: 37, name: Nothing, next: (fromFoldable (34 : Nil)), prev: (fromFoldable Nil), ptr: 37, status: On })
                   ]
               )
           , len: 38
@@ -354,7 +358,7 @@ basicTestSuite = do
                     )
                   , ( Tuple 2
                         { au:
-                            (SinOsc' $ AudioParameter { param: 42.0, timeOffset: 0.0 })
+                            (SinOsc' $ { transition: LinearRamp, param: 42.0, timeOffset: 0.0 })
                         , head: 2
                         , chan: 1
                         , name: Nothing
@@ -487,11 +491,10 @@ basicTestSuite = do
                   , ( Tuple 1
                         { au:
                             ( Bandpass'
-                                ( AudioParameter
-                                    { param: 440.0, timeOffset: 0.0
-                                    }
+                                ( { param: 440.0, timeOffset: 0.0, transition: LinearRamp
+                                  }
                                 )
-                                (AudioParameter { param: 1.0, timeOffset: 0.0 })
+                                ({ transition: LinearRamp, param: 1.0, timeOffset: 0.0 })
                             )
                         , chan: 1
                         , head: 1
@@ -527,10 +530,10 @@ basicTestSuite = do
                   , ( Tuple 4
                         { au:
                             ( SinOsc'
-                                ( AudioParameter
-                                    { param: 440.0
-                                    , timeOffset: 0.0
-                                    }
+                                ( { param: 440.0
+                                  , timeOffset: 0.0
+                                  , transition: LinearRamp
+                                  }
                                 )
                             )
                         , chan: 1
@@ -583,7 +586,7 @@ basicTestSuite = do
                         }
                     )
                   , ( Tuple 1
-                        { au: (Bandpass' (AudioParameter { param: 440.0, timeOffset: 0.0 }) (AudioParameter { param: 1.0, timeOffset: 0.0 }))
+                        { au: (Bandpass' ({ transition: LinearRamp, param: 440.0, timeOffset: 0.0 }) ({ transition: LinearRamp, param: 1.0, timeOffset: 0.0 }))
                         , chan: 1
                         , head: 1
                         , name: Nothing
@@ -595,7 +598,7 @@ basicTestSuite = do
                         }
                     )
                   , ( Tuple 2
-                        { au: (Delay' (AudioParameter { param: 0.2, timeOffset: 0.0 }))
+                        { au: (Delay' ({ transition: LinearRamp, param: 0.2, timeOffset: 0.0 }))
                         , chan: 1
                         , head:
                             2

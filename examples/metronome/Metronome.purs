@@ -8,7 +8,7 @@ import Data.Tuple (Tuple(..), fst, snd)
 import Data.Typelevel.Num (D1)
 import Effect (Effect)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AudioContext, AudioInfo, AudioParameter(..), AudioUnit, EngineInfo, VisualInfo, Exporter, defaultExporter, gain', gainT', runInBrowser, sinOsc, speaker')
+import FRP.Behavior.Audio (AudioContext, AudioInfo, AudioParameterTransition(..), AudioUnit, EngineInfo, Exporter, VisualInfo, defaultExporter, gain', gainT', runInBrowser, sinOsc, speaker')
 import Foreign.Object (Object)
 
 -- a piecewise function that creates an attack/release/sustain envelope
@@ -47,7 +47,7 @@ scene time = pure $ speaker' (gain' 0.1 (gainT' (gn time) $ sinOsc 440.0))
           -- we lock to that
           -- otherwise, we interpolate
           if (fst right - s) < kr then
-            AudioParameter { param: (snd right), timeOffset: (fst right - s) }
+            { param: (snd right), timeOffset: (fst right - s), transition: LinearRamp }
           else
             let
               m = (snd right - snd left) / (fst right - fst left)
@@ -55,7 +55,7 @@ scene time = pure $ speaker' (gain' 0.1 (gainT' (gn time) $ sinOsc 440.0))
               let
                 b = (snd right - (m * fst right))
               in
-                AudioParameter { param: (m * s + b), timeOffset: 0.0 }
+                { param: (m * s + b), timeOffset: 0.0, transition: LinearRamp }
 
 run ::
   forall microphone track buffer floatArray periodicWave.
