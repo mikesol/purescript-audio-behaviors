@@ -200,15 +200,15 @@ scene mouse time = f time <$> click
 
 ### Making sure that certain sounds occur at a precise time
 
-Great audio is all about timing, but so far, we have been locked to scheduling events at multiples of the control rate. The most commonly used control rate for this library is 50Hz, which is way too slow to quantize complex rhythmic events.
+Great audio is all about timing, but so far, we have been locked to scheduling events at multiples of the control rate. The most commonly used control rate for this library is 50Hz (meaning one event every 0.02 seconds), which is too slow to accurately depict complex rhythmic events.
 
-To fix the control rate problem, parameters that can change in time like _frequency_ or _gain_ have an optional second parameter that specifies the offset, in seconds, from the current quantized value in the control rate.
+To fix the control rate problem, parameters that can change in time like _frequency_ or _gain_ have an optional second parameter that specifies the offset, in seconds, from the current quantized value in the control rate. The type of this parameter is `AudioParameter`, and it has several other values that can be set to precisely control how values change over time.
 
-For example, let's say the control rate is `66Hz` and you want a sound to trigger at _exactly_ `0.25` seconds. At this rate, the closest quantized value to `0.25` is `0.2424242424`, or `16/66`. That means that, when `time` is `0.24242424`, we will add an offset of `0.00757576` to the value to make sure that it happens "exactly" at `0.25` seconds. "Exactly" is in quoation marks because floating point arrithmentic will provoke a rounding error of around `0.000000000001`, but this is far smaller than the audio sample rate, so we will not hear it.
+Using `AudioParameter` directly is an advanced feature that will be discussed below. The most common way to use `AudioParameter` is through the function `evalPiecewise`, which accepts the control rate in seconds (in our case, `0.02`), a piecewise function in the form `Array (Tuple time value)` where `time` and `value` are both `Number`s, and the current time.
 
-Let's add a small metronome on the inside of our sound. We will have it beat every `0.9` seconds, and we use the function `gainT'` instead of `gain` to accept an `AudioParameter`.
+Let's add a small metronome on the inside of our sound. We will have it beat every `0.9` seconds, and we use the function `gainT'` instead of `gain` to accept the `AudioParameter` output by `epwf`.
 
-[Try me on klank.dev](https://link.klank.dev/oLNp3z2vXnvvmj3L9)
+[Try me on klank.dev](https://link.klank.dev/2hWU6NDrN92utwc56)
 
 ```haskell
 -- a piecewise function that creates an attack/release/sustain envelope
@@ -228,39 +228,18 @@ pwf =
 
 kr = 20.0 / 1000.0 :: Number -- the control rate in seconds, or 50 Hz
 
+epwf = evalPiecewise kr :: Array (Tuple Number Number) -> Number -> AudioParameter
+
 scene :: Mouse -> Number -> Behavior (AudioUnit D2)
 scene mouse time = f time <$> click
   where
-  split s = span ((s >= _) <<< fst) pwf
-
-  gn s =
-    let
-      ht = split s
-
-      left = fromMaybe (Tuple 0.0 0.0) $ last ht.init
-
-      right = fromMaybe (Tuple 201.0 0.0) $ head ht.rest
-    in
-      -- if we are in a control cycle with a peak or trough
-      -- we lock to that
-      -- otherwise, we interpolate
-      if (fst right - s) < kr then
-        defaultParam { param = (snd right), timeOffset = (fst right - s) }
-      else
-        let
-          m = (snd right - snd left) / (fst right - fst left)
-
-          b = (snd right - (m * fst right))
-        in
-          defaultParam { param = (m * s + b), timeOffset = 0.0 }
-
   f s cl =
     let
       rad = pi * s
     in
       dup1
         ( (gain' 0.2 $ sinOsc (110.0 + (3.0 * sin (0.5 * rad))))
-            + (gain' 0.1 (gainT' (gn s) $ sinOsc 440.0))
+            + (gain' 0.1 (gainT' (epwf pwf s) $ sinOsc 440.0))
             + (gain' 0.1 $ sinOsc (220.0 + (if cl then 50.0 else 0.0)))
             + microphone
         ) \mono ->
@@ -282,7 +261,7 @@ To accomplish this, or anything where memory needs to be retained, the scene acc
 
 To make the accumulator useful, the scene should return the accumulator as well. The constructor `IAudioUnit` allows for this: it accepts an audio unit as well as an accumulator.
 
-[Try me on klank.dev](https://link.klank.dev/CiT8fQAAK5v1fSE58)
+[Try me on klank.dev](https://link.klank.dev/5J32qUoh7XJDQU7Z9)
 
 ```haskell
 pwf :: Array (Tuple Number Number)
@@ -300,6 +279,8 @@ pwf =
 
 kr = 20.0 / 1000.0 :: Number -- the control rate in seconds, or 50 Hz
 
+epwf = evalPiecewise kr
+
 initialOnset = { onset: Nothing } :: { onset :: Maybe Number }
 
 scene ::
@@ -310,31 +291,11 @@ scene ::
   Behavior (IAudioUnit D2 { onset :: Maybe Number | a })
 scene mouse acc@{ onset } time = f time <$> click
   where
-  split s = span ((s >= _) <<< fst) pwf
-
-  gn s =
-    let
-      ht = split s
-
-      left = fromMaybe (Tuple 0.0 0.0) $ last ht.init
-
-      right = fromMaybe (Tuple 201.0 0.0) $ head ht.rest
-    in
-      if (fst right - s) < kr then
-        defaultParam { param = (snd right), timeOffset = (fst right - s) }
-      else
-        let
-          m = (snd right - snd left) / (fst right - fst left)
-
-          b = (snd right - (m * fst right))
-        in
-          defaultParam { param = (m * s + b), timeOffset = 0.0 }
-
   f s cl =
     IAudioUnit
       ( dup1
           ( (gain' 0.2 $ sinOsc (110.0 + (3.0 * sin (0.5 * rad))))
-              + (gain' 0.1 (gainT' (gn s) $ sinOsc 440.0))
+              + (gain' 0.1 (gainT' (epwf pwf s) $ sinOsc 440.0))
               + (gain' 0.1 $ sinOsc (220.0 + (if cl then (50.0 + maybe 0.0 (\t -> 10.0 * (s - t)) stTime) else 0.0)))
               + microphone
           ) \mono ->
@@ -373,7 +334,7 @@ The audio graph must respect certain rules: it must be fully connected, it must 
 
 The graph structure is represented using _incoming_ edges, so processors have only one incoming edge whereas accumulators have an arbitrary number of incoming edges, as we see below. Play it and you'll hear an echo effect!
 
-[Try me on klank.dev](https://link.klank.dev/qTfne4zQjj8xH7Xf9)
+[Try me on klank.dev](https://link.klank.dev/s3muPLnksK7Jyeg68)
 
 ```haskell
 pwf :: Array (Tuple Number Number)
@@ -391,6 +352,8 @@ pwf =
 
 kr = 20.0 / 1000.0 :: Number -- the control rate in seconds, or 50 Hz
 
+epwf = evalPiecewise kr
+
 initialOnset = { onset: Nothing } :: { onset :: Maybe Number }
 
 scene ::
@@ -401,31 +364,11 @@ scene ::
   Behavior (IAudioUnit D2 { onset :: Maybe Number | a })
 scene mouse acc@{ onset } time = f time <$> click
   where
-  split s = span ((s >= _) <<< fst) pwf
-
-  gn s =
-    let
-      ht = split s
-
-      left = fromMaybe (Tuple 0.0 0.0) $ last ht.init
-
-      right = fromMaybe (Tuple 201.0 0.0) $ head ht.rest
-    in
-      if (fst right - s) < kr then
-        defaultParam { param = (snd right), timeOffset = (fst right - s) }
-      else
-        let
-          m = (snd right - snd left) / (fst right - fst left)
-
-          b = (snd right - (m * fst right))
-        in
-          defaultParam { param = (m * s + b), timeOffset = 0.0 }
-
   f s cl =
     IAudioUnit
       ( dup1
           ( (gain' 0.2 $ sinOsc (110.0 + (3.0 * sin (0.5 * rad))))
-              + (gain' 0.1 (gainT' (gn s) $ sinOsc 440.0))
+              + (gain' 0.1 (gainT' (epwf pwf s) $ sinOsc 440.0))
               + (gain' 0.1 $ sinOsc (220.0 + (if cl then (50.0 + maybe 0.0 (\t -> 10.0 * (s - t)) stTime) else 0.0)))
               + ( graph
                     { aggregators:
@@ -466,7 +409,7 @@ scene mouse acc@{ onset } time = f time <$> click
 
 Let's add a little dot that gets bigger when we click. We'll do that using the `AV` constructor that accepts a [Drawing](https://pursuit.purescript.org/packages/purescript-drawing/4.0.0/docs/Graphics.Drawing#t:Drawing).
 
-[Try me on klank.dev](https://klank.dev/?k&ec&url=https://klank-share.s3.eu-west-1.amazonaws.com/K16042993758317541.purs)
+[Try me on klank.dev](https://klank.dev/?k&ec&url=https://klank-share.s3.amazonaws.com/K16043869640467459.purs)
 
 ```haskell
 pwf :: Array (Tuple Number Number)
@@ -484,6 +427,8 @@ pwf =
 
 kr = 20.0 / 1000.0 :: Number -- the control rate in seconds, or 50 Hz
 
+epwf = evalPiecewise kr
+
 initialOnset = { onset: Nothing } :: { onset :: Maybe Number }
 
 scene ::
@@ -495,32 +440,12 @@ scene ::
   Behavior (AV D2 { onset :: Maybe Number | a })
 scene mouse acc@{ onset } (CanvasInfo { w, h }) time = f time <$> click
   where
-  split s = span ((s >= _) <<< fst) pwf
-
-  gn s =
-    let
-      ht = split s
-
-      left = fromMaybe (Tuple 0.0 0.0) $ last ht.init
-
-      right = fromMaybe (Tuple 201.0 0.0) $ head ht.rest
-    in
-      if (fst right - s) < kr then
-        defaultParam { param = (snd right), timeOffset = (fst right - s) }
-      else
-        let
-          m = (snd right - snd left) / (fst right - fst left)
-
-          b = (snd right - (m * fst right))
-        in
-          defaultParam { param = (m * s + b), timeOffset = 0.0 }
-
   f s cl =
     AV
       ( Just
           $ dup1
               ( (gain' 0.2 $ sinOsc (110.0 + (3.0 * sin (0.5 * rad))))
-                  + (gain' 0.1 (gainT' (gn s) $ sinOsc 440.0))
+                  + (gain' 0.1 (gainT' (epwf pwf s) $ sinOsc 440.0))
                   + (gain' 0.1 $ sinOsc (220.0 + (if cl then (50.0 + maybe 0.0 (\t -> 10.0 * (s - t)) stTime) else 0.0)))
                   + ( graph
                     { aggregators:
@@ -621,6 +546,31 @@ makePeriodicWave ::
 ## Advanced usage
 
 Here are some tips for advanced usage of `purescript-audio-behaviors`.
+
+### AudioParameter
+
+The `AudioParameter` type is the type for floating-point values accepted by functions like `gainT` or `sinOscT`. For example:
+
+```haskell
+osc0 = sinOsc 440.0
+osc1 = sinOscT (defaultParam { param = 440.0 })
+```
+
+The `AudioParameter` type has the following signature:
+
+```haskell
+type AudioParameter
+  = { param :: Number
+    , timeOffset :: Number
+    , transition :: AudioParameterTransition
+    , forceSet :: Boolean
+    }
+```
+
+- `param`: The floating point value
+- `timeOffset`: The offset in time from the previous control rate cycle. For example, if the control rate is `0.02` and the event should happen at `1.0735` seconds, then the value would be `0.0135`, or `1.0735 % 0.02`.
+- `transition`: How the transition should occur from the previous value. Options are `Immediate`, `LinearRamp` and `ExponentialRamp`.
+- `forceSet`: Should we force the value to be set even if there is no change. As an optimization, values are _not_ set _unless_ they change from the previous value. While this works in most cases, it leads to audible clicks for linear and exponential transitions. Setting `forceSet` before a linear or exponential transition causes the starting value to be correct.
 
 ### Exporting
 
