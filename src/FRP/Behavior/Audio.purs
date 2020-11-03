@@ -902,10 +902,11 @@ type AudioParameter
   = { param :: Number
     , timeOffset :: Number
     , transition :: AudioParameterTransition
+    , forceSet :: Boolean
     }
 
 defaultParam :: AudioParameter
-defaultParam = { param: 0.0, timeOffset: 0.0, transition: LinearRamp }
+defaultParam = { param: 0.0, timeOffset: 0.0, transition: LinearRamp, forceSet: false }
 
 _epsilon = 0.0001 :: Number
 
@@ -921,20 +922,28 @@ evalPiecewise kr p s =
         (maybe (Tuple 10000.0 0.0) (over _1 (_ + 1.0)) $ A.last p)
         $ A.head ht.rest
   in
-    if (fst right - s) < kr then
+    if (s == fst left) then
       defaultParam
-        { param = (snd right)
-        , timeOffset = (fst right - s)
+        { param = (snd left)
+        , timeOffset = (0.0)
+        , forceSet = true
         }
     else
-      let
-        dnm = (fst (right) - fst (left))
+      if (fst right - s) < kr then
+        defaultParam
+          { param = (snd right)
+          , timeOffset = (fst right - s)
+          , forceSet = (true)
+          }
+      else
+        let
+          dnm = (fst (right) - fst (left))
 
-        m = if dnm < _epsilon then 0.0 else (snd right - snd left) / dnm
+          m = if dnm < _epsilon then (0.0) else (snd right - snd left) / dnm
 
-        b = (snd right - (m * fst right))
-      in
-        defaultParam { param = (m * s + b), timeOffset = 0.0 }
+          b = (snd right - (m * fst right))
+        in
+          defaultParam { param = (m * s + b), timeOffset = 0.0 }
 
 type PannerVars
   = { coneInnerAngle :: (AudioParameter)
@@ -2007,7 +2016,7 @@ audioToPtr = go (-1) DS.empty
         merge ptr
           { head: ptr.ptr
           , prev: DS.empty :: Set Int
-          , au: (Constant' ({ param: 0.0, timeOffset: 0.0, transition: LinearRamp }))
+          , au: (Constant' (defaultParam))
           , name: auHack.name
           }
     in
@@ -2232,11 +2241,7 @@ type PtrInfo
   go' ptr v@(Graph name g) = graphthrough ptr v g
 
 ap_ :: Number -> AudioParameter
-ap_ a =
-  { param: a
-  , timeOffset: 0.0
-  , transition: LinearRamp
-  }
+ap_ a = defaultParam { param = a }
 
 -- | The microphone.
 -- |
@@ -4864,7 +4869,7 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
 
   set' i (Delay' n) (Delay' nx) = if napeq n nx then [ SetDelay i (n.param) (n.timeOffset) (nx.param == speciousDelay) n.transition ] else []
 
-  set' i (Gain' n) (Gain' nx) = if napeq n nx then [ SetGain i (n.param) (n.timeOffset) (nx.param == speciousGain) n.transition ] else []
+  set' i (Gain' n) (Gain' nx) = if (napeq n nx || n.forceSet) then [ SetGain i (n.param) (n.timeOffset) (nx.param == speciousGain) n.transition ] else []
 
   set' i _ _ = []
 
