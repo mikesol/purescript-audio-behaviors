@@ -4708,17 +4708,17 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
       (map (uncurry $ uncurry ConnectTo) $ map (\i -> Tuple i (harmonizeCurrChannels i)) conn)
 
   setFQFilter i a b x y =
-    (if napeq a x then [ SetFrequency i (a.param) (a.timeOffset) (x.param == speciousFreq) a.transition ] else [])
-      <> (if napeq b y then [ SetQ i (b.param) (b.timeOffset) (y.param == speciousQ) b.transition ] else [])
+    (if napeq a x || a.forceSet then [ SetFrequency i (a.param) (a.timeOffset) (x.param == speciousFreq) a.transition ] else [])
+      <> (if napeq b y || b.forceSet then [ SetQ i (b.param) (b.timeOffset) (y.param == speciousQ) b.transition ] else [])
 
   setFilter i a b c x y z =
-    (if napeq a x then [ SetFrequency i (a.param) (a.timeOffset) (z.param == speciousFreq) a.transition ] else [])
-      <> (if napeq b y then [ SetQ i (b.param) (b.timeOffset) (y.param == speciousQ) b.transition ] else [])
-      <> (if napeq c z then [ SetGain i (c.param) (c.timeOffset) (z.param == speciousGain) c.transition ] else [])
+    (if napeq a x || a.forceSet then [ SetFrequency i (a.param) (a.timeOffset) (z.param == speciousFreq) a.transition ] else [])
+      <> (if napeq b y || b.forceSet then [ SetQ i (b.param) (b.timeOffset) (y.param == speciousQ) b.transition ] else [])
+      <> (if napeq c z || c.forceSet then [ SetGain i (c.param) (c.timeOffset) (z.param == speciousGain) c.transition ] else [])
 
   setFGFilter i a c x z =
-    (if napeq a x then [ SetFrequency i (a.param) (a.timeOffset) (x.param == speciousFreq) a.transition ] else [])
-      <> (if napeq c z then [ SetGain i (c.param) (c.timeOffset) (z.param == speciousGain) c.transition ] else [])
+    (if napeq a x || a.forceSet then [ SetFrequency i (a.param) (a.timeOffset) (x.param == speciousFreq) a.transition ] else [])
+      <> (if napeq c z || c.forceSet then [ SetGain i (c.param) (c.timeOffset) (z.param == speciousGain) c.transition ] else [])
 
   -- uncomment!
   set' :: Int -> AudioUnit' -> AudioUnit' -> Array Instruction
@@ -4728,10 +4728,10 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
 
   set' i (AudioWorkletAggregator' _ n) (AudioWorkletAggregator' _ nx) = scp i n nx
 
-  set' i (PlayBuf' _ n _) (PlayBuf' _ nx _) = if napeq n nx then [ SetPlaybackRate i (n.param) (n.timeOffset) (nx.param == speciousRate) n.transition ] else []
+  set' i (PlayBuf' _ n _) (PlayBuf' _ nx _) = if napeq n nx || n.forceSet then [ SetPlaybackRate i (n.param) (n.timeOffset) (nx.param == speciousRate) n.transition ] else []
 
   set' i (LoopBuf' _ n s e) (LoopBuf' _ nx sx ex) =
-    (if napeq n nx then [ SetPlaybackRate i (n.param) (n.timeOffset) (nx.param == speciousRate) n.transition ] else [])
+    (if napeq n nx || n.forceSet then [ SetPlaybackRate i (n.param) (n.timeOffset) (nx.param == speciousRate) n.transition ] else [])
       <> (if s /= sx then [ SetLoopStart i s (sx == speciousStart) ] else [])
       <> (if e /= ex then [ SetLoopEnd i e (ex == speciousEnd) ] else [])
 
@@ -4752,21 +4752,21 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
   set' i (Notch' a b) (Notch' x y) = setFQFilter i a b x y
 
   set' i (DynamicsCompressor' a b c d e) (DynamicsCompressor' v w x y z) =
-    (if napeq a v then [ SetThreshold i (a.param) (a.timeOffset) (v.param == speciousThreshold) a.transition ] else [])
-      <> (if napeq b w then [ SetKnee i (b.param) (b.timeOffset) (w.param == speciousKnee) b.transition ] else [])
-      <> (if napeq c x then [ SetRatio i (c.param) (c.timeOffset) (x.param == speciousRatio) c.transition ] else [])
-      <> (if napeq d y then [ SetAttack i (d.param) (d.timeOffset) (y.param == speciousAttack) d.transition ] else [])
-      <> (if napeq e z then [ SetRelease i (e.param) (e.timeOffset) (z.param == speciousRelease) e.transition ] else [])
+    (if napeq a v || a.forceSet then [ SetThreshold i (a.param) (a.timeOffset) (v.param == speciousThreshold) a.transition ] else [])
+      <> (if napeq b w || b.forceSet then [ SetKnee i (b.param) (b.timeOffset) (w.param == speciousKnee) b.transition ] else [])
+      <> (if napeq c x || c.forceSet then [ SetRatio i (c.param) (c.timeOffset) (x.param == speciousRatio) c.transition ] else [])
+      <> (if napeq d y || d.forceSet then [ SetAttack i (d.param) (d.timeOffset) (y.param == speciousAttack) d.transition ] else [])
+      <> (if napeq e z || e.forceSet then [ SetRelease i (e.param) (e.timeOffset) (z.param == speciousRelease) e.transition ] else [])
 
-  set' i (SinOsc' n) (SinOsc' nx) = if napeq n nx then [ SetFrequency i (n.param) (n.timeOffset) (nx.param == speciousFreq) n.transition ] else []
+  set' i (SinOsc' n) (SinOsc' nx) = if (napeq n nx || n.forceSet) then [ SetFrequency i (n.param) (n.timeOffset) (nx.param == speciousFreq) n.transition ] else []
 
-  set' i (SquareOsc' n) (SquareOsc' nx) = if napeq n nx then [ SetFrequency i (n.param) (n.timeOffset) (nx.param == speciousFreq) n.transition ] else []
+  set' i (SquareOsc' n) (SquareOsc' nx) = if (napeq n nx || n.forceSet) then [ SetFrequency i (n.param) (n.timeOffset) (nx.param == speciousFreq) n.transition ] else []
 
   set' i (SawtoothOsc' n) (SawtoothOsc' nx) = if napeq n nx then [ SetFrequency i (n.param) (n.timeOffset) (nx.param == speciousFreq) n.transition ] else []
 
-  set' i (TriangleOsc' n) (TriangleOsc' nx) = if napeq n nx then [ SetFrequency i (n.param) (n.timeOffset) (nx.param == speciousFreq) n.transition ] else []
+  set' i (TriangleOsc' n) (TriangleOsc' nx) = if (napeq n nx || n.forceSet) then [ SetFrequency i (n.param) (n.timeOffset) (nx.param == speciousFreq) n.transition ] else []
 
-  set' i (PeriodicOsc' n _) (PeriodicOsc' nx _) = if napeq n nx then [ SetFrequency i (n.param) (n.timeOffset) (nx.param == speciousFreq) n.transition ] else []
+  set' i (PeriodicOsc' n _) (PeriodicOsc' nx _) = if (napeq n nx || n.forceSet) then [ SetFrequency i (n.param) (n.timeOffset) (nx.param == speciousFreq) n.transition ] else []
 
   set' i (WaveShaper' _ o) (WaveShaper' _ ox) =
     if o /= ox then
@@ -4779,19 +4779,19 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
   set' i (StereoPanner' n) (StereoPanner' nx) = if napeq n nx then [ SetPan i (n.param) (n.timeOffset) (nx.param == speciousPanner) n.transition ] else []
 
   set' i (Panner' n) (Panner' nx) =
-    ( ( if napeq n.coneInnerAngle nx.coneInnerAngle then
+    ( ( if napeq n.coneInnerAngle nx.coneInnerAngle || n.coneInnerAngle.forceSet then
           [ SetConeInnerAngle i (n.coneInnerAngle.param)
           ]
         else
           []
       )
-        <> ( if napeq n.coneOuterAngle nx.coneOuterAngle then
+        <> ( if napeq n.coneOuterAngle nx.coneOuterAngle || n.coneOuterAngle.forceSet then
               [ SetConeOuterAngle i (n.coneOuterAngle.param)
               ]
             else
               []
           )
-        <> ( if napeq n.coneOuterGain nx.coneOuterGain then
+        <> ( if napeq n.coneOuterGain nx.coneOuterGain || n.coneOuterGain.forceSet then
               [ SetConeOuterGain i (n.coneOuterGain.param)
               ]
             else
@@ -4809,19 +4809,19 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
             else
               []
           )
-        <> ( if napeq n.orientationX nx.orientationX then
+        <> ( if napeq n.orientationX nx.orientationX || n.orientationX.forceSet then
               [ SetOrientationX i (n.orientationX.param) (n.orientationX.timeOffset) (nx.orientationX.param == speciousOrientationX) n.orientationX.transition
               ]
             else
               []
           )
-        <> ( if napeq n.orientationY nx.orientationY then
+        <> ( if napeq n.orientationY nx.orientationY || n.orientationY.forceSet then
               [ SetOrientationY i (n.orientationY.param) (n.orientationY.timeOffset) (nx.orientationY.param == speciousOrientationY) n.orientationY.transition
               ]
             else
               []
           )
-        <> ( if napeq n.orientationZ nx.orientationZ then
+        <> ( if napeq n.orientationZ nx.orientationZ || n.orientationZ.forceSet then
               [ SetOrientationZ i (n.orientationZ.param) (n.orientationZ.timeOffset) (nx.orientationZ.param == speciousOrientationZ) n.orientationZ.transition
               ]
             else
@@ -4833,31 +4833,31 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
             else
               []
           )
-        <> ( if napeq n.positionX nx.positionX then
+        <> ( if napeq n.positionX nx.positionX || n.positionX.forceSet then
               [ SetPositionX i (n.positionX.param) (n.positionX.timeOffset) (nx.positionX.param == speciousPositionX) n.positionX.transition
               ]
             else
               []
           )
-        <> ( if napeq n.positionY nx.positionY then
+        <> ( if napeq n.positionY nx.positionY || n.positionY.forceSet then
               [ SetPositionY i (n.positionY.param) (n.positionY.timeOffset) (nx.positionY.param == speciousPositionY) n.positionY.transition
               ]
             else
               []
           )
-        <> ( if napeq n.positionZ nx.positionZ then
+        <> ( if napeq n.positionZ nx.positionZ || n.positionZ.forceSet then
               [ SetPositionZ i (n.positionZ.param) (n.positionZ.timeOffset) (nx.positionZ.param == speciousPositionZ) n.positionZ.transition
               ]
             else
               []
           )
-        <> ( if napeq n.refDistance nx.refDistance then
+        <> ( if (napeq n.refDistance nx.refDistance) || n.refDistance.forceSet then
               [ SetRefDistance i (n.refDistance.param)
               ]
             else
               []
           )
-        <> ( if napeq n.rolloffFactor nx.rolloffFactor then
+        <> ( if (napeq n.rolloffFactor nx.rolloffFactor) || n.rolloffFactor.forceSet then
               [ SetRolloffFactor i (n.rolloffFactor.param)
               ]
             else
@@ -4865,9 +4865,9 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
           )
     )
 
-  set' i (Constant' n) (Constant' nx) = if napeq n nx then [ SetOffset i (n.param) (n.timeOffset) (nx.param == speciousOffset) n.transition ] else []
+  set' i (Constant' n) (Constant' nx) = if (napeq n nx || n.forceSet) then [ SetOffset i (n.param) (n.timeOffset) (nx.param == speciousOffset) n.transition ] else []
 
-  set' i (Delay' n) (Delay' nx) = if napeq n nx then [ SetDelay i (n.param) (n.timeOffset) (nx.param == speciousDelay) n.transition ] else []
+  set' i (Delay' n) (Delay' nx) = if (napeq n nx || n.forceSet) then [ SetDelay i (n.param) (n.timeOffset) (nx.param == speciousDelay) n.transition ] else []
 
   set' i (Gain' n) (Gain' nx) = if (napeq n nx || n.forceSet) then [ SetGain i (n.param) (n.timeOffset) (nx.param == speciousGain) n.transition ] else []
 
