@@ -377,6 +377,7 @@ import Data.Unfoldable (class Unfoldable)
 import Data.Unfoldable1 as DU
 import Data.Vec (Vec, fill)
 import Data.Vec as V
+-- import Debug.Trace (spy)
 import Effect (Effect, whileE)
 import Effect.Aff (Aff, joinFiber, launchAff, launchAff_)
 import Effect.Class.Console (log)
@@ -1965,19 +1966,24 @@ audioToPtr = go (-1) DS.empty
     let
       r =
         foldl
-          ( \b@(h :| tl) a ->
-              ( go (h.p.ptr + h.len - 1) (DS.singleton ptr.ptr) a
+          ( \b@{ acc: (h :| tl), ln } a ->
+              { acc:
+                  (go (ptr.ptr + ln + h.len - 1) (DS.singleton ptr.ptr) a)
+                    :| (h : tl)
+              , ln: h.len + ln
+              }
+          )
+          { acc:
+              ( NE.singleton
+                  (go ptr.ptr (DS.singleton ptr.ptr) $ NE.head l)
               )
-                :| (h : tl)
-          )
-          ( NE.singleton
-              (go ptr.ptr (DS.singleton ptr.ptr) $ NE.head l)
-          )
+          , ln: 0
+          }
           (NE.tail l)
 
       au =
         ( \{ au: awd, name } ->
-            { au: mergerHack awd (map _.p.ptr r), name }
+            { au: mergerHack awd (map _.p.ptr r.acc), name }
         )
           (au' v)
 
@@ -1985,14 +1991,14 @@ audioToPtr = go (-1) DS.empty
         merge
           { head: ptr.ptr
           , next: ptr.next
-          , prev: DS.fromFoldable $ (map (_.p.head) r)
+          , prev: DS.fromFoldable $ (map (_.p.head) r.acc)
           , au: au.au
           , name: au.name
           }
           ptr
     in
-      { len: (foldl (+) 0 (map _.len r)) + 1
-      , flat: (foldl (<>) M.empty (map _.flat r)) <> M.singleton ptr.ptr p
+      { len: (foldl (+) 0 (map _.len r.acc)) + 1
+      , flat: (foldl (<>) M.empty (map _.flat r.acc)) <> M.singleton ptr.ptr p
       , p
       }
 
@@ -2070,31 +2076,6 @@ audioToPtr = go (-1) DS.empty
             { len: M.size flat, flat, p: _ }
             p
 
-  {-type PtrInfo'
-  = { ptr :: Int
-    , chan :: Int
-    , status :: Status
-    , next :: Set Int
-    }
-
-type PtrInfo
-  = { ptr :: Int
-    , chan :: Int
-    , next :: Set Int
-    , status :: Status
-    , prev :: Set Int
-    , head :: Int
-    , au :: AudioUnit'
-    , name :: MString
-    }
--}
-  {-merge
-          { head: ptr.ptr
-          , prev: DS.fromFoldable $ (map (_.p.head) r)
-          , au: au.au
-          , name: au.name
-          }
-          ptr-}
   closurethrough ::
     forall ch ix.
     Pos ch =>
