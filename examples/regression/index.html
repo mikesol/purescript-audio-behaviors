@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+  <script src="index.js"></script>
+  <script src="moo.js"></script>
+  <script>
+    var offCb = null;
+    var audioCtx = null;
+    function base64ToArrayBuffer(base64) {
+      var binaryString = window.atob(base64);
+      var len = binaryString.length;
+      var bytes = new Uint8Array(len);
+      for (var i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      return bytes.buffer;
+    }
+    var moo = null;
+    var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    var reverbSoundArrayBuffer = base64ToArrayBuffer(impulseResponse);
+    audioCtx.decodeAudioData(
+      reverbSoundArrayBuffer,
+      function (buffer) {
+        moo = buffer;
+      },
+      function (e) {
+        alert("Error when decoding audio data" + e.err);
+      }
+    );
+
+    function turnOnAudio() {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      audioCtx.audioWorklet.addModule("ps-aud-mul.js").then(function () {
+        offCb = PS["FRP.Behavior.Audio.Example.Regression"].run()(audioCtx)({
+          msBetweenSamples: 20,
+          msBetweenPings: 15,
+          fastforwardLowerBound: 0.025,
+          rewindUpperBound: 0.15,
+          initialOffset: 0.1,
+          doWebAudio: true,
+        })({
+          periodicWaves: {},
+          microphones: {},
+          buffers: {
+            moo: moo,
+          },
+          tracks: {},
+          floatArrays: {},
+        })({})(PS["FRP.Behavior.Audio.Example.Regression"].exporter)();
+      });
+    }
+    function turnOffAudio() {
+      offCb ? offCb() : null;
+      offCB = null;
+      audioCtx ? audioCtx.close() : null;
+      audioCtx = null;
+    }
+  </script>
+  <body>
+    <button onclick="turnOnAudio();">turn on</button>
+    <button onclick="turnOffAudio();">turn off</button>
+  </body>
+</html>

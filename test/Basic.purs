@@ -118,206 +118,48 @@ basicTestSuite = do
         `shouldEqual`
           { flat:
               ( DM.fromFoldable
-                  [ ( Tuple 0
-                        { au: Speaker'
-                        , chan: 3
-                        , head: 0
-                        , name: Nothing
-                        , next: (fromFoldable Nil)
-                        , prev:
-                            ( fromFoldable
-                                (1 : Nil)
-                            )
-                        , ptr: 0
-                        , status: On
-                        }
-                    )
-                  , ( Tuple 1
-                        { au: (Gain' $ { transition: LinearRamp, forceSet: false, param: 0.5, timeOffset: 0.0 })
-                        , chan: 3
-                        , head: 1
-                        , name: Nothing
-                        , next:
-                            ( fromFoldable
-                                (0 : Nil)
-                            )
-                        , prev: (fromFoldable (2 : Nil))
-                        , ptr: 1
-                        , status: On
-                        }
-                    )
-                  , ( Tuple 2
-                        { au:
-                            (Merger' (7 : 5 : 3 : Nil))
-                        , chan: 3
-                        , head: 2
-                        , name: Nothing
-                        , next: (fromFoldable (1 : Nil))
-                        , prev: (fromFoldable (3 : 5 : 7 : Nil))
-                        , ptr: 2
-                        , status: On
-                        }
-                    )
-                  , ( Tuple 3
-                        { au: (Gain' $ { transition: LinearRamp, forceSet: false, param: 0.3, timeOffset: 0.0 })
-                        , chan: 1
-                        , head: 3
-                        , name: Nothing
-                        , next:
-                            ( fromFoldable
-                                (2 : Nil)
-                            )
-                        , prev: (fromFoldable (4 : Nil))
-                        , ptr: 3
-                        , status: On
-                        }
-                    )
-                  , ( Tuple 4
-                        { au: (SplitRes' 0)
-                        , chan: 1
-                        , head: 4
-                        , name: Nothing
-                        , next:
-                            ( fromFoldable
-                                (3 : Nil)
-                            )
-                        , prev: (fromFoldable Nil)
-                        , ptr: 4
-                        , status: On
-                        }
-                    )
-                  , ( Tuple 5
-                        { au: (Gain' $ { transition: LinearRamp, forceSet: false, param: 0.3, timeOffset: 0.0 })
-                        , chan: 1
-                        , head: 5
-                        , name: Nothing
-                        , next:
-                            ( fromFoldable
-                                (2 : Nil)
-                            )
-                        , prev: (fromFoldable (6 : Nil))
-                        , ptr: 5
-                        , status: On
-                        }
-                    )
-                  , (Tuple 6 { au: (SplitRes' 1), chan: 1, head: 6, name: Nothing, next: (fromFoldable (5 : Nil)), prev: (fromFoldable Nil), ptr: 6, status: On })
-                  , (Tuple 7 { au: (Gain' $ { transition: LinearRamp, forceSet: false, param: 0.3, timeOffset: 0.0 }), chan: 1, head: 7, name: Nothing, next: (fromFoldable (2 : Nil)), prev: (fromFoldable (8 : Nil)), ptr: 7, status: On })
-                  , ( Tuple 8
-                        { au: (SplitRes' 2)
-                        , chan: 1
-                        , head: 8
-                        , name: Nothing
-                        , next: (fromFoldable (7 : Nil))
-                        , prev:
-                            (fromFoldable Nil)
-                        , ptr: 8
-                        , status: On
-                        }
-                    )
-                  , ( Tuple 9
-                        { au: (Splitter' 3)
-                        , chan: 3
-                        , head: 0
-                        , name: Nothing
-                        , next: (fromFoldable (4 : 6 : 8 : Nil))
-                        , prev:
-                            (fromFoldable (10 : Nil))
-                        , ptr: 9
-                        , status: On
-                        }
-                    )
-                  , (Tuple 10 { au: (Merger' (29 : 20 : 11 : Nil)), chan: 3, head: 10, name: Nothing, next: (fromFoldable (9 : Nil)), prev: (fromFoldable (11 : 20 : 29 : Nil)), ptr: 10, status: On })
+                  [ (Tuple 0 { au: (Splitter' 3), chan: 3, head: 1, name: Nothing, next: (fromFoldable (5 : 7 : 9 : Nil)), prev: (fromFoldable (10 : Nil)), ptr: 0, status: On })
+                  , (Tuple 1 { au: Speaker', chan: 3, head: 1, name: Nothing, next: (fromFoldable Nil), prev: (fromFoldable (2 : Nil)), ptr: 1, status: On })
+                  , (Tuple 2 { au: (Gain' { forceSet: false, param: 0.5, timeOffset: 0.0, transition: LinearRamp }), chan: 3, head: 2, name: Nothing, next: (fromFoldable (1 : Nil)), prev: (fromFoldable (3 : Nil)), ptr: 2, status: On })
+                  , (Tuple 3 { au: (Merger' (8 : 6 : 4 : Nil)), chan: 3, head: 3, name: Nothing, next: (fromFoldable (2 : Nil)), prev: (fromFoldable (4 : 6 : 8 : Nil)), ptr: 3, status: On })
+                  , (Tuple 4 { au: (Gain' { forceSet: false, param: 0.3, timeOffset: 0.0, transition: LinearRamp }), chan: 1, head: 4, name: Nothing, next: (fromFoldable (3 : Nil)), prev: (fromFoldable (5 : Nil)), ptr: 4, status: On })
+                  , (Tuple 5 { au: (SplitRes' 0), chan: 1, head: 5, name: Nothing, next: (fromFoldable (4 : Nil)), prev: (fromFoldable Nil), ptr: 5, status: On })
+                  , (Tuple 6 { au: (Gain' { forceSet: false, param: 0.3, timeOffset: 0.0, transition: LinearRamp }), chan: 1, head: 6, name: Nothing, next: (fromFoldable (3 : Nil)), prev: (fromFoldable (7 : Nil)), ptr: 6, status: On })
+                  , (Tuple 7 { au: (SplitRes' 1), chan: 1, head: 7, name: Nothing, next: (fromFoldable (6 : Nil)), prev: (fromFoldable Nil), ptr: 7, status: On })
+                  , (Tuple 8 { au: (Gain' { forceSet: false, param: 0.3, timeOffset: 0.0, transition: LinearRamp }), chan: 1, head: 8, name: Nothing, next: (fromFoldable (3 : Nil)), prev: (fromFoldable (9 : Nil)), ptr: 8, status: On })
+                  , (Tuple 9 { au: (SplitRes' 2), chan: 1, head: 9, name: Nothing, next: (fromFoldable (8 : Nil)), prev: (fromFoldable Nil), ptr: 9, status: On })
+                  , (Tuple 10 { au: (Merger' (29 : 20 : 11 : Nil)), chan: 3, head: 10, name: Nothing, next: (fromFoldable (0 : Nil)), prev: (fromFoldable (11 : 20 : 29 : Nil)), ptr: 10, status: On })
                   , (Tuple 11 { au: Add', chan: 1, head: 11, name: Nothing, next: (fromFoldable (10 : Nil)), prev: (fromFoldable (12 : 16 : Nil)), ptr: 11, status: On })
-                  , (Tuple 12 { au: (Gain' $ { transition: LinearRamp, forceSet: false, param: 1.0, timeOffset: 0.0 }), chan: 1, head: 12, name: Nothing, next: (fromFoldable (11 : Nil)), prev: (fromFoldable (13 : 14 : 15 : Nil)), ptr: 12, status: On })
-                  , (Tuple 13 { au: (SinOsc' $ { transition: LinearRamp, forceSet: false, param: 440.0, timeOffset: 0.0 }), chan: 1, head: 13, name: Nothing, next: (fromFoldable (12 : Nil)), prev: (fromFoldable Nil), ptr: 13, status: On })
-                  , (Tuple 14 { au: (SinOsc' $ { transition: LinearRamp, forceSet: false, param: 441.0, timeOffset: 0.0 }), chan: 1, head: 14, name: Nothing, next: (fromFoldable (12 : Nil)), prev: (fromFoldable Nil), ptr: 14, status: On })
-                  , (Tuple 15 { au: (SinOsc' $ { transition: LinearRamp, forceSet: false, param: 441.0, timeOffset: 0.0 }), chan: 1, head: 15, name: Nothing, next: (fromFoldable (12 : Nil)), prev: (fromFoldable Nil), ptr: 15, status: On })
-                  , ( Tuple 16
-                        { au:
-                            ( Gain'
-                                $ { param: 0.9
-                                  , forceSet: false
-                                  , timeOffset: 0.0
-                                  , transition: LinearRamp
-                                  }
-                            )
-                        , chan: 1
-                        , head: 16
-                        , name: Nothing
-                        , next: (fromFoldable (11 : Nil))
-                        , prev: (fromFoldable (17 : 18 : 19 : Nil))
-                        , ptr: 16
-                        , status: On
-                        }
-                    )
-                  , (Tuple 17 { au: (SinOsc' $ { transition: LinearRamp, forceSet: false, param: 442.0, timeOffset: 0.0 }), chan: 1, head: 17, name: Nothing, next: (fromFoldable (16 : Nil)), prev: (fromFoldable Nil), ptr: 17, status: On })
-                  , (Tuple 18 { au: (SinOsc' $ { transition: LinearRamp, forceSet: false, param: 443.0, timeOffset: 0.0 }), chan: 1, head: 18, name: Nothing, next: (fromFoldable (16 : Nil)), prev: (fromFoldable Nil), ptr: 18, status: On })
-                  , (Tuple 19 { au: (SinOsc' $ { transition: LinearRamp, forceSet: false, param: 443.0, timeOffset: 0.0 }), chan: 1, head: 19, name: Nothing, next: (fromFoldable (16 : Nil)), prev: (fromFoldable Nil), ptr: 19, status: On })
+                  , (Tuple 12 { au: (Gain' { forceSet: false, param: 1.0, timeOffset: 0.0, transition: LinearRamp }), chan: 1, head: 12, name: Nothing, next: (fromFoldable (11 : Nil)), prev: (fromFoldable (13 : 14 : 15 : Nil)), ptr: 12, status: On })
+                  , (Tuple 13 { au: (SinOsc' { forceSet: false, param: 440.0, timeOffset: 0.0, transition: LinearRamp }), chan: 1, head: 13, name: Nothing, next: (fromFoldable (12 : Nil)), prev: (fromFoldable Nil), ptr: 13, status: On })
+                  , (Tuple 14 { au: (SinOsc' { forceSet: false, param: 441.0, timeOffset: 0.0, transition: LinearRamp }), chan: 1, head: 14, name: Nothing, next: (fromFoldable (12 : Nil)), prev: (fromFoldable Nil), ptr: 14, status: On })
+                  , (Tuple 15 { au: (SinOsc' { forceSet: false, param: 441.0, timeOffset: 0.0, transition: LinearRamp }), chan: 1, head: 15, name: Nothing, next: (fromFoldable (12 : Nil)), prev: (fromFoldable Nil), ptr: 15, status: On })
+                  , (Tuple 16 { au: (Gain' { forceSet: false, param: 0.9, timeOffset: 0.0, transition: LinearRamp }), chan: 1, head: 16, name: Nothing, next: (fromFoldable (11 : Nil)), prev: (fromFoldable (17 : 18 : 19 : Nil)), ptr: 16, status: On })
+                  , (Tuple 17 { au: (SinOsc' { forceSet: false, param: 442.0, timeOffset: 0.0, transition: LinearRamp }), chan: 1, head: 17, name: Nothing, next: (fromFoldable (16 : Nil)), prev: (fromFoldable Nil), ptr: 17, status: On })
+                  , (Tuple 18 { au: (SinOsc' { forceSet: false, param: 443.0, timeOffset: 0.0, transition: LinearRamp }), chan: 1, head: 18, name: Nothing, next: (fromFoldable (16 : Nil)), prev: (fromFoldable Nil), ptr: 18, status: On })
+                  , (Tuple 19 { au: (SinOsc' { forceSet: false, param: 443.0, timeOffset: 0.0, transition: LinearRamp }), chan: 1, head: 19, name: Nothing, next: (fromFoldable (16 : Nil)), prev: (fromFoldable Nil), ptr: 19, status: On })
                   , (Tuple 20 { au: Add', chan: 1, head: 20, name: Nothing, next: (fromFoldable (10 : Nil)), prev: (fromFoldable (21 : 25 : Nil)), ptr: 20, status: On })
-                  , ( Tuple 21
-                        { au: (Gain' $ { transition: LinearRamp, forceSet: false, param: 1.0, timeOffset: 0.0 })
-                        , chan: 1
-                        , head: 21
-                        , name: Nothing
-                        , next: (fromFoldable (20 : Nil))
-                        , prev: (fromFoldable (22 : 23 : 24 : Nil))
-                        , ptr: 21
-                        , status: On
-                        }
-                    )
-                  , (Tuple 22 { au: (SinOsc' $ { transition: LinearRamp, forceSet: false, param: 440.0, timeOffset: 0.0 }), chan: 1, head: 22, name: Nothing, next: (fromFoldable (21 : Nil)), prev: (fromFoldable Nil), ptr: 22, status: On })
-                  , (Tuple 23 { au: (SinOsc' $ { transition: LinearRamp, forceSet: false, param: 441.0, timeOffset: 0.0 }), chan: 1, head: 23, name: Nothing, next: (fromFoldable (21 : Nil)), prev: (fromFoldable Nil), ptr: 23, status: On })
-                  , (Tuple 24 { au: (SinOsc' $ { transition: LinearRamp, forceSet: false, param: 441.0, timeOffset: 0.0 }), chan: 1, head: 24, name: Nothing, next: (fromFoldable (21 : Nil)), prev: (fromFoldable Nil), ptr: 24, status: On })
-                  , (Tuple 25 { au: (Gain' $ { transition: LinearRamp, forceSet: false, param: 0.9, timeOffset: 0.0 }), chan: 1, head: 25, name: Nothing, next: (fromFoldable (20 : Nil)), prev: (fromFoldable (26 : 27 : 28 : Nil)), ptr: 25, status: On })
-                  , (Tuple 26 { au: (SinOsc' $ { transition: LinearRamp, forceSet: false, param: 442.0, timeOffset: 0.0 }), chan: 1, head: 26, name: Nothing, next: (fromFoldable (25 : Nil)), prev: (fromFoldable Nil), ptr: 26, status: On })
-                  , ( Tuple 27
-                        { au: (SinOsc' $ { transition: LinearRamp, forceSet: false, param: 443.0, timeOffset: 0.0 })
-                        , chan: 1
-                        , head: 27
-                        , name: Nothing
-                        , next:
-                            ( fromFoldable
-                                (25 : Nil)
-                            )
-                        , prev: (fromFoldable Nil)
-                        , ptr: 27
-                        , status: On
-                        }
-                    )
-                  , (Tuple 28 { au: (SinOsc' $ { transition: LinearRamp, forceSet: false, param: 443.0, timeOffset: 0.0 }), chan: 1, head: 28, name: Nothing, next: (fromFoldable (25 : Nil)), prev: (fromFoldable Nil), ptr: 28, status: On })
+                  , (Tuple 21 { au: (Gain' { forceSet: false, param: 1.0, timeOffset: 0.0, transition: LinearRamp }), chan: 1, head: 21, name: Nothing, next: (fromFoldable (20 : Nil)), prev: (fromFoldable (22 : 23 : 24 : Nil)), ptr: 21, status: On })
+                  , (Tuple 22 { au: (SinOsc' { forceSet: false, param: 440.0, timeOffset: 0.0, transition: LinearRamp }), chan: 1, head: 22, name: Nothing, next: (fromFoldable (21 : Nil)), prev: (fromFoldable Nil), ptr: 22, status: On })
+                  , (Tuple 23 { au: (SinOsc' { forceSet: false, param: 441.0, timeOffset: 0.0, transition: LinearRamp }), chan: 1, head: 23, name: Nothing, next: (fromFoldable (21 : Nil)), prev: (fromFoldable Nil), ptr: 23, status: On })
+                  , (Tuple 24 { au: (SinOsc' { forceSet: false, param: 441.0, timeOffset: 0.0, transition: LinearRamp }), chan: 1, head: 24, name: Nothing, next: (fromFoldable (21 : Nil)), prev: (fromFoldable Nil), ptr: 24, status: On })
+                  , (Tuple 25 { au: (Gain' { forceSet: false, param: 0.9, timeOffset: 0.0, transition: LinearRamp }), chan: 1, head: 25, name: Nothing, next: (fromFoldable (20 : Nil)), prev: (fromFoldable (26 : 27 : 28 : Nil)), ptr: 25, status: On })
+                  , (Tuple 26 { au: (SinOsc' { forceSet: false, param: 442.0, timeOffset: 0.0, transition: LinearRamp }), chan: 1, head: 26, name: Nothing, next: (fromFoldable (25 : Nil)), prev: (fromFoldable Nil), ptr: 26, status: On })
+                  , (Tuple 27 { au: (SinOsc' { forceSet: false, param: 443.0, timeOffset: 0.0, transition: LinearRamp }), chan: 1, head: 27, name: Nothing, next: (fromFoldable (25 : Nil)), prev: (fromFoldable Nil), ptr: 27, status: On })
+                  , (Tuple 28 { au: (SinOsc' { forceSet: false, param: 443.0, timeOffset: 0.0, transition: LinearRamp }), chan: 1, head: 28, name: Nothing, next: (fromFoldable (25 : Nil)), prev: (fromFoldable Nil), ptr: 28, status: On })
                   , (Tuple 29 { au: Add', chan: 1, head: 29, name: Nothing, next: (fromFoldable (10 : Nil)), prev: (fromFoldable (30 : 34 : Nil)), ptr: 29, status: On })
-                  , (Tuple 30 { au: (Gain' $ { transition: LinearRamp, forceSet: false, param: 1.0, timeOffset: 0.0 }), chan: 1, head: 30, name: Nothing, next: (fromFoldable (29 : Nil)), prev: (fromFoldable (31 : 32 : 33 : Nil)), ptr: 30, status: On })
-                  , ( Tuple 31
-                        { au: (SinOsc' $ { transition: LinearRamp, forceSet: false, param: 440.0, timeOffset: 0.0 })
-                        , chan: 1
-                        , head: 31
-                        , name: Nothing
-                        , next: (fromFoldable (30 : Nil))
-                        , prev: (fromFoldable Nil)
-                        , ptr: 31
-                        , status: On
-                        }
-                    )
-                  , (Tuple 32 { au: (SinOsc' $ { transition: LinearRamp, forceSet: false, param: 441.0, timeOffset: 0.0 }), chan: 1, head: 32, name: Nothing, next: (fromFoldable (30 : Nil)), prev: (fromFoldable Nil), ptr: 32, status: On })
-                  , (Tuple 33 { au: (SinOsc' $ { transition: LinearRamp, forceSet: false, param: 441.0, timeOffset: 0.0 }), chan: 1, head: 33, name: Nothing, next: (fromFoldable (30 : Nil)), prev: (fromFoldable Nil), ptr: 33, status: On })
-                  , (Tuple 34 { au: (Gain' $ { transition: LinearRamp, forceSet: false, param: 0.9, timeOffset: 0.0 }), chan: 1, head: 34, name: Nothing, next: (fromFoldable (29 : Nil)), prev: (fromFoldable (35 : 36 : 37 : Nil)), ptr: 34, status: On })
-                  , (Tuple 35 { au: (SinOsc' $ { transition: LinearRamp, forceSet: false, param: 442.0, timeOffset: 0.0 }), chan: 1, head: 35, name: Nothing, next: (fromFoldable (34 : Nil)), prev: (fromFoldable Nil), ptr: 35, status: On })
-                  , ( Tuple 36
-                        { au: (SinOsc' $ { transition: LinearRamp, forceSet: false, param: 443.0, timeOffset: 0.0 })
-                        , chan: 1
-                        , head: 36
-                        , name: Nothing
-                        , next: (fromFoldable (34 : Nil))
-                        , prev: (fromFoldable Nil)
-                        , ptr: 36
-                        , status: On
-                        }
-                    )
-                  , (Tuple 37 { au: (SinOsc' $ { transition: LinearRamp, forceSet: false, param: 443.0, timeOffset: 0.0 }), chan: 1, head: 37, name: Nothing, next: (fromFoldable (34 : Nil)), prev: (fromFoldable Nil), ptr: 37, status: On })
+                  , (Tuple 30 { au: (Gain' { forceSet: false, param: 1.0, timeOffset: 0.0, transition: LinearRamp }), chan: 1, head: 30, name: Nothing, next: (fromFoldable (29 : Nil)), prev: (fromFoldable (31 : 32 : 33 : Nil)), ptr: 30, status: On })
+                  , (Tuple 31 { au: (SinOsc' { forceSet: false, param: 440.0, timeOffset: 0.0, transition: LinearRamp }), chan: 1, head: 31, name: Nothing, next: (fromFoldable (30 : Nil)), prev: (fromFoldable Nil), ptr: 31, status: On })
+                  , (Tuple 32 { au: (SinOsc' { forceSet: false, param: 441.0, timeOffset: 0.0, transition: LinearRamp }), chan: 1, head: 32, name: Nothing, next: (fromFoldable (30 : Nil)), prev: (fromFoldable Nil), ptr: 32, status: On })
+                  , (Tuple 33 { au: (SinOsc' { forceSet: false, param: 441.0, timeOffset: 0.0, transition: LinearRamp }), chan: 1, head: 33, name: Nothing, next: (fromFoldable (30 : Nil)), prev: (fromFoldable Nil), ptr: 33, status: On })
+                  , (Tuple 34 { au: (Gain' { forceSet: false, param: 0.9, timeOffset: 0.0, transition: LinearRamp }), chan: 1, head: 34, name: Nothing, next: (fromFoldable (29 : Nil)), prev: (fromFoldable (35 : 36 : 37 : Nil)), ptr: 34, status: On })
+                  , (Tuple 35 { au: (SinOsc' { forceSet: false, param: 442.0, timeOffset: 0.0, transition: LinearRamp }), chan: 1, head: 35, name: Nothing, next: (fromFoldable (34 : Nil)), prev: (fromFoldable Nil), ptr: 35, status: On })
+                  , (Tuple 36 { au: (SinOsc' { forceSet: false, param: 443.0, timeOffset: 0.0, transition: LinearRamp }), chan: 1, head: 36, name: Nothing, next: (fromFoldable (34 : Nil)), prev: (fromFoldable Nil), ptr: 36, status: On })
+                  , (Tuple 37 { au: (SinOsc' { forceSet: false, param: 443.0, timeOffset: 0.0, transition: LinearRamp }), chan: 1, head: 37, name: Nothing, next: (fromFoldable (34 : Nil)), prev: (fromFoldable Nil), ptr: 37, status: On })
                   ]
               )
           , len: 38
-          , p: { au: (Splitter' 3), chan: 3, head: 0, name: Nothing, next: (fromFoldable (4 : 6 : 8 : Nil)), prev: (fromFoldable (10 : Nil)), ptr: 9, status: On }
+          , p: { au: (Splitter' 3), chan: 3, head: 1, name: Nothing, next: (fromFoldable (5 : 7 : 9 : Nil)), prev: (fromFoldable (10 : Nil)), ptr: 0, status: On }
           }
   describe "Audio tree" do
     it "should correctly split" do
@@ -329,84 +171,16 @@ basicTestSuite = do
         `shouldEqual`
           { flat:
               ( DM.fromFoldable
-                  [ ( Tuple 0
-                        { au: Speaker'
-                        , head: 0
-                        , chan: 1
-                        , name: Nothing
-                        , next: (fromFoldable Nil)
-                        , prev:
-                            ( fromFoldable
-                                (1 : Nil)
-                            )
-                        , ptr: 0
-                        , status: On
-                        }
-                    )
-                  , ( Tuple 1
-                        { au: Mul'
-                        , head: 1
-                        , chan: 1
-                        , name: Nothing
-                        , next: (fromFoldable (0 : Nil))
-                        , prev:
-                            ( fromFoldable
-                                (2 : 3 : Nil)
-                            )
-                        , ptr: 1
-                        , status: On
-                        }
-                    )
-                  , ( Tuple 2
-                        { au:
-                            (SinOsc' $ { transition: LinearRamp, forceSet: false, param: 42.0, timeOffset: 0.0 })
-                        , head: 2
-                        , chan: 1
-                        , name: Nothing
-                        , next: (fromFoldable (1 : Nil))
-                        , prev: (fromFoldable Nil)
-                        , ptr: 2
-                        , status: On
-                        }
-                    )
-                  , ( Tuple 3
-                        { au: DupRes'
-                        , head: 3
-                        , chan: 1
-                        , name: Nothing
-                        , next: (fromFoldable (1 : Nil))
-                        , prev:
-                            (fromFoldable Nil)
-                        , ptr: 3
-                        , status: On
-                        }
-                    )
-                  , ( Tuple 4
-                        { au: Dup'
-                        , head: 1
-                        , chan: 1
-                        , name: Nothing
-                        , next: (fromFoldable (3 : Nil))
-                        , prev: (fromFoldable (5 : Nil))
-                        , ptr: 4
-                        , status: On
-                        }
-                    )
-                  , ( Tuple 5
-                        { au: Microphone'
-                        , head: 5
-                        , chan: 1
-                        , name: Nothing
-                        , next: (fromFoldable (4 : Nil))
-                        , prev: (fromFoldable Nil)
-                        , ptr: 5
-                        , status: On
-                        }
-                    )
+                  [ (Tuple 0 { au: Speaker', chan: 1, head: 0, name: Nothing, next: (fromFoldable Nil), prev: (fromFoldable (2 : Nil)), ptr: 0, status: On })
+                  , (Tuple 1 { au: Dup', chan: 1, head: 2, name: Nothing, next: (fromFoldable (4 : Nil)), prev: (fromFoldable (5 : Nil)), ptr: 1, status: On })
+                  , (Tuple 2 { au: Mul', chan: 1, head: 2, name: Nothing, next: (fromFoldable (0 : Nil)), prev: (fromFoldable (3 : 4 : Nil)), ptr: 2, status: On })
+                  , (Tuple 3 { au: (SinOsc' { forceSet: false, param: 42.0, timeOffset: 0.0, transition: LinearRamp }), chan: 1, head: 3, name: Nothing, next: (fromFoldable (2 : Nil)), prev: (fromFoldable Nil), ptr: 3, status: On })
+                  , (Tuple 4 { au: DupRes', chan: 1, head: 4, name: Nothing, next: (fromFoldable (2 : Nil)), prev: (fromFoldable Nil), ptr: 4, status: On })
+                  , (Tuple 5 { au: Microphone', chan: 1, head: 5, name: Nothing, next: (fromFoldable (1 : Nil)), prev: (fromFoldable Nil), ptr: 5, status: On })
                   ]
               )
           , len: 6
-          , p: { head: 0, au: Speaker', chan: 1, name: Nothing, next: (fromFoldable Nil), prev: (fromFoldable (1 : Nil)), ptr: 0, status: On }
+          , p: { au: Speaker', chan: 1, head: 0, name: Nothing, next: (fromFoldable Nil), prev: (fromFoldable (2 : Nil)), ptr: 0, status: On }
           }
   describe "To object" do
     it "should correctly transform a simple object" do

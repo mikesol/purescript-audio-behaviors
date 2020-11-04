@@ -250,7 +250,7 @@ run ::
   VisualInfo ->
   Exporter Unit Unit ->
   Effect (Effect Unit)
-run = runInBrowser (atx)
+run = runInBrowser (feedback)
 
 exporter =
   defaultExporter ::
