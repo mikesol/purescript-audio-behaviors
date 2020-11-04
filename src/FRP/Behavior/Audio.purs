@@ -1968,7 +1968,7 @@ audioToPtr = go (-1) DS.empty
         foldl
           ( \b@{ acc: (h :| tl), ln } a ->
               { acc:
-                  (go (ptr.ptr + ln + h.len - 1) (DS.singleton ptr.ptr) a)
+                  (go (ptr.ptr + ln + h.len) (DS.singleton ptr.ptr) a)
                     :| (h : tl)
               , ln: h.len + ln
               }
@@ -2088,14 +2088,12 @@ audioToPtr = go (-1) DS.empty
     AlgStep
   closurethrough ptr v a evaluatedClosure getImpeti =
     let
-      closureResult = go (ptr.ptr - 1) ptr.next evaluatedClosure
-
-      myPtr = ptr.ptr + closureResult.len
+      closureResult = go (ptr.ptr) ptr.next evaluatedClosure
 
       continuation =
         go
           (ptr.ptr + closureResult.len)
-          (DS.singleton myPtr)
+          (DS.singleton ptr.ptr)
           a
 
       au = au' v
@@ -2105,7 +2103,7 @@ audioToPtr = go (-1) DS.empty
       p =
         merge
           { head: closureResult.p.head
-          , ptr: myPtr
+          , ptr: ptr.ptr
           , prev: DS.singleton continuation.p.head
           , next: impeti
           , au: au.au
@@ -2120,7 +2118,7 @@ audioToPtr = go (-1) DS.empty
         , flat:
             closureResult.flat
               <> continuation.flat
-              <> (M.singleton myPtr p)
+              <> (M.singleton ptr.ptr p)
         , p
         }
     in
