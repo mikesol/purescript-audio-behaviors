@@ -78,7 +78,7 @@ run ::
   VisualInfo ->
   Exporter Unit Unit ->
   Effect (Effect Unit)
-run = runInBrowser scene
+run = runInBrowser scene1
 
 exporter = defaultExporter :: Exporter Unit Unit
 
