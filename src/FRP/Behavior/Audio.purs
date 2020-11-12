@@ -3742,6 +3742,12 @@ instance semiringAudioUnit :: Semiring (AudioUnit ch) where
   add a b = Add Nothing (a :| (b : Nil))
   mul a b = Mul Nothing (a :| (b : Nil))
 
+instance semigroupAudioUnit :: Semigroup (AudioUnit ch) where
+  append a b = Add Nothing (a :| (b : Nil))
+
+instance monoidAudioUnit :: Monoid (AudioUnit ch) where
+  mempty = Constant Nothing (ap_ 0.0)
+
 type AudioBehavior ch
   = Behavior (AudioUnit ch)
 
