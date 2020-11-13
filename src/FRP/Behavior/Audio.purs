@@ -4554,30 +4554,28 @@ describeConnection start end passage =
         )
     )
 
-isGen :: AudioUnit' -> Boolean
-isGen (Microphone') = true
-
+isStoppable :: AudioUnit' -> Boolean
 -- NB: play is not a gen as there is no stop method on the source element
 -- this is a bad, as it will keep playing in the background after
 -- disconnected from the speaker
 -- find a way to disconnect
-isGen (PlayBuf' _ _ _) = true
+isStoppable (PlayBuf' _ _ _) = true
 
-isGen (LoopBuf' _ _ _ _) = true
+isStoppable (LoopBuf' _ _ _ _) = true
 
-isGen (SawtoothOsc' _) = true
+isStoppable (SawtoothOsc' _) = true
 
-isGen (TriangleOsc' _) = true
+isStoppable (TriangleOsc' _) = true
 
-isGen (PeriodicOsc' _ _) = true
+isStoppable (PeriodicOsc' _ _) = true
 
-isGen (SinOsc' _) = true
+isStoppable (SinOsc' _) = true
 
-isGen (SquareOsc' _) = true
+isStoppable (SquareOsc' _) = true
 
-isGen (Constant' _) = true
+isStoppable (Constant' _) = true
 
-isGen _ = false
+isStoppable _ = false
 
 scp :: Int -> Object (AudioParameter) -> Object (AudioParameter) -> Array Instruction
 scp i n nx =
@@ -4636,7 +4634,7 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
   stop =
     map (Stop <<< fst)
       ( A.filter
-          (maybe false (isGen <<< _.au) <<< flip M.lookup prev.flat <<< fst)
+          (maybe false (isStoppable <<< _.au) <<< flip M.lookup prev.flat <<< fst)
           $ statusChange (Just Off) (Just On)
       )
 
