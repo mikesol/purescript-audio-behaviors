@@ -11,7 +11,7 @@ import Data.Tuple (Tuple(..))
 import Data.Typelevel.Num (D1)
 import Effect (Effect)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AudioContext, AudioInfo, AudioUnit, EngineInfo, Exporter, VisualInfo, AudioParameter, defaultExporter, evalPiecewise, gain', gainT', gainT_', gain_', runInBrowser, sinOsc, sinOsc_, speaker, speaker_)
+import FRP.Behavior.Audio (AudioContext, AudioInfo, AudioParameter, AudioUnit, EngineInfo, Exporter, VisualInfo, RecorderSignature, defaultExporter, evalPiecewise, gain', gainT', gainT_', gain_', runInBrowser, sinOsc, sinOsc_, speaker, speaker_)
 import Foreign.Object (Object)
 
 pwf0 :: Array (Tuple Number Number)
@@ -116,11 +116,11 @@ sceneNN s =
         )
 
 run ::
-  forall microphone track buffer floatArray periodicWave.
+  forall microphone recorder track buffer floatArray periodicWave.
   Unit ->
   AudioContext ->
   EngineInfo ->
-  AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
+  AudioInfo (Object microphone) (Object (RecorderSignature recorder)) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
   VisualInfo ->
   Exporter Unit Unit ->
   Effect (Effect Unit)

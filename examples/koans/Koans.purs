@@ -9,7 +9,7 @@ import Data.Typelevel.Num (D1, D2)
 import Data.Vec ((+>), empty)
 import Effect (Effect)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AudioContext, AudioInfo, AudioParameterTransition, AudioUnit, EngineInfo, Exporter, Oversample(..), VisualInfo, allpass, bandpass, constant, convolver, defaultExporter, defaultParam, delay, dup1, dynamicsCompressor, evalPiecewise, g'add, g'bandpass, g'delay, g'gain, gain', gainT_', graph, highpass, highshelf, iirFilter, loopBuf, loopBufT, lowpass, lowshelf, merger, microphone, notch, panner, pannerMono, pannerVars', peaking, periodicOsc, play, playBuf, playBufWithOffset, playBuf_, play_, runInBrowser, sawtoothOsc, sinOsc, sinOsc_, spatialPanner, speaker, speaker', squareOsc, triangleOsc, waveShaper)
+import FRP.Behavior.Audio (AudioContext, AudioInfo, AudioParameterTransition, AudioUnit, EngineInfo, Exporter, Oversample(..), VisualInfo, RecorderSignature, allpass, bandpass, constant, convolver, defaultExporter, defaultParam, delay, dup1, dynamicsCompressor, evalPiecewise, g'add, g'bandpass, g'delay, g'gain, gain', gainT_', graph, highpass, highshelf, iirFilter, loopBuf, loopBufT, lowpass, lowshelf, merger, microphone, notch, panner, pannerMono, pannerVars', peaking, periodicOsc, play, playBuf, playBufWithOffset, playBuf_, play_, runInBrowser, sawtoothOsc, sinOsc, sinOsc_, spatialPanner, speaker, speaker', squareOsc, triangleOsc, waveShaper)
 import Foreign.Object (Object)
 import Math (pi, sin)
 import Record.Extra (SLProxy(..), SNil)
@@ -245,11 +245,11 @@ feedback _ =
     )
 
 run ::
-  forall microphone track buffer floatArray periodicWave.
+  forall microphone recorder track buffer floatArray periodicWave.
   Unit ->
   AudioContext ->
   EngineInfo ->
-  AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
+  AudioInfo (Object microphone) (Object (RecorderSignature recorder)) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
   VisualInfo ->
   Exporter Unit Unit ->
   Effect (Effect Unit)

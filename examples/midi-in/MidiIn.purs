@@ -10,7 +10,7 @@ import Data.Tuple (snd)
 import Data.Typelevel.Num (D1)
 import Effect (Effect)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AudioContext, AudioInfo, AudioUnit, EngineInfo, Exporter, VisualInfo, defaultExporter, gain', runInBrowser_, sinOsc, speaker')
+import FRP.Behavior.Audio (AudioContext, AudioInfo, AudioUnit, EngineInfo, Exporter, VisualInfo, RecorderSignature, defaultExporter, gain', runInBrowser_, sinOsc, speaker')
 import FRP.Behavior.MIDI (midi)
 import FRP.Event.MIDI (MIDI, MIDIAccess, MIDIEvent(..), MIDIEventInTime, getMidi, midiAccess)
 import Foreign.Object (Object)
@@ -43,13 +43,14 @@ scene midiIn time = f <$> (midi midiIn)
       (gain' (if simpleOnOff md then 0.6 else 0.0) $ sinOsc 440.0)
 
 run ::
-  forall microphone track buffer floatArray periodicWave.
+  forall microphone recorder track buffer floatArray periodicWave.
   MIDIAccess ->
   Unit ->
   AudioContext ->
   EngineInfo ->
   AudioInfo
     (Object microphone)
+    (Object (RecorderSignature recorder))
     (Object track)
     (Object buffer)
     (Object floatArray)

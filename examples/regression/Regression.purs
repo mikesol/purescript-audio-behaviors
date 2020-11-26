@@ -14,7 +14,7 @@ import Data.Typelevel.Num (D2)
 import Effect (Effect)
 import Effect.Class.Console (log)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AudioContext, AudioInfo, AudioParameter, AudioUnit, EngineInfo, Exporter, VisualInfo, defaultExporter, evalPiecewise, g'add_, g'delay_, g'gain_, graph_, playBufWithOffset_, runInBrowser, speaker)
+import FRP.Behavior.Audio (AudioContext, AudioInfo, AudioParameter, AudioUnit, EngineInfo, Exporter, VisualInfo, RecorderSignature, defaultExporter, evalPiecewise, g'add_, g'delay_, g'gain_, graph_, playBufWithOffset_, runInBrowser, speaker)
 import Foreign.Object (Object)
 import Record.Extra (SLProxy(..), SNil)
 import Type.Data.Graph (type (:/))
@@ -111,11 +111,11 @@ scene time =
         )
 
 run ::
-  forall microphone track buffer floatArray periodicWave.
+  forall microphone recorder track buffer floatArray periodicWave.
   Unit ->
   AudioContext ->
   EngineInfo ->
-  AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
+  AudioInfo (Object microphone) (Object (RecorderSignature recorder)) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
   VisualInfo ->
   Exporter Unit Unit ->
   Effect (Effect Unit)

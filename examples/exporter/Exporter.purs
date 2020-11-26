@@ -7,7 +7,7 @@ import Data.Typelevel.Num (D1)
 import Effect (Effect)
 import Effect.Class.Console (log)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AudioContext, AudioInfo, AudioUnit, EngineInfo, Exporter, VisualInfo, gain', runInBrowser, sinOsc, speaker)
+import FRP.Behavior.Audio (AudioContext, AudioInfo, AudioUnit, EngineInfo, Exporter, VisualInfo, RecorderSignature, gain', runInBrowser, sinOsc, speaker)
 import Foreign.Object (Object)
 import Math (pi, sin)
 
@@ -26,11 +26,11 @@ scene time =
           )
 
 run ::
-  forall microphone track buffer floatArray periodicWave.
+  forall microphone recorder track buffer floatArray periodicWave.
   Unit ->
   AudioContext ->
   EngineInfo ->
-  AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
+  AudioInfo (Object microphone) (Object (RecorderSignature recorder)) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
   VisualInfo ->
   Exporter String Unit ->
   Effect (Effect Unit)

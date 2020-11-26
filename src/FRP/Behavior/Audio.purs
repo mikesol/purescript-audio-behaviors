@@ -9,6 +9,7 @@
 -- | All audio units have these four varieties.  Any audio unit that is not a generator takes one or many audio units as inputs.  In addition, some audio units (like `speaker` and `gain`) have a variety with an apostrophe (`speaker'` and `gain'`) that accept a single audio unit instead of a list.
 module FRP.Behavior.Audio
   ( speaker
+  , recorder
   , microphone
   , audioWorkletGenerator
   , audioWorkletProcessor
@@ -56,6 +57,7 @@ module FRP.Behavior.Audio
   , delay
   , gain
   , speaker_
+  , recorder_
   , microphone_
   , audioWorkletGenerator_
   , audioWorkletProcessor_
@@ -289,7 +291,11 @@ module FRP.Behavior.Audio
   , CanvasInfo'
   , EngineInfo
   , AudioInfo
+  , RecorderInfo
+  , RecorderSignature
+  , MediaRecorder
   , VisualInfo
+  , TouchAudioIO
   , BrowserPeriodicWave
   , BrowserAudioTrack
   , BrowserAudioBuffer
@@ -317,6 +323,8 @@ module FRP.Behavior.Audio
   , AudioGraphAggregator
   , class RunnableMedia
   , makePeriodicWave
+  , mediaRecorderToUrl
+  , isTypeSupported
   , reconciliationToInstructionSet
   , touchAudio
   , objectToMapping
@@ -370,14 +378,13 @@ import Data.Set (Set, member)
 import Data.Set as DS
 import Data.String (Pattern(..), split, take)
 import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
-import Data.Traversable (sequence)
+import Data.Traversable (sequence, traverse_)
 import Data.Tuple (Tuple(..), fst, snd, swap, uncurry)
 import Data.Typelevel.Num (class LtEq, class Pos, D1, D2, D3, D4, D5, D20, toInt')
 import Data.Unfoldable (class Unfoldable)
 import Data.Unfoldable1 as DU
 import Data.Vec (Vec, fill)
 import Data.Vec as V
--- import Debug.Trace (spy)
 import Effect (Effect, whileE)
 import Effect.Aff (Aff, joinFiber, launchAff, launchAff_)
 import Effect.Class.Console (log)
@@ -407,6 +414,8 @@ import Type.Row.Homogeneous (class Homogeneous)
 import Type.RowList (class ListToRow, RLProxy(..))
 import Unsafe.Coerce (unsafeCoerce)
 
+foreign import data MediaRecorder :: Type
+
 foreign import data BrowserPeriodicWave :: Type
 
 foreign import data BrowserAudioBuffer :: Type
@@ -416,6 +425,12 @@ foreign import data BrowserFloatArray :: Type
 foreign import data BrowserAudioTrack :: Type
 
 foreign import data AudioContext :: Type
+
+foreign import stopMediaRecorder :: MediaRecorder -> Effect Unit
+
+foreign import mediaRecorderToUrl :: String -> (String -> Effect Unit) -> MediaRecorder -> Effect Unit
+
+foreign import isTypeSupported :: String -> Effect Boolean
 
 foreign import decodeAudioDataFromUri :: AudioContext -> String -> Effect (Promise BrowserAudioBuffer)
 
@@ -1075,6 +1090,7 @@ data AudioUnit ch
   | Delay MString (AudioParameter) (AudioUnit ch)
   | Gain MString (AudioParameter) (NonEmpty List (AudioUnit ch))
   | Speaker MString (NonEmpty List (AudioUnit ch))
+  | Recorder MString String (AudioUnit ch)
   | NoSound MString
   | Graph MString (AudioGraph ch)
   | SplitRes Int
@@ -1132,6 +1148,7 @@ data AudioUnit'
   | Delay' (AudioParameter)
   | Gain' (AudioParameter)
   | Speaker'
+  | Recorder' String
   | NoSound'
   | SplitRes' Int
   | DupRes'
@@ -1323,6 +1340,11 @@ isSpeaker_ Speaker'' = true
 
 isSpeaker_ _ = false
 
+isRecorder_ :: AudioUnit'' -> Boolean
+isRecorder_ Recorder'' = true
+
+isRecorder_ _ = false
+
 isNoSound_ :: AudioUnit'' -> Boolean
 isNoSound_ NoSound'' = true
 
@@ -1375,6 +1397,7 @@ data AudioUnit''
   | Delay''
   | Gain''
   | Speaker''
+  | Recorder''
   | NoSound''
   | SplitRes''
   | DupRes''
@@ -1526,6 +1549,8 @@ au' (Gain name n _) = { au: (Gain' n), name }
 
 au' (Speaker name _) = { au: Speaker', name }
 
+au' (Recorder name destination _) = { au: Recorder' destination, name }
+
 au' (NoSound name) = { au: NoSound', name }
 
 ------------ we only use this for the name
@@ -1610,6 +1635,8 @@ au'' (Delay' _) = Delay''
 au'' (Gain' _) = Gain''
 
 au'' Speaker' = Speaker''
+
+au'' (Recorder' _) = Recorder''
 
 au'' NoSound' = NoSound''
 
@@ -1760,6 +1787,8 @@ tagToAU Delay'' = Delay' (ap_ speciousDelay)
 tagToAU Gain'' = Gain' (ap_ speciousGain)
 
 tagToAU Speaker'' = Speaker'
+
+tagToAU Recorder'' = (Recorder' "")
 
 tagToAU NoSound'' = NoSound'
 
@@ -2169,55 +2198,57 @@ audioToPtr = go (-1) DS.empty
 
   go' ptr v@(WaveShaper _ _ _ a) = passthrough ptr v a
 
-  go' ptr v@(Dup1 name a f) = closurethrough ptr v a (f DupRes) dupResGetImpetus
+  go' ptr v@(Dup1 _ a f) = closurethrough ptr v a (f DupRes) dupResGetImpetus
 
-  go' ptr v@(Dup2 name a f) = closurethrough ptr v a (f DupRes) dupResGetImpetus
+  go' ptr v@(Dup2 _ a f) = closurethrough ptr v a (f DupRes) dupResGetImpetus
 
-  go' ptr v@(Dup3 name a f) = closurethrough ptr v a (f DupRes) dupResGetImpetus
+  go' ptr v@(Dup3 _ a f) = closurethrough ptr v a (f DupRes) dupResGetImpetus
 
-  go' ptr v@(Dup4 name a f) = closurethrough ptr v a (f DupRes) dupResGetImpetus
+  go' ptr v@(Dup4 _ a f) = closurethrough ptr v a (f DupRes) dupResGetImpetus
 
-  go' ptr v@(Dup5 name a f) = closurethrough ptr v a (f DupRes) dupResGetImpetus
+  go' ptr v@(Dup5 _ a f) = closurethrough ptr v a (f DupRes) dupResGetImpetus
 
-  go' ptr v@(SinOsc name n) = terminus ptr v
+  go' ptr v@(SinOsc _ _) = terminus ptr v
 
-  go' ptr v@(SquareOsc name n) = terminus ptr v
+  go' ptr v@(SquareOsc _ _) = terminus ptr v
 
-  go' ptr v@(Constant name n) = terminus ptr v
+  go' ptr v@(Constant _ _) = terminus ptr v
 
-  go' ptr v@(NoSound name) = terminus ptr v
+  go' ptr v@(NoSound _) = terminus ptr v
 
-  go' ptr v@(SplitRes n) = terminus ptr v
+  go' ptr v@(SplitRes _) = terminus ptr v
 
   go' ptr v@(DupRes) = terminus ptr v
 
-  go' ptr v@(StereoPanner name n a) = passthrough ptr v a
+  go' ptr v@(StereoPanner _ _ a) = passthrough ptr v a
 
-  go' ptr v@(Panner name vars a) = passthrough ptr v a
+  go' ptr v@(Panner _ _ a) = passthrough ptr v a
 
-  go' ptr v@(Delay name n a) = passthrough ptr v a
+  go' ptr v@(Delay _ _ a) = passthrough ptr v a
 
-  go' ptr v@(Mul name l) = listthrough ptr v l
+  go' ptr v@(Recorder _ _ a) = passthrough ptr v a
 
-  go' ptr v@(Merger name l) = listthrough ptr v (V.head l :| ((chopHack <<< fromFoldable <<< V.toArray) l))
+  go' ptr v@(Mul _ l) = listthrough ptr v l
 
-  go' ptr v@(Add name l) = listthrough ptr v l
+  go' ptr v@(Merger _ l) = listthrough ptr v (V.head l :| ((chopHack <<< fromFoldable <<< V.toArray) l))
 
-  go' ptr v@(Gain name n l) = listthrough ptr v l
+  go' ptr v@(Add _ l) = listthrough ptr v l
 
-  go' ptr v@(Speaker name l) = listthrough ptr v l
+  go' ptr v@(Gain _ _ l) = listthrough ptr v l
 
-  go' ptr v@(Split1 name a f) = closurethrough ptr v a (f $ fill SplitRes) splitResGetImpetus
+  go' ptr v@(Speaker _ l) = listthrough ptr v l
 
-  go' ptr v@(Split2 name a f) = closurethrough ptr v a (f $ fill SplitRes) splitResGetImpetus
+  go' ptr v@(Split1 _ a f) = closurethrough ptr v a (f $ fill SplitRes) splitResGetImpetus
 
-  go' ptr v@(Split3 name a f) = closurethrough ptr v a (f $ fill SplitRes) splitResGetImpetus
+  go' ptr v@(Split2 _ a f) = closurethrough ptr v a (f $ fill SplitRes) splitResGetImpetus
 
-  go' ptr v@(Split4 name a f) = closurethrough ptr v a (f $ fill SplitRes) splitResGetImpetus
+  go' ptr v@(Split3 _ a f) = closurethrough ptr v a (f $ fill SplitRes) splitResGetImpetus
 
-  go' ptr v@(Split5 name a f) = closurethrough ptr v a (f $ fill SplitRes) splitResGetImpetus
+  go' ptr v@(Split4 _ a f) = closurethrough ptr v a (f $ fill SplitRes) splitResGetImpetus
 
-  go' ptr v@(Graph name g) = graphthrough ptr v g
+  go' ptr v@(Split5 _ a f) = closurethrough ptr v a (f $ fill SplitRes) splitResGetImpetus
+
+  go' ptr v@(Graph _ g) = graphthrough ptr v g
 
 ap_ :: Number -> AudioParameter
 ap_ a = defaultParam { param = a }
@@ -3041,6 +3072,13 @@ speaker' = Speaker Nothing <<< NE.singleton
 speaker_ :: forall ch. Pos ch => String -> NonEmpty List (AudioUnit ch) -> AudioUnit ch
 speaker_ = Speaker <<< Just
 
+-- | Send sound to a recorder.
+recorder :: forall ch. Pos ch => String -> AudioUnit ch -> AudioUnit ch
+recorder = Recorder Nothing
+
+recorder_ :: forall ch. Pos ch => String -> String -> AudioUnit ch -> AudioUnit ch
+recorder_ = Recorder <<< Just
+
 -- | A merger of mono audio channels.
 -- |
 -- | Accepts a vector of mono audio and produces the merged result.
@@ -3829,6 +3867,8 @@ ucomp (Gain' _) (Gain' _) = true
 
 ucomp Speaker' Speaker' = true
 
+ucomp (Recorder' s0) (Recorder' s1) = s0 == s1
+
 ucomp NoSound' NoSound' = true
 
 ucomp (SplitRes' _) (SplitRes' _) = true
@@ -3990,6 +4030,9 @@ makeNaiveReconciliation1 ipt =
           )
     }
 
+type TouchAudioIO
+  = { generators :: Array Foreign, recorders :: Array MediaRecorder }
+
 -- | the base time to set at
 -- | instructions
 -- | audio context
@@ -3998,14 +4041,14 @@ makeNaiveReconciliation1 ipt =
 -- | audio units
 -- | audio units
 foreign import touchAudio ::
-  forall microphone track buffer floatArray periodicWave.
+  forall microphone recorder track buffer floatArray periodicWave.
   FFIPredicates ->
   Number ->
   Array Instruction ->
   AudioContext ->
-  AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
-  Array Foreign ->
-  Effect (Array Foreign)
+  AudioInfo (Object microphone) (Object (RecorderSignature recorder)) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
+  TouchAudioIO ->
+  Effect TouchAudioIO
 
 toTuple :: Array Int -> Maybe (Tuple Int Int)
 toTuple a = do
@@ -4318,6 +4361,7 @@ type FFIPredicates
     , isDelay :: (AudioUnit'' -> Boolean)
     , isGain :: (AudioUnit'' -> Boolean)
     , isSpeaker :: (AudioUnit'' -> Boolean)
+    , isRecorder :: (AudioUnit'' -> Boolean)
     , isNoSound :: (AudioUnit'' -> Boolean)
     , isSplitRes :: (AudioUnit'' -> Boolean)
     , isDupRes :: (AudioUnit'' -> Boolean)
@@ -4404,6 +4448,7 @@ toFFI =
   , isDelay: isDelay_
   , isGain: isGain_
   , isSpeaker: isSpeaker_
+  , isRecorder: isRecorder_
   , isNoSound: isNoSound_
   , isSplitRes: isSplitRes_
   , isDupRes: isDupRes_
@@ -4472,6 +4517,8 @@ sourceConstructor (AudioWorkletProcessor' s _) = Just s
 sourceConstructor (AudioWorkletAggregator' s _) = Just s
 
 sourceConstructor (PlayBuf' s _ _) = Just s
+
+sourceConstructor (Recorder' s) = Just s
 
 sourceConstructor (LoopBuf' s _ _ _) = Just s
 
@@ -4868,8 +4915,21 @@ reconciliationToInstructionSet { prev, cur, reconciliation } =
         )
     )
 
-type AudioInfo microphones tracks buffers floatArrays periodicWaves
+type RecorderSignature recorder
+  = recorder -> Effect Unit
+
+type RecorderInfo dataavailableEvent errorEvent pauseEvent resumeEvent startEvent stopEvent
+  = { ondataavailable :: dataavailableEvent -> Effect Unit
+    , onerror :: errorEvent -> Effect Unit
+    , onpause :: pauseEvent -> Effect Unit
+    , onresume :: resumeEvent -> Effect Unit
+    , onstart :: startEvent -> Effect Unit
+    , onstop :: stopEvent -> Effect Unit
+    }
+
+type AudioInfo microphones recorders tracks buffers floatArrays periodicWaves
   = { microphones :: microphones
+    , recorders :: recorders
     , tracks :: tracks
     , buffers :: buffers
     , floatArrays :: floatArrays
@@ -4926,23 +4986,23 @@ type RunInBrowserIAnimation_ accumulator ch env
       env
 
 type RunInBrowser callback accumulator env
-  = forall microphone track buffer floatArray periodicWave.
+  = forall microphone recorder track buffer floatArray periodicWave.
     callback ->
     accumulator ->
     AudioContext ->
     EngineInfo ->
-    AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
+    AudioInfo (Object microphone) (Object (RecorderSignature recorder)) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
     VisualInfo ->
     Exporter env accumulator ->
     Effect (Effect Unit)
 
 type RunInBrowser_ callback accumulator env
-  = forall microphone track buffer floatArray periodicWave.
+  = forall microphone recorder track buffer floatArray periodicWave.
     Effect callback ->
     accumulator ->
     AudioContext ->
     EngineInfo ->
-    AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
+    AudioInfo (Object microphone) (Object (RecorderSignature recorder)) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
     VisualInfo ->
     Exporter env accumulator ->
     Effect (Effect Unit)
@@ -4971,12 +5031,12 @@ type EngineInfo
 
 class RunnableMedia callback accumulator env where
   runInBrowser ::
-    forall microphone track buffer floatArray periodicWave.
+    forall microphone recorder track buffer floatArray periodicWave.
     callback ->
     accumulator ->
     AudioContext ->
     EngineInfo ->
-    AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
+    AudioInfo (Object microphone) (Object (RecorderSignature recorder)) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
     VisualInfo ->
     Exporter env accumulator ->
     Effect (Effect Unit)
@@ -5066,7 +5126,7 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
     let
       tOffset = engineInfo.initialOffset
     clock <- new 0
-    units <- new ([] :: Array Foreign)
+    units <- new ({ generators: [], recorders: [] } :: TouchAudioIO)
     audioClockStart <- getAudioClockTime ctx
     fiber <- launchAff exporter.acquire
     bam <-
@@ -5199,7 +5259,7 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
                                   audioInfo
                                   uts
                               else
-                                pure []
+                                pure { generators: [], recorders: [] }
                             write uts' units
                             __endTime <- map getTime now
                             if (__endTime - __startTime) >= __contract then
@@ -5221,6 +5281,8 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
     pure
       ( do
           bam
+          uts <- read units
+          traverse_ stopMediaRecorder uts.recorders
           launchAff_
             ( do
                 env <- joinFiber fiber
@@ -5231,13 +5293,13 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
 -- | The main executor loop in the browser
 -- | Accepts an effectful scene
 runInBrowser_ ::
-  forall accumulator microphone track buffer floatArray periodicWave callback env.
+  forall accumulator microphone recorder track buffer floatArray periodicWave callback env.
   RunnableMedia callback accumulator env =>
   Effect callback ->
   accumulator ->
   AudioContext ->
   EngineInfo ->
-  AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
+  AudioInfo (Object microphone) (Object (RecorderSignature recorder)) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
   VisualInfo ->
   Exporter env accumulator ->
   Effect (Effect Unit)
