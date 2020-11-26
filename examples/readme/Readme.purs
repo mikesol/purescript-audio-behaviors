@@ -15,7 +15,7 @@ import Data.Typelevel.Num (D1, D2)
 import Data.Vec ((+>), empty)
 import Effect (Effect)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AV(..), AudioContext, AudioInfo, AudioUnit, CanvasInfo(..), EngineInfo, Exporter, IAudioUnit(..), VisualInfo, defaultExporter, defaultParam, dup1, g'add, g'bandpass, g'delay, g'gain, gain', gainT', graph, merger, microphone, panner, play, runInBrowser_, sinOsc, speaker, speaker')
+import FRP.Behavior.Audio (AV(..), AudioContext, AudioInfo, AudioUnit, CanvasInfo(..), EngineInfo, Exporter, IAudioUnit(..), VisualInfo, RecorderSignature, defaultExporter, defaultParam, dup1, g'add, g'bandpass, g'delay, g'gain, gain', gainT', graph, merger, microphone, panner, play, runInBrowser_, sinOsc, speaker, speaker')
 import FRP.Behavior.Mouse (buttons, position)
 import FRP.Event.Mouse (Mouse, getMouse)
 import Foreign.Object (Object)
@@ -381,11 +381,11 @@ scene8 mouse acc@{ onset } (CanvasInfo { w, h, boundingClientRect: { x, y } }) t
   pos = map (fromMaybe { x: 0, y: 0 }) (position mouse)
 
 run ::
-  forall microphone track buffer floatArray periodicWave.
+  forall microphone recorder track buffer floatArray periodicWave.
   { onset :: Maybe Number } ->
   AudioContext ->
   EngineInfo ->
-  AudioInfo (Object microphone) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
+  AudioInfo (Object microphone) (Object (RecorderSignature recorder)) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
   VisualInfo ->
   Exporter Unit { onset :: Maybe Number } ->
   Effect (Effect Unit)

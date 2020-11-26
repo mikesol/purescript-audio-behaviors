@@ -14,7 +14,17 @@
           rewindUpperBound: 0.15,
           initialOffset: 0.1,
           doWebAudio: true,
-        })({})({})(PS["FRP.Behavior.Audio.Example.HelloWorld"].exporter)();
+        })({
+          recorders: {
+            recorder: PS["FRP.Behavior.Audio.Example.HelloWorld"].mr2url(
+              "audio/ogg; codecs=opus"
+            )(function (s) {
+              return function () {
+                document.querySelector("audio").src = s;
+              };
+            }),
+          },
+        })({})(PS["FRP.Behavior.Audio.Example.HelloWorld"].exporter)();
       });
     }
     function turnOffAudio() {
@@ -27,5 +37,6 @@
   <body>
     <button onclick="turnOnAudio();">turn on</button>
     <button onclick="turnOffAudio();">turn off</button>
+    <audio controls></audio>
   </body>
 </html>
