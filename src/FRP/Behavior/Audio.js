@@ -271,15 +271,15 @@ var getSideEffectFromGenerator = function (g) {
 };
 
 var genericSetter = function (predicates, generators, c, n, timeToSet) {
-  if (c.value3) {
+  if (predicates.isImmediately(c.value3)) {
     getMainFromGenerator(generators[c.value0])[n].value = c.value1;
   } else {
     getMainFromGenerator(generators[c.value0])[n][
-      predicates.isImmediate(c.value4)
+      predicates.isNoRamp(c.value3)
         ? "setValueAtTime"
-        : predicates.isLinearRamp(c.value4)
+        : predicates.isLinearRamp(c.value3)
         ? "linearRampToValueAtTime"
-        : predicates.isExponentialRamp(c.value4)
+        : predicates.isExponentialRamp(c.value3)
         ? "exponentialRampToValueAtTime"
         : "linearRampToValueAtTime"
     ](c.value1, timeToSet + c.value2);
@@ -674,17 +674,14 @@ exports.touchAudio = function (predicates) {
               }
               for (var i = 0; i < nu.length; i++) {
                 var c = nu[i];
-                if (predicates.isSinOsc(c.value1)) {
-                  getMainFromGenerator(generators[c.value0]).type = "sine";
-                  getMainFromGenerator(generators[c.value0]).start(
-                    timeToSet + c.value4.value0
-                  );
-                } else if (predicates.isLoopBuf(c.value1)) {
+                if (predicates.isLoopBuf(c.value1)) {
                   getMainFromGenerator(generators[c.value0]).loop = true;
                   getMainFromGenerator(generators[c.value0]).buffer =
                     audioInfo.buffers[c.value3.value0];
                   getMainFromGenerator(generators[c.value0]).start(
-                    timeToSet + c.value4.value0,
+                    predicates.isNothing(c.value4)
+                      ? 0.0
+                      : timeToSet + c.value4.value0,
                     lb[c.value0]
                   );
                 } else if (predicates.isWaveShaper(c.value1)) {
@@ -698,7 +695,9 @@ exports.touchAudio = function (predicates) {
                   getMainFromGenerator(generators[c.value0]).buffer =
                     audioInfo.buffers[c.value3.value0];
                   getMainFromGenerator(generators[c.value0]).start(
-                    timeToSet + c.value4.value0,
+                    predicates.isNothing(c.value4)
+                      ? 0.0
+                      : timeToSet + c.value4.value0,
                     c.value5.value0
                   );
                 } else if (predicates.isPlay(c.value1)) {
@@ -711,7 +710,9 @@ exports.touchAudio = function (predicates) {
                   audioInfo.tracks[c.value3.value0].play();
                 } else if (predicates.isConstant(c.value1)) {
                   getMainFromGenerator(generators[c.value0]).start(
-                    timeToSet + c.value4.value0
+                    predicates.isNothing(c.value4)
+                      ? 0.0
+                      : timeToSet + c.value4.value0
                   );
                 } else if (predicates.isLowpass(c.value1)) {
                   getMainFromGenerator(generators[c.value0]).type = "lowpass";
@@ -729,28 +730,42 @@ exports.touchAudio = function (predicates) {
                   getMainFromGenerator(generators[c.value0]).type = "peaking";
                 } else if (predicates.isHighpass(c.value1)) {
                   getMainFromGenerator(generators[c.value0]).type = "highpass";
+                } else if (predicates.isSinOsc(c.value1)) {
+                  getMainFromGenerator(generators[c.value0]).type = "sine";
+                  getMainFromGenerator(generators[c.value0]).start(
+                    predicates.isNothing(c.value4)
+                      ? 0.0
+                      : timeToSet + c.value4.value0
+                  );
                 } else if (predicates.isSquareOsc(c.value1)) {
                   getMainFromGenerator(generators[c.value0]).type = "square";
                   getMainFromGenerator(generators[c.value0]).start(
-                    timeToSet + c.value4.value0
+                    predicates.isNothing(c.value4)
+                      ? 0.0
+                      : timeToSet + c.value4.value0
                   );
                 } else if (predicates.isTriangleOsc(c.value1)) {
                   getMainFromGenerator(generators[c.value0]).type = "triangle";
                   getMainFromGenerator(generators[c.value0]).start(
-                    timeToSet + c.value4.value0
+                    predicates.isNothing(c.value4)
+                      ? 0.0
+                      : timeToSet + c.value4.value0
                   );
                 } else if (predicates.isSawtoothOsc(c.value1)) {
                   getMainFromGenerator(generators[c.value0]).type = "sawtooth";
                   getMainFromGenerator(generators[c.value0]).start(
-                    timeToSet + c.value4.value0
+                    predicates.isNothing(c.value4)
+                      ? 0.0
+                      : timeToSet + c.value4.value0
                   );
                 } else if (predicates.isPeriodicOsc(c.value1)) {
-                  // getMainFromGenerator(generators[c.value0]).type = "custom";
                   getMainFromGenerator(generators[c.value0]).setPeriodicWave(
                     audioInfo.periodicWaves[c.value3.value0]
                   );
                   getMainFromGenerator(generators[c.value0]).start(
-                    timeToSet + c.value4.value0
+                    predicates.isNothing(c.value4)
+                      ? 0.0
+                      : timeToSet + c.value4.value0
                   );
                 } else if (predicates.isSplitRes(c.value1)) {
                   getMainFromGenerator(

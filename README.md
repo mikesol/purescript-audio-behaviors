@@ -569,7 +569,7 @@ type AudioParameter
 
 - `param`: The floating point value
 - `timeOffset`: The offset in time from the previous control rate cycle. For example, if the control rate is `0.02` and the event should happen at `1.0735` seconds, then the value would be `0.0135`, or `1.0735 % 0.02`.
-- `transition`: How the transition should occur from the previous value. Options are `Immediate`, `LinearRamp` and `ExponentialRamp`.
+- `transition`: How the transition should occur from the previous value. Options are `NoRamp`, `LinearRamp`, `ExponentialRamp` and `Immedaitely`. `Immediately` ignores the audio clock and schedules an event to happen ASAP, making it a good option for reactions to input events.
 - `forceSet`: Should we force the value to be set even if there is no change. As an optimization, values are _not_ set _unless_ they change from the previous value. While this works in most cases, it leads to audible clicks for linear and exponential transitions. Setting `forceSet` before a linear or exponential transition causes the starting value to be correct.
 
 ### Exporting

@@ -253,7 +253,7 @@ run ::
   VisualInfo ->
   Exporter Unit Unit ->
   Effect (Effect Unit)
-run = runInBrowser (triangleMul)
+run = runInBrowser pb
 
 exporter =
   defaultExporter ::
