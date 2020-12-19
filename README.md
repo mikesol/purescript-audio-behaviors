@@ -24,7 +24,7 @@ This library uses the [behaviors pattern](https://wiki.haskell.org/Functional_Re
 
 For example, consider the following behavior, taken from [`HelloWorld.purs`](./examples/hello-world/HelloWorld.purs):
 
-[Try me on klank.dev](https://link.klank.dev/CBv8TPJxVWJikohT9)
+[Try me on klank.dev](https://klank.dev/?k&url=https://klank-share.s3.amazonaws.com/K16084000683023921.purs&klank=https://klank-share.s3.amazonaws.com/klank16084000721812905.js)
 
 ```haskell
 scene ::  Number -> Behavior (AudioUnit D1)
@@ -63,7 +63,7 @@ In this section, we'll build a scene from the ground up. In doing so, we'll acco
 
 Let's start with a sine wave at A440 playing at a volume of `0.5` (where `1.0` is the loudest volume).
 
-[Try me on klank.dev](https://link.klank.dev/TYgGyYwjdh5mWg9D9)
+[Try me on klank.dev](https://klank.dev/?k&url=https://klank-share.s3.eu-west-1.amazonaws.com/K16084001257983247.purs&klank=https://klank-share.s3.eu-west-1.amazonaws.com/klank16084001276737565.js)
 
 ```haskell
 scene :: Number -> Behavior (AudioUnit D1)
@@ -76,7 +76,7 @@ Note that, because this function does not depend on time, we can ignore the inpu
 
 Let's add our voice to the mix! We'll put it above a nice low drone.
 
-[Try me on klank.dev](https://link.klank.dev/qCFPu6fK7h4BGiUx9)
+[Try me on klank.dev](https://klank.dev/?k&url=https://klank-share.s3.eu-west-1.amazonaws.com/K16084001860847436.purs&klank=https://klank-share.s3.eu-west-1.amazonaws.com/klank16084001880123757.js)
 
 ```haskell
 scene :: Number -> Behavior (AudioUnit D1)
@@ -98,7 +98,7 @@ Make sure to wear headphones to avoid feedback!
 
 Let's add some soothing jungle sounds to the mix. We use the function `play` to add an audio element. This function assumes that you provide an audio element with the appropriate tag to the toplevel `runInBrowser` function. In this case, the tag is `"forest"`.
 
-[Try me on klank.dev](https://link.klank.dev/mkpLh13aNu1duSEa9)
+[Try me on klank.dev](https://klank.dev/?k&url=https://klank-share.s3.eu-west-1.amazonaws.com/K16084006090986919.purs&klank=https://klank-share.s3.eu-west-1.amazonaws.com/klank16084006109696103.js)
 
 ```haskell
 -- assuming we have passed in an object
@@ -111,7 +111,7 @@ scene =
         ( speaker
             $ ( (gain' 0.2 $ sinOsc 110.0)
                   :| (gain' 0.1 $ sinOsc 220.0)
-                  : (gain' 0.5 $ (play "forest"))
+                  : (gain' 0.5 $ (playBuf "forest" 1.0))
                   : microphone
                   : Nil
               )
@@ -123,8 +123,6 @@ scene =
 To go from mono to stereo, there is a class of functions called `dupX`, `splitX` and `merger`. In the example below, we use `dup1` to duplicate a mono sound and then `merge` it into two stereo tracks.
 
 If you want to make two separate audio units, then you can use a normal let block. If, on the other hand, you want to use the same underlying unit, use `dupX`. When in doubt, use `dupX`, as you'll rarely need to duplicate an identical audio source.
-
-[Try me on klank.dev](https://link.klank.dev/wUrdhc4Q2dn5v3TNA)
 
 ```haskell
 scene :: Number -> Behavior (AudioUnit D2)
@@ -148,8 +146,6 @@ scene =
 
 Up until this point, our audio hasn't reacted to many behaviors. Let's fix that! One behavior to react to is the passage of time. Let's add a slow undulation to the lowest pitch in the drone that is based on the passage of time
 
-[Try me on klank.dev](https://link.klank.dev/7R891WVcSnTcZT5G6)
-
 ```haskell
 scene :: Number -> Behavior (AudioUnit D2)
 scene time =
@@ -172,8 +168,6 @@ scene time =
 ### Getting the sound to change as a function of a mouse input event
 
 The next snippet of code uses the mouse to modulate the pitch of the higher note by roughly a major third.
-
-[Try me on klank.dev](https://link.klank.dev/bkvxvHTFQeKeyMZK6)
 
 ```haskell
 scene :: Mouse -> Number -> Behavior (AudioUnit D2)
@@ -207,8 +201,6 @@ To fix the control rate problem, parameters that can change in time like _freque
 Using `AudioParameter` directly is an advanced feature that will be discussed below. The most common way to use `AudioParameter` is through the function `evalPiecewise`, which accepts the control rate in seconds (in our case, `0.02`), a piecewise function in the form `Array (Tuple time value)` where `time` and `value` are both `Number`s, and the current time.
 
 Let's add a small metronome on the inside of our sound. We will have it beat every `0.9` seconds, and we use the function `gainT'` instead of `gain` to accept the `AudioParameter` output by `epwf`.
-
-[Try me on klank.dev](https://link.klank.dev/2hWU6NDrN92utwc56)
 
 ```haskell
 -- a piecewise function that creates an attack/release/sustain envelope
@@ -260,8 +252,6 @@ Sometimes, you don't just want to react to an event like a mouse click. You want
 To accomplish this, or anything where memory needs to be retained, the scene accepts an arbitrary accumulator as its first parameter. You can think of it as a [fold](https://pursuit.purescript.org/packages/purescript-foldable-traversable/4.1.1/docs/Data.Foldable#v:fold) over time.
 
 To make the accumulator useful, the scene should return the accumulator as well. The constructor `IAudioUnit` allows for this: it accepts an audio unit as well as an accumulator.
-
-[Try me on klank.dev](https://link.klank.dev/5J32qUoh7XJDQU7Z9)
 
 ```haskell
 pwf :: Array (Tuple Number Number)
@@ -333,8 +323,6 @@ An audio graph is a row with three keys: `accumulators`, `processors` and `gener
 The audio graph must respect certain rules: it must be fully connected, it must have a unique terminal node, it must have at least one generator, it must have no orphan nodes, it must not have duplicate edges between nodes, etc. Violating any of these rules will result in a type error at compile-time.
 
 The graph structure is represented using _incoming_ edges, so processors have only one incoming edge whereas accumulators have an arbitrary number of incoming edges, as we see below. Play it and you'll hear an echo effect!
-
-[Try me on klank.dev](https://link.klank.dev/s3muPLnksK7Jyeg68)
 
 ```haskell
 pwf :: Array (Tuple Number Number)
