@@ -171,6 +171,8 @@ scene time =
 
 The next snippet of code uses the mouse to modulate the pitch of the higher note by roughly a major third.
 
+[Try me on klank.dev](https://klank.dev/?k&url=https://klank-share.s3.eu-west-1.amazonaws.com/K16084535789877191.purs&klank=https://klank-share.s3.eu-west-1.amazonaws.com/klank16084535806767881.js)
+
 ```haskell
 scene :: Mouse -> Number -> Behavior (AudioUnit D2)
 scene mouse time = f time <$> click
