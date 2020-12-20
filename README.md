@@ -136,7 +136,7 @@ scene =
             ) \mono ->
             speaker
               $ ( (panner (-0.5) (merger (mono +> mono +> empty)))
-                    :| (gain' 0.5 $ (play "forest"))
+                    :| (gain' 0.5 $ (playBuf "forest" 1.0))
                     : Nil
                 )
         )
@@ -145,6 +145,8 @@ scene =
 ### Getting the sound to change as a function of time
 
 Up until this point, our audio hasn't reacted to many behaviors. Let's fix that! One behavior to react to is the passage of time. Let's add a slow undulation to the lowest pitch in the drone that is based on the passage of time
+
+[Try me on klank.dev](https://klank.dev/?k&url=https://klank-share.s3.amazonaws.com/K1608453374107641.purs&klank=https://klank-share.s3.amazonaws.com/klank16084533778906742.js)
 
 ```haskell
 scene :: Number -> Behavior (AudioUnit D2)
@@ -160,7 +162,7 @@ scene time =
           ) \mono ->
           speaker
             $ ( (panner (-0.5) (merger (mono +> mono +> empty)))
-                  :| (gain' 0.5 $ (play "forest"))
+                  :| (gain' 0.5 $ (playBuf "forest" 1.0))
                   : Nil
               )
 ```
@@ -184,7 +186,7 @@ scene mouse time = f time <$> click
         ) \mono ->
         speaker
           $ ( (panner (-0.5) (merger (mono +> mono +> empty)))
-                :| (gain' 0.5 $ (play "forest"))
+                :| (gain' 0.5 $ (playBuf "forest" 1.0))
                 : Nil
             )
 
@@ -237,7 +239,7 @@ scene mouse time = f time <$> click
         ) \mono ->
         speaker
           $ ( (panner (-0.5) (merger (mono +> mono +> empty)))
-                :| (gain' 0.5 $ (play "forest"))
+                :| (gain' 0.5 $ (playBuf "forest" 1.0))
                 : Nil
             )
 
@@ -291,7 +293,7 @@ scene mouse acc@{ onset } time = f time <$> click
           ) \mono ->
           speaker
             $ ( (panner (-0.5) (merger (mono +> mono +> empty)))
-                  :| (gain' 0.5 $ (play "forest"))
+                  :| (gain' 0.5 $ (playBuf "forest" 1.0))
                   : Nil
               )
       )
@@ -376,7 +378,7 @@ scene mouse acc@{ onset } time = f time <$> click
           ) \mono ->
           speaker
             $ ( (panner (-0.5) (merger (mono +> mono +> empty)))
-                  :| (gain' 0.5 $ (play "forest"))
+                  :| (gain' 0.5 $ (playBuf "forest" 1.0))
                   : Nil
               )
       )
@@ -453,7 +455,7 @@ scene mouse acc@{ onset } (CanvasInfo { w, h }) time = f time <$> click
               ) \mono ->
               speaker
                 $ ( (panner (-0.5) (merger (mono +> mono +> empty)))
-                      :| (gain' 0.5 $ (play "forest"))
+                      :| (gain' 0.5 $ (playBuf "forest" 1.0))
                       : Nil
                   )
       )
