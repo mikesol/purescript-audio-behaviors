@@ -222,6 +222,15 @@ onoffb t =
             <> (if t > 3.0 then (pure $ gain' 0.3 (playBuf_ "f1" "moo" 1.0)) else Nil)
         )
 
+onoffb2 :: Number -> Behavior (AudioUnit D1)
+onoffb2 t =
+  pure
+    $ speaker
+        ( zero
+            :| (if t < 1.0 then (pure $ gain' 0.3 (playBuf_ "f0" "moo" 1.0)) else Nil)
+            <> (if t > 3.0 then (pure $ gain' 0.3 (playBuf_ "f1" "moo" 1.0)) else Nil)
+        )
+
 -- feedback
 feedback :: Number -> Behavior (AudioUnit D1)
 feedback _ =
@@ -253,7 +262,7 @@ run ::
   VisualInfo ->
   Exporter Unit Unit ->
   Effect (Effect Unit)
-run = runInBrowser pb
+run = runInBrowser onoffb2
 
 exporter =
   defaultExporter ::

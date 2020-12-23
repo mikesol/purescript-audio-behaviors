@@ -347,7 +347,6 @@ module FRP.Behavior.Audio
   , AudioTag
   , PtrInfo
   , MString
-  , Reconciled
   , audioIOInterleaved
   , Status(..)
   , AudioUnit''(..)
@@ -372,17 +371,15 @@ import Data.List as DL
 import Data.Map (Map)
 import Data.Map as M
 import Data.Maybe (Maybe(..), fromMaybe, isNothing, maybe)
-import Data.NonEmpty (NonEmpty(..), (:|))
+import Data.NonEmpty (NonEmpty, (:|))
 import Data.NonEmpty as NE
 import Data.Set (Set, member)
 import Data.Set as DS
 import Data.String (Pattern(..), split, take)
 import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
 import Data.Traversable (sequence, traverse_)
-import Data.Tuple (Tuple(..), fst, snd, swap, uncurry)
+import Data.Tuple (Tuple(..), fst, snd)
 import Data.Typelevel.Num (class LtEq, class Pos, D1, D2, D3, D4, D5, D20, toInt')
-import Data.Unfoldable (class Unfoldable)
-import Data.Unfoldable1 as DU
 import Data.Vec (Vec, fill)
 import Data.Vec as V
 import Effect (Effect, whileE)
@@ -627,22 +624,22 @@ audioIO processor sampleRate inputl params currentSample sink = do
         cp <- read curpos
         write (cp + 1) curpos
         pure $ cp < inputl
-  let
+
     _behaviorCurrentTime =
       currentTime do
         cp <- read curpos
         let
           ct = cp + currentSample
         pure $ (toNumber ct) / (toNumber sampleRate)
-  let
+
     _secondsToBehaviorSampleFrame = \lb ->
       sampleFrame do
         cp0 <- read curpos
         let
           lookback = if lb < 0.0 then 0.0 else lb
-        let
+
           lookbackInSamples = floor (lookback * toNumber sampleRate)
-        let
+
           cp = (audiol sink) - inputl - lookbackInSamples
         pure
           $ if (cp < 0) then
@@ -651,13 +648,13 @@ audioIO processor sampleRate inputl params currentSample sink = do
                 (replicate (length (fromMaybe [] $ head sink)) 0.0)
             else
               map (map (fromMaybe 0.0 <<< flip index cp)) sink
-  let
+
     _behaviorControlParams =
       controlParams
         $ do
             cp <- read curpos
             pure $ paramGetter cp params
-  let
+
     chain =
       processor
         _behaviorCurrentTime
@@ -696,32 +693,37 @@ audioIOInterleaved processor sampleRate params currentSample nChannels bufferLen
         cp <- read curpos
         write (cp + 1) curpos
         pure $ cp < bufferLength
-  let
+
     _behaviorCurrentTime =
       currentTime do
         cp <- read curpos
         let
           ct = cp + currentSample
         pure $ (toNumber ct) / (toNumber sampleRate)
-  let
+
     _secondsToBehaviorSampleFrame = \lb ->
       sampleFrame do
         cp0 <- read curpos
         let -- how far we're looking back in seconds
           lookback = if lb < 0.0 then 0.0 else lb
-        let -- how many samples we're looking back
+
+          -- how many samples we're looking back
           lookbackInSamples = (bufferLength - cp0) + floor (lookback * toNumber sampleRate)
-        let -- number of blocs to rewind
+
+          -- number of blocs to rewind
           numberOfBlocsToSkip = lookbackInSamples / bufferLength
-        let -- the offset from the end of the bloc we are reading
+
+          -- the offset from the end of the bloc we are reading
           offsetFromEndOfBloc = lookbackInSamples - (numberOfBlocsToSkip * bufferLength)
-        let -- number of floats to read back to get to bloc
+
+          -- number of floats to read back to get to bloc
           floatsToSkipUntilDesiredBloc = numberOfBlocsToSkip * bufferLength * nChannels
-        let -- number of floats to read back to get to channel (in stereo, L goes to blocLength, R to 0)
+
+          -- number of floats to read back to get to channel (in stereo, L goes to blocLength, R to 0)
           floatsToSkipUntilDesiredChannel i = ((nChannels - 1 - i) * bufferLength)
-        let
+
           sinkLen = length sink
-        let
+
           frame =
             [ map
                 ( \i ->
@@ -758,13 +760,13 @@ audioIOInterleaved processor sampleRate params currentSample nChannels bufferLen
         --          <> " frame "
         --          <> show frame
         pure frame
-  let
+
     _behaviorControlParams =
       controlParams
         $ do
             cp <- read curpos
             pure $ paramGetter cp params
-  let
+
     chain =
       processor
         _behaviorCurrentTime
@@ -1649,158 +1651,6 @@ au'' NoSound' = NoSound''
 au'' (SplitRes' _) = SplitRes''
 
 au'' DupRes' = DupRes''
-
--- hackish system, convert to Maybe?
-speciousGain = -1051.43 :: Number
-
-speciousRate = -3.4545 :: Number
-
-speciousOffset = -3.4545 :: Number
-
-speciousStart = -4.5555 :: Number
-
-speciousEnd = -4.5555 :: Number
-
-speciousFreq = -1.1562 :: Number
-
-speciousQ = -1.1562 :: Number
-
-speciousThreshold = -1.0 :: Number
-
-speciousKnee = -1.0 :: Number
-
-speciousRatio = -1.0 :: Number
-
-speciousAttack = -1.0 :: Number
-
-speciousRelease = -1.0 :: Number
-
-speciousConeInnerAngle = -3.0 :: Number
-
-speciousConeOuterAngle = -3.0 :: Number
-
-speciousConeOuterGain = -3.0 :: Number
-
-speciousMaxDistance = -3.0 :: Number
-
-speciousOrientationX = -3.0 :: Number
-
-speciousOrientationY = -3.0 :: Number
-
-speciousOrientationZ = -3.0 :: Number
-
-speciousPositionX = -3.0 :: Number
-
-speciousPositionY = -3.0 :: Number
-
-speciousPositionZ = -3.0 :: Number
-
-speciousRefDistance = -3.0 :: Number
-
-speciousRolloffFactor = -3.0 :: Number
-
-speciousPanner = -3.0 :: Number
-
-speciousConstant = -9.181818281867 :: Number
-
-speciousDelay = -9.181818281867 :: Number
-
-tagToAU :: AudioUnit'' -> AudioUnit'
-tagToAU Microphone'' = Microphone'
-
-tagToAU Play'' = Play' "" 0.0
-
-tagToAU AudioWorkletGenerator'' = AudioWorkletGenerator' "" O.empty
-
-tagToAU AudioWorkletProcessor'' = AudioWorkletProcessor' "" O.empty
-
-tagToAU AudioWorkletAggregator'' = AudioWorkletAggregator' "" O.empty
-
-tagToAU PlayBuf'' = PlayBuf' "" (ap_ (speciousRate)) (ap_ (speciousOffset))
-
-tagToAU LoopBuf'' = LoopBuf' "" (ap_ (speciousRate)) (speciousStart) (speciousEnd)
-
-tagToAU IIRFilter'' = IIRFilter' [] []
-
-tagToAU Lowpass'' = Lowpass' (ap_ (speciousFreq)) (ap_ (speciousQ))
-
-tagToAU Highpass'' = Highpass' (ap_ (speciousFreq)) (ap_ (speciousQ))
-
-tagToAU Bandpass'' = Bandpass' (ap_ (speciousFreq)) (ap_ (speciousQ))
-
-tagToAU Lowshelf'' = Lowshelf' (ap_ (speciousFreq)) (ap_ (speciousGain))
-
-tagToAU Highshelf'' = Highshelf' (ap_ (speciousFreq)) (ap_ (speciousGain))
-
-tagToAU Peaking'' = Peaking' (ap_ (speciousFreq)) (ap_ (speciousQ)) (ap_ (speciousGain))
-
-tagToAU Notch'' = Notch' (ap_ (speciousFreq)) (ap_ (speciousQ))
-
-tagToAU Allpass'' = Allpass' (ap_ (speciousFreq)) (ap_ (speciousQ))
-
-tagToAU Convolver'' = Convolver' ""
-
-tagToAU DynamicsCompressor'' = DynamicsCompressor' (ap_ (speciousThreshold)) (ap_ (speciousKnee)) (ap_ (speciousRatio)) (ap_ (speciousAttack)) (ap_ (speciousRelease))
-
-tagToAU SawtoothOsc'' = SawtoothOsc' (ap_ speciousFreq)
-
-tagToAU TriangleOsc'' = TriangleOsc' (ap_ speciousFreq)
-
-tagToAU PeriodicOsc'' = PeriodicOsc' (ap_ speciousFreq) ""
-
-tagToAU WaveShaper'' = WaveShaper' "" None
-
-tagToAU Dup'' = Dup'
-
-tagToAU SinOsc'' = SinOsc' (ap_ speciousFreq)
-
-tagToAU SquareOsc'' = SquareOsc' (ap_ speciousFreq)
-
-tagToAU Splitter'' = Splitter' (-1)
-
-tagToAU Panner'' =
-  Panner'
-    { coneInnerAngle: (ap_ (speciousConeInnerAngle))
-    , coneOuterAngle: (ap_ (speciousConeOuterAngle))
-    , coneOuterGain: (ap_ (speciousConeOuterGain))
-    , distanceModel: Inverse
-    , maxDistance: (ap_ (speciousMaxDistance))
-    , orientationX: (ap_ (speciousOrientationX))
-    , orientationY: (ap_ (speciousOrientationY))
-    , orientationZ: (ap_ (speciousOrientationZ))
-    , panningModel: EqualPower
-    , positionX: (ap_ (speciousPositionX))
-    , positionY: (ap_ (speciousPositionY))
-    , positionZ: (ap_ (speciousPositionZ))
-    , refDistance: (ap_ (speciousRefDistance))
-    , rolloffFactor: (ap_ (speciousRolloffFactor))
-    }
-
-tagToAU StereoPanner'' = (StereoPanner' (ap_ speciousPanner))
-
-tagToAU Mul'' = Mul'
-
-tagToAU Add'' = Add'
-
-tagToAU Swap'' = Swap'
-
-tagToAU Merger'' = Merger' Nil
-
-tagToAU Constant'' = Constant' (ap_ speciousConstant)
-
-tagToAU Delay'' = Delay' (ap_ speciousDelay)
-
-tagToAU Gain'' = Gain' (ap_ speciousGain)
-
-tagToAU Speaker'' = Speaker'
-
-tagToAU Recorder'' = (Recorder' "")
-
-tagToAU NoSound'' = NoSound'
-
-tagToAU SplitRes'' = (SplitRes' (-1))
-
-tagToAU DupRes'' = DupRes'
 
 type UnfoldedFlatAudio
   = Tuple Int PtrInfo
@@ -3926,116 +3776,6 @@ audioGrouper (h : t) =
         <> audioGrouper pt.no
     )
 
-makeContiguousUnits :: AudioTag -> Int -> Int -> List PtrInfo
-makeContiguousUnits _ _ 0 = Nil
-
-makeContiguousUnits t start n =
-  map
-    ( \i ->
-        { au: tagToAU t.tag
-        , name: Nothing
-        , status: Off
-        , next: DS.empty
-        , chan: t.chan
-        , head: (-42) -- ugh, hackish
-        , prev: DS.empty
-        , ptr: i
-        }
-    )
-    (DU.range start (start + n - 1))
-
-maybeNel :: forall a. List a -> Maybe (NonEmpty List a)
-maybeNel Nil = Nothing
-
-maybeNel (h : t) = Just $ h :| t
-
-nonEmptyListLength :: forall a. NonEmpty List a -> Int
-nonEmptyListLength (_ :| t) = DL.length t + 1
-
-addContiguousNewUnits :: UnfoldedGroupedAudio -> Reconcilable -> Reconcilable
-addContiguousNewUnits ug toModify =
-  let
-    nu =
-      makeContiguousUnits
-        (fst ug)
-        (M.size toModify.flat)
-        (max 0 (nonEmptyListLength (snd ug) - (maybe 0 nonEmptyListLength $ M.lookup (fst ug) toModify.grouped)))
-  in
-    ( { grouped:
-          maybe
-            toModify.grouped
-            (\nel -> M.insertWith (\(h0 :| t0) (h1 :| t1) -> h0 :| (t0 <> (h1 : t1))) (fst ug) nel toModify.grouped)
-            $ maybeNel nu
-      , flat:
-          toModify.flat <> (M.fromFoldable (map (\i -> Tuple i.ptr i) nu))
-      }
-    )
-
-normalizeReconcilable :: Reconcilable -> Reconcilable -> Reconcilable
-normalizeReconcilable target tom = go (M.toUnfoldable target.grouped) tom
-  where
-  go :: List UnfoldedGroupedAudio -> Reconcilable -> Reconcilable
-  go Nil toModify = toModify
-
-  go (h : t) toModify = let tm = addContiguousNewUnits h toModify in go t tm
-
-nextDegree :: Map Int Int -> Array Int
-nextDegree m = (A.fromFoldable <<< M.keys) $ M.filter (_ == 1) m
-
-glpMIN = 1 :: Int
-
-makeNaiveReconciliation0 ::
-  Reconcilable ->
-  Reconcilable ->
-  { prev :: Reconcilable, cur :: Reconcilable }
-makeNaiveReconciliation0 prev cur =
-  let
-    cur_ = normalizeReconcilable prev cur
-  in
-    let
-      prev_ = normalizeReconcilable cur prev
-    in
-      { prev: prev_
-      , cur: cur_
-      }
-
--- First step: fix
--- Second step: optimize
-makeNaiveReconciliation1 ::
-  { prev :: Reconcilable
-  , cur :: Reconcilable
-  } ->
-  Reconciled'
-makeNaiveReconciliation1 ipt =
-  let
-    cur_ = ipt.cur
-
-    prev_ = ipt.prev
-  in
-    { prev: prev_
-    , cur: cur_
-    , reconciliation:
-        M.fromFoldable
-          ( join
-              ( map
-                  ( \(Tuple idx0 (NonEmpty x' x)) ->
-                      ( maybe Nil
-                          ( \(NonEmpty i' i) ->
-                              DL.zipWith
-                                ( \a b ->
-                                    Tuple a.ptr b.ptr
-                                )
-                                (i' : i)
-                                (x' : x)
-                          )
-                          (M.lookup idx0 prev_.grouped)
-                      )
-                  )
-                  $ M.toUnfoldable cur_.grouped
-              )
-          )
-    }
-
 type TouchAudioIO
   = { generators :: Array Foreign, recorders :: Array MediaRecorder }
 
@@ -4082,21 +3822,30 @@ type Reconciled'
     , reconciliation :: Map Int Int
     }
 
-type Reconciled
-  = { prev :: Reconcilable
-    , cur :: Reconcilable
-    , reconciliation :: Map Int Int
-    , instructionSet :: Array Instruction
-    }
-
 -- "Assembly like" instruction
 -- for sequential programming with audio units
 -- treating them as pointers.
+instructionForOrd :: Instruction -> Int
+instructionForOrd (Stop _) = 0
+
+instructionForOrd (DisconnectFrom _ _) = 1
+
+instructionForOrd (Free _) = 2
+
+instructionForOrd (Shuffle _ _) = 3
+
+instructionForOrd (NewUnit _ _ _ _ _ _ _) = 4
+
+instructionForOrd (ConnectTo _ _ _) = 5
+
+instructionForOrd _ = 6
+
 data Instruction
   = Stop Int
+  | Free Int
   | DisconnectFrom Int Int -- id id
   | ConnectTo Int Int (Maybe (Tuple Int Int)) -- id id channelConnections
-  | Shuffle (Array (Tuple Int Int)) -- id id, shuffles the map
+  | Shuffle Int Int -- id id
   | NewUnit Int AudioUnit'' (Maybe Int) (Maybe String) (Maybe Number) (Maybe Number) (Maybe (Tuple (Array Number) (Array Number))) -- new audio unit, maybe with channel info, maybe with a source, maybe with a start time, maybe with an offset, maybe with FF and FB info for IIR filter
   | SetFrequency Int Number Number AudioParameterTransition -- frequency
   | SetThreshold Int Number Number AudioParameterTransition -- threshold
@@ -4139,6 +3888,11 @@ isStop_ (Stop _) = true
 
 isStop_ _ = false
 
+isFree_ :: Instruction -> Boolean
+isFree_ (Free _) = true
+
+isFree_ _ = false
+
 isDisconnectFrom_ :: Instruction -> Boolean
 isDisconnectFrom_ (DisconnectFrom _ _) = true
 
@@ -4150,7 +3904,7 @@ isConnectTo_ (ConnectTo _ _ _) = true
 isConnectTo_ _ = false
 
 isShuffle_ :: Instruction -> Boolean
-isShuffle_ (Shuffle _) = true
+isShuffle_ (Shuffle _ _) = true
 
 isShuffle_ _ = false
 
@@ -4373,6 +4127,7 @@ type FFIPredicates
     , isSplitRes :: (AudioUnit'' -> Boolean)
     , isDupRes :: (AudioUnit'' -> Boolean)
     , isStop :: (Instruction -> Boolean)
+    , isFree :: (Instruction -> Boolean)
     , isDisconnectFrom :: (Instruction -> Boolean)
     , isConnectTo :: (Instruction -> Boolean)
     , isShuffle :: (Instruction -> Boolean)
@@ -4461,6 +4216,7 @@ toFFI =
   , isSplitRes: isSplitRes_
   , isDupRes: isDupRes_
   , isStop: isStop_
+  , isFree: isFree_
   , isDisconnectFrom: isDisconnectFrom_
   , isConnectTo: isConnectTo_
   , isShuffle: isShuffle_
@@ -4501,12 +4257,15 @@ toFFI =
   } ::
     FFIPredicates
 
+derive instance instructionEq :: Eq Instruction
+
+instance instructionOrd :: Ord Instruction where
+  compare a b = compare (instructionForOrd a) (instructionForOrd b)
+
 derive instance genericInstruction :: Generic Instruction _
 
 instance showInstruction :: Show Instruction where
   show s = genericShow s
-
-derive instance eqInstruction :: Eq Instruction
 
 channelConstructor :: AudioUnit' -> Maybe Int
 channelConstructor (Merger' l) = Just $ DL.length l
@@ -4578,37 +4337,6 @@ os2s o = case o of
 napeq :: AudioParameter -> AudioParameter -> Boolean
 napeq ({ param: a }) ({ param: b }) = a /= b
 
-describeConnection :: Reconcilable -> Reconcilable -> Map Int Int -> Array (Tuple Int Int)
-describeConnection start end passage =
-  (A.fromFoldable <<< M.keys)
-    ( M.filter
-        ( \(Tuple f s) ->
-            fromMaybe false
-              ((not <<< member s <<< _.next) <$> (M.lookup f end.flat))
-        )
-        ( M.fromFoldable
-            ( DL.catMaybes
-                ( map
-                    ( \it@(Tuple f s) ->
-                        Tuple it
-                          <$> ( Tuple
-                                <$> M.lookup f passage
-                                <*> M.lookup s passage
-                            )
-                    )
-                    $ join
-                        ( map
-                            ( \au ->
-                                map (Tuple au.ptr)
-                                  $ DL.fromFoldable au.next
-                            )
-                            (M.values start.flat)
-                        )
-                )
-            )
-        )
-    )
-
 isStoppable :: AudioUnit' -> Boolean
 -- NB: play is not a gen as there is no stop method on the source element
 -- this is a bad, as it will keep playing in the background after
@@ -4632,13 +4360,8 @@ isStoppable (Constant' _) = true
 
 isStoppable _ = false
 
-maybeMakeImmediate :: Boolean -> AudioParameterTransition -> AudioParameterTransition
-maybeMakeImmediate true = const Immediately
-
-maybeMakeImmediate false = identity
-
-scp :: Int -> Object (AudioParameter) -> Object (AudioParameter) -> Array Instruction
-scp i n nx =
+scp :: Int -> Object (AudioParameter) -> Maybe (Object (AudioParameter)) -> Array Instruction
+scp i n (Just nx) =
   join
     $ map
         ( \(Tuple k0 v0) ->
@@ -4651,282 +4374,348 @@ scp i n nx =
         )
         (O.toUnfoldable n)
 
-reconciliationToInstructionSet :: Reconciled' -> Reconciled
-reconciliationToInstructionSet { prev, cur, reconciliation } =
-  { prev
-  , cur
-  , reconciliation
-  , instructionSet: stop <> disconnect <> (pure shuffle) <> new <> connect <> set
-  }
+scp i n Nothing =
+  join
+    $ map
+        ( \(Tuple k0 v0) ->
+            [ SetCustomParam i k0 (v0.param) (v0.timeOffset) v0.transition ]
+        )
+        (O.toUnfoldable n)
+
+doStop :: PtrInfo -> Array Instruction
+doStop pi =
+  (if isStoppable pi.au then [ Stop pi.ptr ] else [])
+    <> map (DisconnectFrom pi.ptr) (A.fromFoldable pi.next)
+    <> [ Free pi.ptr ]
+
+doGo :: FlatAudio -> PtrInfo -> Array Instruction
+doGo fa pi =
+  [ NewUnit pi.ptr (au'' pi.au)
+      (channelConstructor pi.au)
+      (sourceConstructor pi.au)
+      (startConstructor pi.au)
+      (offsetConstructor pi.au)
+      (iirCoefConstructor pi.au)
+  ]
+    <> map
+        ( \x ->
+            ConnectTo pi.ptr x
+              (harmonizeCurrChannels fa (Tuple pi.ptr x))
+        )
+        (A.fromFoldable pi.next)
+    <> set pi.ptr pi.au Nothing
+
+doStay :: PtrInfo -> PtrInfo -> Array Instruction
+doStay prev cur = (if prev.ptr /= cur.ptr then [ Shuffle prev.ptr cur.ptr ] else []) <> set cur.ptr cur.au (Just prev.au)
+
+buildReconciliation' :: FlatAudio -> List PtrInfo -> List PtrInfo -> Array Instruction
+buildReconciliation' fa Nil Nil = []
+
+buildReconciliation' fa (a : b) Nil = doStop a <> buildReconciliation' fa b Nil
+
+buildReconciliation' fa Nil (a : b) = doGo fa a <> buildReconciliation' fa Nil b
+
+buildReconciliation' fa (a : b) (x : y) = doStay a x <> buildReconciliation' fa b y
+
+asList :: forall a. NonEmpty List a -> List a
+asList (a :| b) = a : b
+
+harmonizeCurrChannels' :: PtrInfo -> PtrInfo -> Maybe (Tuple Int Int)
+harmonizeCurrChannels' _ { au: SplitRes' n } = Just (Tuple n 0)
+
+harmonizeCurrChannels' { ptr } { au: Merger' l } = DL.head $ map (Tuple 0 <<< fst) (DL.filter (\(Tuple chan pt) -> ptr == pt) $ DL.mapWithIndex (\i a -> Tuple i a) l)
+
+harmonizeCurrChannels' { chan } _ = Nothing
+
+harmonizeCurrChannels :: FlatAudio -> Tuple Int Int -> Maybe (Tuple Int Int)
+harmonizeCurrChannels curFlat (Tuple l r) =
+  fromMaybe Nothing
+    $ harmonizeCurrChannels'
+    <$> (M.lookup l curFlat)
+    <*> (M.lookup r curFlat)
+
+buildReconciliation :: FlatAudio -> GroupedAudio -> GroupedAudio -> AudioTag -> Array Instruction
+buildReconciliation curFlat prev cur tag = buildReconciliation' curFlat (go prev) (go cur)
   where
-  reversed =
-    ( M.fromFoldable
-        <<< map swap
-        <<< (M.toUnfoldable :: Map Int Int -> Array (Tuple Int Int))
+  go = maybe Nil asList <<< M.lookup tag
+
+buildReconciliations :: FlatAudio -> Set AudioTag -> GroupedAudio -> GroupedAudio -> Array Instruction
+buildReconciliations curFlat keys prev cur =
+  let
+    curried = buildReconciliation curFlat prev cur
+  in
+    join $ map curried (A.fromFoldable keys)
+
+foo :: (Int -> Number -> Number -> AudioParameterTransition -> Instruction) -> Int -> AudioParameter -> AudioParameter -> Array Instruction
+foo c i a x = if napeq a x || a.forceSet then [ c i (a.param) (a.timeOffset) a.transition ] else []
+
+bar :: (Int -> Number -> Number -> AudioParameterTransition -> Instruction) -> Int -> AudioParameter -> Instruction
+bar c i a = c i (a.param) (a.timeOffset) Immediately
+
+setFQFilter ::
+  Int ->
+  AudioParameter ->
+  AudioParameter ->
+  Maybe AudioParameter ->
+  Maybe AudioParameter ->
+  Array Instruction
+setFQFilter i a b (Just x) (Just y) = foo SetFrequency i a x <> foo SetQ i b y
+
+setFQFilter i a b _ _ = [ bar SetFrequency i a, bar SetQ i b ]
+
+setFilter ::
+  Int ->
+  AudioParameter ->
+  AudioParameter ->
+  AudioParameter ->
+  Maybe AudioParameter ->
+  Maybe AudioParameter ->
+  Maybe AudioParameter ->
+  Array Instruction
+setFilter i a b c (Just x) (Just y) (Just z) = foo SetFrequency i a x <> foo SetQ i b y <> foo SetGain i c z
+
+setFilter i a b c _ _ _ = [ bar SetFrequency i a, bar SetQ i b, bar SetGain i c ]
+
+setFGFilter ::
+  Int ->
+  AudioParameter ->
+  AudioParameter ->
+  Maybe AudioParameter ->
+  Maybe AudioParameter ->
+  Array Instruction
+setFGFilter i a c (Just x) (Just z) = foo SetFrequency i a x <> foo SetGain i c z
+
+setFGFilter i a c _ _ = [ bar SetFrequency i a, bar SetGain i c ]
+
+-- curId cur prev
+set :: Int -> AudioUnit' -> Maybe AudioUnit' -> Array Instruction
+set i (AudioWorkletGenerator' _ n) (Just (AudioWorkletGenerator' _ nx)) = scp i n (Just nx)
+
+set i (AudioWorkletGenerator' _ n) Nothing = scp i n Nothing
+
+set i (AudioWorkletProcessor' _ n) (Just (AudioWorkletProcessor' _ nx)) = scp i n (Just nx)
+
+set i (AudioWorkletProcessor' _ n) Nothing = scp i n Nothing
+
+set i (AudioWorkletAggregator' _ n) (Just (AudioWorkletAggregator' _ nx)) = scp i n (Just nx)
+
+set i (AudioWorkletAggregator' _ n) Nothing = scp i n Nothing
+
+set i (PlayBuf' _ n _) (Just (PlayBuf' _ nx _)) = foo SetPlaybackRate i n nx
+
+set i (PlayBuf' _ n _) Nothing = [ bar SetPlaybackRate i n ]
+
+set i (LoopBuf' _ n s e) (Just (LoopBuf' _ nx sx ex)) =
+  foo SetPlaybackRate i n nx
+    <> (if s /= sx then [ SetLoopStart i s false ] else [])
+    <> (if e /= ex then [ SetLoopEnd i e false ] else [])
+
+set i (LoopBuf' _ n s e) Nothing =
+  [ bar SetPlaybackRate i n
+  , SetLoopStart i s true
+  , SetLoopEnd i e true
+  ]
+
+set i (Lowpass' a b) (Just (Lowpass' x y)) = setFQFilter i a b (Just x) (Just y)
+
+set i (Lowpass' a b) Nothing = setFQFilter i a b Nothing Nothing
+
+set i (Highpass' a b) (Just (Highpass' x y)) = setFQFilter i a b (Just x) (Just y)
+
+set i (Highpass' a b) Nothing = setFQFilter i a b Nothing Nothing
+
+set i (Bandpass' a b) (Just (Bandpass' x y)) = setFQFilter i a b (Just x) (Just y)
+
+set i (Bandpass' a b) Nothing = setFQFilter i a b Nothing Nothing
+
+set i (Allpass' a b) (Just (Allpass' x y)) = setFQFilter i a b (Just x) (Just y)
+
+set i (Allpass' a b) Nothing = setFQFilter i a b Nothing Nothing
+
+set i (Highshelf' a c) (Just (Highshelf' x z)) = setFGFilter i a c (Just x) (Just z)
+
+set i (Highshelf' a c) Nothing = setFGFilter i a c Nothing Nothing
+
+set i (Lowshelf' a c) (Just (Lowshelf' x z)) = setFGFilter i a c (Just x) (Just z)
+
+set i (Lowshelf' a c) Nothing = setFGFilter i a c Nothing Nothing
+
+set i (Peaking' a b c) (Just (Peaking' x y z)) = setFilter i a b c (Just x) (Just y) (Just z)
+
+set i (Peaking' a b c) Nothing = setFilter i a b c Nothing Nothing Nothing
+
+set i (Notch' a b) (Just (Notch' x y)) = setFQFilter i a b (Just x) (Just y)
+
+set i (Notch' a b) Nothing = setFQFilter i a b Nothing Nothing
+
+set i (DynamicsCompressor' a b c d e) (Just (DynamicsCompressor' v w x y z)) = foo SetThreshold i a v <> foo SetKnee i b w <> foo SetRatio i c x <> foo SetAttack i d y <> foo SetRelease i e z
+
+set i (DynamicsCompressor' a b c d e) Nothing = [ bar SetThreshold i a, bar SetKnee i b, bar SetRatio i c, bar SetAttack i d, bar SetRelease i e ]
+
+set i (SinOsc' n) (Just (SinOsc' nx)) = foo SetFrequency i n nx
+
+set i (SinOsc' n) Nothing = [ bar SetFrequency i n ]
+
+set i (SquareOsc' n) (Just (SquareOsc' nx)) = foo SetFrequency i n nx
+
+set i (SquareOsc' n) Nothing = [ bar SetFrequency i n ]
+
+set i (SawtoothOsc' n) (Just (SawtoothOsc' nx)) = foo SetFrequency i n nx
+
+set i (SawtoothOsc' n) Nothing = [ bar SetFrequency i n ]
+
+set i (TriangleOsc' n) (Just (TriangleOsc' nx)) = foo SetFrequency i n nx
+
+set i (TriangleOsc' n) Nothing = [ bar SetFrequency i n ]
+
+set i (PeriodicOsc' n _) (Just (PeriodicOsc' nx _)) = foo SetFrequency i n nx
+
+set i (PeriodicOsc' n _) Nothing = [ bar SetFrequency i n ]
+
+set i (WaveShaper' _ o) (Just (WaveShaper' _ ox)) =
+  if o /= ox then
+    [ SetOversample i
+        $ os2s o
+    ]
+  else
+    []
+
+set i (WaveShaper' _ o) Nothing =
+  [ SetOversample i
+      $ os2s o
+  ]
+
+set i (StereoPanner' n) (Just (StereoPanner' nx)) = foo SetPan i n nx
+
+set i (StereoPanner' n) Nothing = [ bar SetPan i n ]
+
+set i (Panner' n) (Just (Panner' nx)) =
+  ( ( if napeq n.coneInnerAngle nx.coneInnerAngle || n.coneInnerAngle.forceSet then
+        [ SetConeInnerAngle i (n.coneInnerAngle.param)
+        ]
+      else
+        []
     )
-      reconciliation
-
-  reconciliationAsMap = reconciliation
-
-  reversedAsMap = reversed
-
-  -- disconnections that we need to make
-  disconnect = (map (uncurry DisconnectFrom) $ describeConnection prev cur reconciliationAsMap)
-
-  statusChange :: forall f. Unfoldable f ⇒ Maybe Status -> Maybe Status -> f (Tuple Int Int)
-  statusChange isNow was =
-    ( M.toUnfoldable
-        $ M.filter
-            ( \v ->
-                ( map (_.status)
-                    $ M.lookup v cur.flat
-                )
-                  == isNow
-            )
-            ( M.filterKeys
-                (\k -> (map (_.status) $ M.lookup k prev.flat) == was)
-                reconciliationAsMap
-            )
-    )
-
-  -- turning off
-  stop :: Array Instruction
-  stop =
-    map (Stop <<< fst)
-      ( A.filter
-          (maybe false (isStoppable <<< _.au) <<< flip M.lookup prev.flat <<< fst)
-          $ statusChange (Just Off) (Just On)
-      )
-
-  -- shuffle instructions represent the new array that we will make out of the old
-  shuffle :: Instruction
-  shuffle = Shuffle $ statusChange (Just On) (Just On)
-
-  -- new units that were not in the old array
-  new :: Array Instruction
-  new =
-    ( A.catMaybes
-        ( map
-            ( \i ->
-                map
-                  ( \ptr ->
-                      (NewUnit i $ au'' ptr.au) (channelConstructor ptr.au)
-                        (sourceConstructor ptr.au)
-                        (startConstructor ptr.au)
-                        (offsetConstructor ptr.au)
-                        (iirCoefConstructor ptr.au)
-                  )
-                  $ M.lookup i cur.flat
-            )
-            ( A.catMaybes
-                ( map
-                    ( \k ->
-                        M.lookup k reconciliationAsMap
-                    )
-                    $ (A.fromFoldable <<< M.keys) (M.filter (\i -> i.status == Off) prev.flat)
-                )
-            )
+      <> ( if napeq n.coneOuterAngle nx.coneOuterAngle || n.coneOuterAngle.forceSet then
+            [ SetConeOuterAngle i (n.coneOuterAngle.param)
+            ]
+          else
+            []
         )
-    )
-
-  harmonizeCurrChannels' :: PtrInfo -> PtrInfo -> Maybe (Tuple Int Int)
-  harmonizeCurrChannels' _ { au: SplitRes' n } = Just (Tuple n 0)
-
-  harmonizeCurrChannels' { ptr } { au: Merger' l } = DL.head $ map (Tuple 0 <<< fst) (DL.filter (\(Tuple chan pt) -> ptr == pt) $ DL.mapWithIndex (\i a -> Tuple i a) l)
-
-  harmonizeCurrChannels' { chan } _ = Nothing
-
-  harmonizeCurrChannels :: Tuple Int Int -> Maybe (Tuple Int Int)
-  harmonizeCurrChannels (Tuple l r) =
-    fromMaybe Nothing
-      $ harmonizeCurrChannels'
-      <$> (M.lookup l cur.flat)
-      <*> (M.lookup r cur.flat)
-
-  connect :: Array Instruction
-  connect =
-    let
-      conn = describeConnection cur prev reversedAsMap
-    in
-      (map (uncurry $ uncurry ConnectTo) $ map (\i -> Tuple i (harmonizeCurrChannels i)) conn)
-
-  setFQFilter i a b x y =
-    (if napeq a x || a.forceSet then [ SetFrequency i (a.param) (a.timeOffset) $ maybeMakeImmediate (x.param == speciousFreq) a.transition ] else [])
-      <> (if napeq b y || b.forceSet then [ SetQ i (b.param) (b.timeOffset) $ maybeMakeImmediate (y.param == speciousQ) b.transition ] else [])
-
-  setFilter i a b c x y z =
-    (if napeq a x || a.forceSet then [ SetFrequency i (a.param) (a.timeOffset) $ maybeMakeImmediate (z.param == speciousFreq) a.transition ] else [])
-      <> (if napeq b y || b.forceSet then [ SetQ i (b.param) (b.timeOffset) $ maybeMakeImmediate (y.param == speciousQ) b.transition ] else [])
-      <> (if napeq c z || c.forceSet then [ SetGain i (c.param) (c.timeOffset) $ maybeMakeImmediate (z.param == speciousGain) c.transition ] else [])
-
-  setFGFilter i a c x z =
-    (if napeq a x || a.forceSet then [ SetFrequency i (a.param) (a.timeOffset) $ maybeMakeImmediate (x.param == speciousFreq) a.transition ] else [])
-      <> (if napeq c z || c.forceSet then [ SetGain i (c.param) (c.timeOffset) $ maybeMakeImmediate (z.param == speciousGain) c.transition ] else [])
-
-  -- uncomment!
-  set' :: Int -> AudioUnit' -> AudioUnit' -> Array Instruction
-  set' i (AudioWorkletGenerator' _ n) (AudioWorkletGenerator' _ nx) = scp i n nx
-
-  set' i (AudioWorkletProcessor' _ n) (AudioWorkletProcessor' _ nx) = scp i n nx
-
-  set' i (AudioWorkletAggregator' _ n) (AudioWorkletAggregator' _ nx) = scp i n nx
-
-  set' i (PlayBuf' _ n _) (PlayBuf' _ nx _) = if napeq n nx || n.forceSet then [ SetPlaybackRate i (n.param) (n.timeOffset) $ maybeMakeImmediate (nx.param == speciousRate) n.transition ] else []
-
-  set' i (LoopBuf' _ n s e) (LoopBuf' _ nx sx ex) =
-    (if napeq n nx || n.forceSet then [ SetPlaybackRate i (n.param) (n.timeOffset) $ maybeMakeImmediate (nx.param == speciousRate) n.transition ] else [])
-      <> (if s /= sx then [ SetLoopStart i s (sx == speciousStart) ] else [])
-      <> (if e /= ex then [ SetLoopEnd i e (ex == speciousEnd) ] else [])
-
-  set' i (Lowpass' a b) (Lowpass' x y) = setFQFilter i a b x y
-
-  set' i (Highpass' a b) (Highpass' x y) = setFQFilter i a b x y
-
-  set' i (Bandpass' a b) (Bandpass' x y) = setFQFilter i a b x y
-
-  set' i (Allpass' a b) (Allpass' x y) = setFQFilter i a b x y
-
-  set' i (Highshelf' a c) (Highshelf' x z) = setFGFilter i a c x z
-
-  set' i (Lowshelf' a c) (Lowshelf' x z) = setFGFilter i a c x z
-
-  set' i (Peaking' a b c) (Peaking' x y z) = setFilter i a b c x y z
-
-  set' i (Notch' a b) (Notch' x y) = setFQFilter i a b x y
-
-  set' i (DynamicsCompressor' a b c d e) (DynamicsCompressor' v w x y z) =
-    (if napeq a v || a.forceSet then [ SetThreshold i (a.param) (a.timeOffset) $ maybeMakeImmediate (v.param == speciousThreshold) a.transition ] else [])
-      <> (if napeq b w || b.forceSet then [ SetKnee i (b.param) (b.timeOffset) $ maybeMakeImmediate (w.param == speciousKnee) b.transition ] else [])
-      <> (if napeq c x || c.forceSet then [ SetRatio i (c.param) (c.timeOffset) $ maybeMakeImmediate (x.param == speciousRatio) c.transition ] else [])
-      <> (if napeq d y || d.forceSet then [ SetAttack i (d.param) (d.timeOffset) $ maybeMakeImmediate (y.param == speciousAttack) d.transition ] else [])
-      <> (if napeq e z || e.forceSet then [ SetRelease i (e.param) (e.timeOffset) $ maybeMakeImmediate (z.param == speciousRelease) e.transition ] else [])
-
-  set' i (SinOsc' n) (SinOsc' nx) = if (napeq n nx || n.forceSet) then [ SetFrequency i (n.param) (n.timeOffset) $ maybeMakeImmediate (nx.param == speciousFreq) n.transition ] else []
-
-  set' i (SquareOsc' n) (SquareOsc' nx) = if (napeq n nx || n.forceSet) then [ SetFrequency i (n.param) (n.timeOffset) $ maybeMakeImmediate (nx.param == speciousFreq) n.transition ] else []
-
-  set' i (SawtoothOsc' n) (SawtoothOsc' nx) = if napeq n nx then [ SetFrequency i (n.param) (n.timeOffset) $ maybeMakeImmediate (nx.param == speciousFreq) n.transition ] else []
-
-  set' i (TriangleOsc' n) (TriangleOsc' nx) = if (napeq n nx || n.forceSet) then [ SetFrequency i (n.param) (n.timeOffset) $ maybeMakeImmediate (nx.param == speciousFreq) n.transition ] else []
-
-  set' i (PeriodicOsc' n _) (PeriodicOsc' nx _) = if (napeq n nx || n.forceSet) then [ SetFrequency i (n.param) (n.timeOffset) $ maybeMakeImmediate (nx.param == speciousFreq) n.transition ] else []
-
-  set' i (WaveShaper' _ o) (WaveShaper' _ ox) =
-    if o /= ox then
-      [ SetOversample i
-          $ os2s o
-      ]
-    else
-      []
-
-  set' i (StereoPanner' n) (StereoPanner' nx) = if napeq n nx then [ SetPan i (n.param) (n.timeOffset) $ maybeMakeImmediate (nx.param == speciousPanner) n.transition ] else []
-
-  set' i (Panner' n) (Panner' nx) =
-    ( ( if napeq n.coneInnerAngle nx.coneInnerAngle || n.coneInnerAngle.forceSet then
-          [ SetConeInnerAngle i (n.coneInnerAngle.param)
-          ]
-        else
-          []
-      )
-        <> ( if napeq n.coneOuterAngle nx.coneOuterAngle || n.coneOuterAngle.forceSet then
-              [ SetConeOuterAngle i (n.coneOuterAngle.param)
-              ]
-            else
-              []
-          )
-        <> ( if napeq n.coneOuterGain nx.coneOuterGain || n.coneOuterGain.forceSet then
-              [ SetConeOuterGain i (n.coneOuterGain.param)
-              ]
-            else
-              []
-          )
-        <> ( if n.distanceModel /= nx.distanceModel then
-              [ SetDistanceModel i (dm2str n.distanceModel)
-              ]
-            else
-              []
-          )
-        <> ( if napeq n.maxDistance nx.maxDistance then
-              [ SetMaxDistance i (n.maxDistance.param)
-              ]
-            else
-              []
-          )
-        <> ( if napeq n.orientationX nx.orientationX || n.orientationX.forceSet then
-              [ SetOrientationX i (n.orientationX.param) (n.orientationX.timeOffset) $ maybeMakeImmediate (nx.orientationX.param == speciousOrientationX) n.orientationX.transition
-              ]
-            else
-              []
-          )
-        <> ( if napeq n.orientationY nx.orientationY || n.orientationY.forceSet then
-              [ SetOrientationY i (n.orientationY.param) (n.orientationY.timeOffset) $ maybeMakeImmediate (nx.orientationY.param == speciousOrientationY) n.orientationY.transition
-              ]
-            else
-              []
-          )
-        <> ( if napeq n.orientationZ nx.orientationZ || n.orientationZ.forceSet then
-              [ SetOrientationZ i (n.orientationZ.param) (n.orientationZ.timeOffset) $ maybeMakeImmediate (nx.orientationZ.param == speciousOrientationZ) n.orientationZ.transition
-              ]
-            else
-              []
-          )
-        <> ( if n.panningModel /= nx.panningModel then
-              [ SetPanningModel i (pm2str n.panningModel)
-              ]
-            else
-              []
-          )
-        <> ( if napeq n.positionX nx.positionX || n.positionX.forceSet then
-              [ SetPositionX i (n.positionX.param) (n.positionX.timeOffset) $ maybeMakeImmediate (nx.positionX.param == speciousPositionX) n.positionX.transition
-              ]
-            else
-              []
-          )
-        <> ( if napeq n.positionY nx.positionY || n.positionY.forceSet then
-              [ SetPositionY i (n.positionY.param) (n.positionY.timeOffset) $ maybeMakeImmediate (nx.positionY.param == speciousPositionY) n.positionY.transition
-              ]
-            else
-              []
-          )
-        <> ( if napeq n.positionZ nx.positionZ || n.positionZ.forceSet then
-              [ SetPositionZ i (n.positionZ.param) (n.positionZ.timeOffset) $ maybeMakeImmediate (nx.positionZ.param == speciousPositionZ) n.positionZ.transition
-              ]
-            else
-              []
-          )
-        <> ( if (napeq n.refDistance nx.refDistance) || n.refDistance.forceSet then
-              [ SetRefDistance i (n.refDistance.param)
-              ]
-            else
-              []
-          )
-        <> ( if (napeq n.rolloffFactor nx.rolloffFactor) || n.rolloffFactor.forceSet then
-              [ SetRolloffFactor i (n.rolloffFactor.param)
-              ]
-            else
-              []
-          )
-    )
-
-  set' i (Constant' n) (Constant' nx) = if (napeq n nx || n.forceSet) then [ SetOffset i (n.param) (n.timeOffset) $ maybeMakeImmediate (nx.param == speciousOffset) n.transition ] else []
-
-  set' i (Delay' n) (Delay' nx) = if (napeq n nx || n.forceSet) then [ SetDelay i (n.param) (n.timeOffset) $ maybeMakeImmediate (nx.param == speciousDelay) n.transition ] else []
-
-  set' i (Gain' n) (Gain' nx) = if (napeq n nx || n.forceSet) then [ SetGain i (n.param) (n.timeOffset) $ maybeMakeImmediate (nx.param == speciousGain) n.transition ] else []
-
-  set' i _ _ = []
-
-  set :: Array Instruction
-  set =
-    ( join
-        ( map
-            ( \v ->
-                set' v.ptr v.au
-                  (fromMaybe v.au $ (map _.au $ M.lookup v.ptr reversedAsMap >>= flip M.lookup prev.flat))
-            )
-            (A.filter (\{ status } -> status == On) (A.fromFoldable $ M.values cur.flat))
+      <> ( if napeq n.coneOuterGain nx.coneOuterGain || n.coneOuterGain.forceSet then
+            [ SetConeOuterGain i (n.coneOuterGain.param)
+            ]
+          else
+            []
         )
-    )
+      <> ( if n.distanceModel /= nx.distanceModel then
+            [ SetDistanceModel i (dm2str n.distanceModel)
+            ]
+          else
+            []
+        )
+      <> ( if napeq n.maxDistance nx.maxDistance then
+            [ SetMaxDistance i (n.maxDistance.param)
+            ]
+          else
+            []
+        )
+      <> ( if napeq n.orientationX nx.orientationX || n.orientationX.forceSet then
+            [ SetOrientationX i (n.orientationX.param) (n.orientationX.timeOffset) n.orientationX.transition
+            ]
+          else
+            []
+        )
+      <> ( if napeq n.orientationY nx.orientationY || n.orientationY.forceSet then
+            [ SetOrientationY i (n.orientationY.param) (n.orientationY.timeOffset) n.orientationY.transition
+            ]
+          else
+            []
+        )
+      <> ( if napeq n.orientationZ nx.orientationZ || n.orientationZ.forceSet then
+            [ SetOrientationZ i (n.orientationZ.param) (n.orientationZ.timeOffset) n.orientationZ.transition
+            ]
+          else
+            []
+        )
+      <> ( if n.panningModel /= nx.panningModel then
+            [ SetPanningModel i (pm2str n.panningModel)
+            ]
+          else
+            []
+        )
+      <> ( if napeq n.positionX nx.positionX || n.positionX.forceSet then
+            [ SetPositionX i (n.positionX.param) (n.positionX.timeOffset) n.positionX.transition
+            ]
+          else
+            []
+        )
+      <> ( if napeq n.positionY nx.positionY || n.positionY.forceSet then
+            [ SetPositionY i (n.positionY.param) (n.positionY.timeOffset) n.positionY.transition
+            ]
+          else
+            []
+        )
+      <> ( if napeq n.positionZ nx.positionZ || n.positionZ.forceSet then
+            [ SetPositionZ i (n.positionZ.param) (n.positionZ.timeOffset) n.positionZ.transition
+            ]
+          else
+            []
+        )
+      <> ( if (napeq n.refDistance nx.refDistance) || n.refDistance.forceSet then
+            [ SetRefDistance i (n.refDistance.param)
+            ]
+          else
+            []
+        )
+      <> ( if (napeq n.rolloffFactor nx.rolloffFactor) || n.rolloffFactor.forceSet then
+            [ SetRolloffFactor i (n.rolloffFactor.param)
+            ]
+          else
+            []
+        )
+  )
+
+set i (Panner' n) Nothing =
+  [ SetConeInnerAngle i (n.coneInnerAngle.param)
+  , SetConeOuterAngle i (n.coneOuterAngle.param)
+  , SetConeOuterGain i (n.coneOuterGain.param)
+  , SetDistanceModel i (dm2str n.distanceModel)
+  , SetMaxDistance i (n.maxDistance.param)
+  , SetOrientationX i (n.orientationX.param) (n.orientationX.timeOffset) n.orientationX.transition
+  , SetOrientationY i (n.orientationY.param) (n.orientationY.timeOffset) n.orientationY.transition
+  , SetOrientationZ i (n.orientationZ.param) (n.orientationZ.timeOffset) n.orientationZ.transition
+  , SetPanningModel i (pm2str n.panningModel)
+  , SetPositionX i (n.positionX.param) (n.positionX.timeOffset) n.positionX.transition
+  , SetPositionY i (n.positionY.param) (n.positionY.timeOffset) n.positionY.transition
+  , SetPositionZ i (n.positionZ.param) (n.positionZ.timeOffset) n.positionZ.transition
+  , SetRefDistance i (n.refDistance.param)
+  , SetRolloffFactor i (n.rolloffFactor.param)
+  ]
+
+set i (Constant' n) (Just (Constant' nx)) = foo SetOffset i n nx
+
+set i (Constant' n) Nothing = [ bar SetOffset i n ]
+
+set i (Delay' n) (Just (Delay' nx)) = foo SetDelay i n nx
+
+set i (Delay' n) Nothing = [ bar SetDelay i n ]
+
+set i (Gain' n) (Just (Gain' nx)) = foo SetGain i n nx
+
+set i (Gain' n) Nothing = [ bar SetGain i n ]
+
+set i _ _ = []
+
+reconciliationToInstructionSet :: Reconcilable -> Reconcilable -> Array Instruction
+reconciliationToInstructionSet prev cur =
+  A.sort
+    $ buildReconciliations cur.flat
+        (M.keys prev.grouped <> M.keys cur.grouped)
+        prev.grouped
+        cur.grouped
+  where
+  keys = M.keys prev.grouped <> M.keys cur.grouped
 
 type RecorderSignature recorder
   = recorder -> Effect Unit
@@ -5194,7 +4983,7 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
                   __cvsNow
               let
                 timeInSeconds = toNumber ct / 1000.0
-              let
+
                 behavior = scene _accNow (CanvasInfo canvasInfo) timeInSeconds
               bang <- create :: Effect (EventIO Unit)
               let
@@ -5230,21 +5019,17 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
                         ( \aud -> do
                             let
                               i = audioToPtr aud
-                            let
+
                               cur = { flat: i.flat, grouped: audioGrouper (DL.fromFoldable i.flat) }
                             prev <- read reconRef
                             write cur reconRef
                             let
-                              prog' = makeNaiveReconciliation0 prev cur
-                            let
-                              prog = makeNaiveReconciliation1 prog'
-                            let
-                              instr = reconciliationToInstructionSet prog
+                              instructionSet = reconciliationToInstructionSet prev cur
                             audioClockCur <- getAudioClockTime ctx
                             let
                               instructions =
                                 { t: clockNow_
-                                , i: instr.instructionSet
+                                , i: instructionSet
                                 }
                             exporterQueueRef <- read __exporterQueueRef
                             launchAff
