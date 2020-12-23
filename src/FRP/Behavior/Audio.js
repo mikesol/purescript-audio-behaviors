@@ -306,6 +306,7 @@ exports.touchAudio = function (predicates) {
               var lb = {};
               var generators = incoming.generators;
               var recorders = incoming.recorders;
+              var old = null;
               for (var i = 0; i < instructions.length; i++) {
                 var c = instructions[i];
                 if (predicates.isDisconnectFrom(c)) {
@@ -333,11 +334,11 @@ exports.touchAudio = function (predicates) {
                     );
                   }
                 } else if (predicates.isShuffle(c)) {
-                  var old = generators;
-                  var generators = new Array(c.value0.length);
-                  for (var j = 0; j < c.value0.length; j++) {
-                    generators[c.value0[j].value1] = old[c.value0[j].value0];
+                  if (old === null) {
+                    old = generators;
+                    generators = old.slice();
                   }
+                  generators[c.value2] = old[c.value1];
                 } else if (predicates.isNewUnit(c)) {
                   nu.push(c);
                   generators[c.value0] = {
