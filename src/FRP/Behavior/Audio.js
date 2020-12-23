@@ -304,9 +304,9 @@ exports.touchAudio = function (predicates) {
               }
               var nu = [];
               var lb = {};
-              var generators = incoming.generators;
+              var generators = incoming.generators.slice();
               var recorders = incoming.recorders;
-              var old = null;
+              var old = incoming.generators.slice();
               for (var i = 0; i < instructions.length; i++) {
                 var c = instructions[i];
                 if (predicates.isDisconnectFrom(c)) {
@@ -334,11 +334,7 @@ exports.touchAudio = function (predicates) {
                     );
                   }
                 } else if (predicates.isShuffle(c)) {
-                  if (old === null) {
-                    old = generators;
-                    generators = old.slice();
-                  }
-                  generators[c.value2] = old[c.value1];
+                  generators[c.value1] = old[c.value0];
                 } else if (predicates.isNewUnit(c)) {
                   nu.push(c);
                   generators[c.value0] = {
@@ -599,6 +595,8 @@ exports.touchAudio = function (predicates) {
                     .linearRampToValueAtTime(c.value2, timeToSet + c.value3);
                 } else if (predicates.isStop(c)) {
                   getMainFromGenerator(generators[c.value0]).stop();
+                } else if (predicates.isFree(c)) {
+                  delete generators[c.value0];
                 } else if (predicates.isSetConeInnerAngle(c)) {
                   getMainFromGenerator(generators[c.value0]).coneInnerAngle =
                     c.value1;

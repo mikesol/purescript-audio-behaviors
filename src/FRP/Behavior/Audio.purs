@@ -3830,16 +3830,19 @@ instructionForOrd (Stop _) = 0
 
 instructionForOrd (DisconnectFrom _ _) = 1
 
-instructionForOrd (Shuffle _ _) = 2
+instructionForOrd (Free _) = 2
 
-instructionForOrd (NewUnit _ _ _ _ _ _ _) = 3
+instructionForOrd (Shuffle _ _) = 3
 
-instructionForOrd (ConnectTo _ _ _) = 4
+instructionForOrd (NewUnit _ _ _ _ _ _ _) = 4
 
-instructionForOrd _ = 5
+instructionForOrd (ConnectTo _ _ _) = 5
+
+instructionForOrd _ = 6
 
 data Instruction
   = Stop Int
+  | Free Int
   | DisconnectFrom Int Int -- id id
   | ConnectTo Int Int (Maybe (Tuple Int Int)) -- id id channelConnections
   | Shuffle Int Int -- id id
@@ -3884,6 +3887,11 @@ isStop_ :: Instruction -> Boolean
 isStop_ (Stop _) = true
 
 isStop_ _ = false
+
+isFree_ :: Instruction -> Boolean
+isFree_ (Free _) = true
+
+isFree_ _ = false
 
 isDisconnectFrom_ :: Instruction -> Boolean
 isDisconnectFrom_ (DisconnectFrom _ _) = true
@@ -4119,6 +4127,7 @@ type FFIPredicates
     , isSplitRes :: (AudioUnit'' -> Boolean)
     , isDupRes :: (AudioUnit'' -> Boolean)
     , isStop :: (Instruction -> Boolean)
+    , isFree :: (Instruction -> Boolean)
     , isDisconnectFrom :: (Instruction -> Boolean)
     , isConnectTo :: (Instruction -> Boolean)
     , isShuffle :: (Instruction -> Boolean)
@@ -4207,6 +4216,7 @@ toFFI =
   , isSplitRes: isSplitRes_
   , isDupRes: isDupRes_
   , isStop: isStop_
+  , isFree: isFree_
   , isDisconnectFrom: isDisconnectFrom_
   , isConnectTo: isConnectTo_
   , isShuffle: isShuffle_
@@ -4376,6 +4386,7 @@ doStop :: PtrInfo -> Array Instruction
 doStop pi =
   (if isStoppable pi.au then [ Stop pi.ptr ] else [])
     <> map (DisconnectFrom pi.ptr) (A.fromFoldable pi.next)
+    <> [ Free pi.ptr ]
 
 doGo :: FlatAudio -> PtrInfo -> Array Instruction
 doGo fa pi =
@@ -5049,6 +5060,7 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
                                 pure { generators: [], recorders: [] }
                             write uts' units
                             __endTime <- map getTime now
+                            log $ "pf@ " <> show (__endTime - __startTime)
                             if (__endTime - __startTime) >= __contract then
                               log
                                 ( "Audio control processing is too slow. It took this long: "
