@@ -4408,14 +4408,14 @@ doGo fa pi =
 doStay :: PtrInfo -> PtrInfo -> Array Instruction
 doStay prev cur = (if prev.ptr /= cur.ptr then [ Shuffle prev.ptr cur.ptr ] else []) <> set cur.ptr cur.au (Just prev.au)
 
-buildReconciliation' :: FlatAudio -> List PtrInfo -> List PtrInfo -> Array Instruction
-buildReconciliation' fa Nil Nil = []
+buildReconciliation' :: FlatAudio -> List PtrInfo -> List PtrInfo -> Array Instruction -> Array Instruction
+buildReconciliation' fa Nil Nil acc = acc
 
-buildReconciliation' fa (a : b) Nil = doStop a <> buildReconciliation' fa b Nil
+buildReconciliation' fa (a : b) Nil acc = buildReconciliation' fa b Nil (acc <> doStop a)
 
-buildReconciliation' fa Nil (a : b) = doGo fa a <> buildReconciliation' fa Nil b
+buildReconciliation' fa Nil (a : b) acc = buildReconciliation' fa Nil b (acc <> doGo fa a)
 
-buildReconciliation' fa (a : b) (x : y) = doStay a x <> buildReconciliation' fa b y
+buildReconciliation' fa (a : b) (x : y) acc = buildReconciliation' fa b y (acc <> doStay a x)
 
 asList :: forall a. NonEmpty List a -> List a
 asList (a :| b) = a : b
@@ -4435,7 +4435,7 @@ harmonizeCurrChannels curFlat (Tuple l r) =
     <*> (M.lookup r curFlat)
 
 buildReconciliation :: FlatAudio -> GroupedAudio -> GroupedAudio -> AudioTag -> Array Instruction
-buildReconciliation curFlat prev cur tag = buildReconciliation' curFlat (go prev) (go cur)
+buildReconciliation curFlat prev cur tag = buildReconciliation' curFlat (go prev) (go cur) []
   where
   go = maybe Nil asList <<< M.lookup tag
 
@@ -5017,14 +5017,18 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
                         avv
                       maybe (pure unit)
                         ( \aud -> do
+                            __t0 <- map getTime now
                             let
                               i = audioToPtr aud
-
+                            __t1 <- map getTime now
+                            let
                               cur = { flat: i.flat, grouped: audioGrouper (DL.fromFoldable i.flat) }
                             prev <- read reconRef
                             write cur reconRef
+                            __t2 <- map getTime now
                             let
                               instructionSet = reconciliationToInstructionSet prev cur
+                            __t3 <- map getTime now
                             audioClockCur <- getAudioClockTime ctx
                             let
                               instructions =
@@ -5069,6 +5073,7 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
                                 )
                             else
                               pure unit
+                            log $ "stats :: " <> (show $ __t0 - __startTime) <> " @ " <> (show $ __t1 - __t0) <> " @ " <> (show $ __t2 - __t1) <> " @ " <> (show $ __t3 - __t2) <> " @ " <> (show $ __endTime - __t3) <> " @ " <> (show $ __endTime - __startTime)
                             pure unit
                         )
                         ava
