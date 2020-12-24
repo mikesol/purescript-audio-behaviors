@@ -4408,14 +4408,14 @@ doGo fa pi =
 doStay :: PtrInfo -> PtrInfo -> Array Instruction
 doStay prev cur = (if prev.ptr /= cur.ptr then [ Shuffle prev.ptr cur.ptr ] else []) <> set cur.ptr cur.au (Just prev.au)
 
-buildReconciliation' :: FlatAudio -> List PtrInfo -> List PtrInfo -> Array Instruction
-buildReconciliation' fa Nil Nil = []
+buildReconciliation' :: FlatAudio -> List PtrInfo -> List PtrInfo -> Array Instruction -> Array Instruction
+buildReconciliation' fa Nil Nil acc = acc
 
-buildReconciliation' fa (a : b) Nil = doStop a <> buildReconciliation' fa b Nil
+buildReconciliation' fa (a : b) Nil acc = buildReconciliation' fa b Nil (acc <> doStop a)
 
-buildReconciliation' fa Nil (a : b) = doGo fa a <> buildReconciliation' fa Nil b
+buildReconciliation' fa Nil (a : b) acc = buildReconciliation' fa Nil b (acc <> doGo fa a)
 
-buildReconciliation' fa (a : b) (x : y) = doStay a x <> buildReconciliation' fa b y
+buildReconciliation' fa (a : b) (x : y) acc = buildReconciliation' fa b y (acc <> doStay a x)
 
 asList :: forall a. NonEmpty List a -> List a
 asList (a :| b) = a : b
@@ -4435,7 +4435,7 @@ harmonizeCurrChannels curFlat (Tuple l r) =
     <*> (M.lookup r curFlat)
 
 buildReconciliation :: FlatAudio -> GroupedAudio -> GroupedAudio -> AudioTag -> Array Instruction
-buildReconciliation curFlat prev cur tag = buildReconciliation' curFlat (go prev) (go cur)
+buildReconciliation curFlat prev cur tag = buildReconciliation' curFlat (go prev) (go cur) []
   where
   go = maybe Nil asList <<< M.lookup tag
 
