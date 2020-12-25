@@ -6,26 +6,26 @@
     var audioCtx = null;
     function turnOnAudio() {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      audioCtx.audioWorklet.addModule("ps-aud-mul.js").then(function () {
-        offCb = PS["FRP.Behavior.Audio.Example.HelloWorld"].run()(audioCtx)({
-          msBetweenSamples: 20,
-          msBetweenPings: 15,
-          fastforwardLowerBound: 0.025,
-          rewindUpperBound: 0.15,
-          initialOffset: 0.1,
-          doWebAudio: true,
-        })({
-          recorders: {
-            recorder: PS["FRP.Behavior.Audio.Example.HelloWorld"].mr2url(
-              "audio/ogg; codecs=opus"
-            )(function (s) {
-              return function () {
-                document.querySelector("audio").src = s;
-              };
-            }),
-          },
-        })({})(PS["FRP.Behavior.Audio.Example.HelloWorld"].exporter)();
-      });
+      //audioCtx.audioWorklet.addModule("ps-aud-mul.js").then(function () {
+      offCb = PS["FRP.Behavior.Audio.Example.HelloWorld"].run()(audioCtx)({
+        msBetweenSamples: 20,
+        msBetweenPings: 15,
+        fastforwardLowerBound: 0.025,
+        rewindUpperBound: 0.15,
+        initialOffset: 0.1,
+        doWebAudio: true,
+      })({
+        recorders: {
+          recorder: PS["FRP.Behavior.Audio.Example.HelloWorld"].mr2url(
+            "audio/ogg; codecs=opus"
+          )(function (s) {
+            return function () {
+              document.querySelector("audio").src = s;
+            };
+          }),
+        },
+      })({})(PS["FRP.Behavior.Audio.Example.HelloWorld"].exporter)();
+      //});
     }
     function turnOffAudio() {
       offCb ? offCb() : null;
