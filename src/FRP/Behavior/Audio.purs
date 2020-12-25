@@ -385,7 +385,7 @@ import Data.Vec (Vec, fill)
 import Data.Vec as V
 import Effect (Effect, whileE)
 import Effect.Aff (Aff, joinFiber, launchAff, launchAff_)
-import Effect.Class.Console (log)
+import Effect.Class.Console (warn)
 import Effect.Exception (try)
 import Effect.Ref (modify_, new, read, write)
 import FRP.Behavior (ABehavior, Behavior, behavior, sample_)
@@ -4963,7 +4963,7 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
                 ( do
                     let
                       newV = clockNow_ + engineInfo.msBetweenSamples
-                    log $ "Fastforwarding " <> show clockNow_ <> " " <> show newV <> " " <> show startingPosWRT
+                    warn $ "Fastforwarding " <> show clockNow_ <> " " <> show newV <> " " <> show startingPosWRT
                     write newV clock
                 )
               else
