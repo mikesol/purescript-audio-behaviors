@@ -5022,18 +5022,18 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
                         avv
                       maybe (pure unit)
                         ( \aud -> do
-                            __t0 <- map getTime now
+                            -- __t0 <- map getTime now
                             let
                               i = audioToPtr aud
-                            __t1 <- map getTime now
+                            -- __t1 <- map getTime now
                             let
                               cur = { flat: i.flat, grouped: audioGrouper (DL.fromFoldable i.flat) }
                             prev <- read reconRef
                             write cur reconRef
-                            __t2 <- map getTime now
+                            --__t2 <- map getTime now
                             let
                               instructionSet = reconciliationToInstructionSet prev cur
-                            __t3 <- map getTime now
+                            --__t3 <- map getTime now
                             audioClockCur <- getAudioClockTime ctx
                             let
                               instructions =
@@ -5078,7 +5078,7 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
                                 )
                             else
                               pure unit
-                            log $ "stats :: " <> (show $ __t0 - __startTime) <> " @ " <> (show $ __t1 - __t0) <> " @ " <> (show $ __t2 - __t1) <> " @ " <> (show $ __t3 - __t2) <> " @ " <> (show $ __endTime - __t3) <> " @ " <> (show $ __endTime - __startTime)
+                            --log $ "stats :: " <> (show $ __t0 - __startTime) <> " @ " <> (show $ __t1 - __t0) <> " @ " <> (show $ __t2 - __t1) <> " @ " <> (show $ __t3 - __t2) <> " @ " <> (show $ __endTime - __t3) <> " @ " <> (show $ __endTime - __startTime)
                             pure unit
                         )
                         ava
