@@ -15,6 +15,7 @@ module FRP.Behavior.Audio
   , audioWorkletProcessor
   , audioWorkletAggregator
   , play
+  , GraphicUnit(..)
   , playBuf
   , playBufWithOffset
   , loopBuf
@@ -4843,14 +4844,17 @@ class RunnableMedia callback accumulator env where
     Exporter env accumulator ->
     Effect (Effect Unit)
 
+data GraphicUnit
+  = GUDrawing Drawing
+
 data AV ch accumulator
-  = AV (Maybe (AudioUnit ch)) (Maybe Drawing) accumulator
+  = AV (Maybe (AudioUnit ch)) (Maybe GraphicUnit) accumulator
 
 type BuildingBlocks accumulator
   = { id :: Int
     , timeStamp :: Number
     , audio :: Maybe (Array Instruction)
-    , canvas :: Maybe Drawing
+    , canvas :: Maybe GraphicUnit
     , accumulator :: accumulator
     }
 
@@ -4861,10 +4865,10 @@ data Time'Drawing
   = Time'Drawing Number Drawing
 
 data Animation
-  = Animation Drawing
+  = Animation GraphicUnit
 
 data IAnimation accumulator
-  = IAnimation Drawing accumulator
+  = IAnimation GraphicUnit accumulator
 
 data IAudioUnit ch accumulator
   = IAudioUnit (AudioUnit ch) accumulator
@@ -4993,26 +4997,27 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
                   ( \(AV ava avv avz) -> do
                       write avz __accumulator
                       maybe (pure unit)
-                        ( \viz -> do
-                            let
-                              cvs_ = getFirstCanvas visualInfo.canvases
-                            maybe
-                              (pure unit)
-                              ( \cvs__ -> do
-                                  _ <-
-                                    try do
-                                      cvs <- cvs__
-                                      canvasCtx <- getContext2D cvs
-                                      clearRect canvasCtx
-                                        { height: canvasInfo.h
-                                        , width: canvasInfo.w
-                                        , x: 0.0
-                                        , y: 0.0
-                                        }
-                                      render canvasCtx viz
-                                  pure unit
-                              )
-                              cvs_
+                        ( \viz' -> case viz' of
+                            GUDrawing viz -> do
+                              let
+                                cvs_ = getFirstCanvas visualInfo.canvases
+                              maybe
+                                (pure unit)
+                                ( \cvs__ -> do
+                                    _ <-
+                                      try do
+                                        cvs <- cvs__
+                                        canvasCtx <- getContext2D cvs
+                                        clearRect canvasCtx
+                                          { height: canvasInfo.h
+                                          , width: canvasInfo.w
+                                          , x: 0.0
+                                          , y: 0.0
+                                          }
+                                        render canvasCtx viz
+                                    pure unit
+                                )
+                                cvs_
                         )
                         avv
                       maybe (pure unit)

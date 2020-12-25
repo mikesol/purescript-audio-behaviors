@@ -462,9 +462,15 @@ scene mouse acc@{ onset } (CanvasInfo { w, h }) time = f time <$> click
                   )
       )
       ( Just
-          $ filled
-              (fillColor (rgb 0 0 0))
-              (circle (w / 2.0) (h / 2.0) (if cl then 25.0 else 5.0))
+          ( GUDrawing
+              $ filled
+                  (fillColor (rgb 0 0 0))
+                  ( circle
+                      (if cl then toNumber ps.x - x else w / 2.0)
+                      (if cl then toNumber ps.y - y else h / 2.0)
+                      (if cl then 25.0 else 5.0)
+                  )
+          )
       )
       (acc { onset = stTime })
     where

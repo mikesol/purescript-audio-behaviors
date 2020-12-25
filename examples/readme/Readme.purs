@@ -15,7 +15,7 @@ import Data.Typelevel.Num (D1, D2)
 import Data.Vec ((+>), empty)
 import Effect (Effect)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AV(..), AudioContext, AudioInfo, AudioUnit, CanvasInfo(..), EngineInfo, Exporter, IAudioUnit(..), VisualInfo, RecorderSignature, defaultExporter, defaultParam, dup1, g'add, g'bandpass, g'delay, g'gain, gain', gainT', graph, merger, microphone, panner, play, runInBrowser_, sinOsc, speaker, speaker')
+import FRP.Behavior.Audio (AV(..), AudioContext, AudioInfo, AudioUnit, CanvasInfo(..), EngineInfo, Exporter, GraphicUnit(..), IAudioUnit(..), RecorderSignature, VisualInfo, defaultExporter, defaultParam, dup1, g'add, g'bandpass, g'delay, g'gain, gain', gainT', graph, merger, microphone, panner, play, runInBrowser_, sinOsc, speaker, speaker')
 import FRP.Behavior.Mouse (buttons, position)
 import FRP.Event.Mouse (Mouse, getMouse)
 import Foreign.Object (Object)
@@ -357,13 +357,15 @@ scene8 mouse acc@{ onset } (CanvasInfo { w, h, boundingClientRect: { x, y } }) t
                   )
       )
       ( Just
-          $ filled
-              (fillColor (rgb 0 0 0))
-              ( circle
-                  (if cl then toNumber ps.x - x else w / 2.0)
-                  (if cl then toNumber ps.y - y else h / 2.0)
-                  (if cl then 25.0 else 5.0)
-              )
+          ( GUDrawing
+              $ filled
+                  (fillColor (rgb 0 0 0))
+                  ( circle
+                      (if cl then toNumber ps.x - x else w / 2.0)
+                      (if cl then toNumber ps.y - y else h / 2.0)
+                      (if cl then 25.0 else 5.0)
+                  )
+          )
       )
       (acc { onset = stTime })
     where
