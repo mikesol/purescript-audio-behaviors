@@ -5070,7 +5070,7 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
                             write uts' units
                             __endTime <- map getTime now
                             if (__endTime - __startTime) >= __contract then
-                              log
+                              warn
                                 ( "Audio control processing is too slow. It took this long: "
                                     <> show (__endTime - __startTime)
                                     <> " but it needs to take this long: "
