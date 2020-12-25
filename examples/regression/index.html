@@ -29,24 +29,24 @@
 
     function turnOnAudio() {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      //audioCtx.audioWorklet.addModule("ps-aud-mul.js").then(function () {
-      offCb = PS["FRP.Behavior.Audio.Example.Regression"].run()(audioCtx)({
-        msBetweenSamples: 20,
-        msBetweenPings: 15,
-        fastforwardLowerBound: 0.025,
-        rewindUpperBound: 0.15,
-        initialOffset: 0.1,
-        doWebAudio: true,
-      })({
-        periodicWaves: {},
-        microphones: {},
-        buffers: {
-          moo: moo,
-        },
-        tracks: {},
-        floatArrays: {},
-      })({})(PS["FRP.Behavior.Audio.Example.Regression"].exporter)();
-      //});
+      audioCtx.audioWorklet.addModule("ps-aud-mul.js").then(function () {
+        offCb = PS["FRP.Behavior.Audio.Example.Regression"].run()(audioCtx)({
+          msBetweenSamples: 20,
+          msBetweenPings: 15,
+          fastforwardLowerBound: 0.025,
+          rewindUpperBound: 0.15,
+          initialOffset: 0.1,
+          doWebAudio: true,
+        })({
+          periodicWaves: {},
+          microphones: {},
+          buffers: {
+            moo: moo,
+          },
+          tracks: {},
+          floatArrays: {},
+        })({})(PS["FRP.Behavior.Audio.Example.Regression"].exporter)();
+      });
     }
     function turnOffAudio() {
       offCb ? offCb() : null;
