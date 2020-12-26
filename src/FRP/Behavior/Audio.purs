@@ -4745,7 +4745,7 @@ type AudioInfo microphones recorders tracks buffers floatArrays periodicWaves
 -- canvases can be killed off based on a rendering function, ie in halogen
 -- we want to be able to throw if the canvas does not exist
 type VisualInfo
-  = { canvases :: Object CanvasElement
+  = { canvases :: Object (Effect CanvasElement)
     , images :: Object HTMLImageElement
     , videos :: Object HTMLVideoElement
     , sourceCanvases :: Object HTMLCanvasElement
@@ -4877,7 +4877,7 @@ data IAnimation accumulator
 data IAudioUnit ch accumulator
   = IAudioUnit (AudioUnit ch) accumulator
 
-getFirstCanvas :: Object CanvasElement -> Maybe CanvasElement
+getFirstCanvas :: Object (Effect CanvasElement) -> Maybe (Effect CanvasElement)
 getFirstCanvas = map snd <<< A.head <<< O.toUnfoldable
 
 instance soundscapeRunnableMedia :: Pos ch => RunnableMedia (Number -> ABehavior Event (AudioUnit ch)) Unit env where
@@ -4973,16 +4973,14 @@ renderAndGetPainting visualInfo canvasInfo viz = do
     cvs_ = getFirstCanvas visualInfo.canvases
   case cvs_ of
     Nothing -> pure mempty
-    Just cvs -> do
+    Just cvs__ -> do
       eep <-
         try do
+          cvs <- cvs__
           canvasCtx <- getContext2D cvs
-          let
-            __images = visualInfo.images
-
-            __videos = visualInfo.videos
-
-            __canvases = visualInfo.sourceCanvases
+          __images <- sequence visualInfo.images
+          __videos <- sequence visualInfo.videos
+          __canvases <- sequence visualInfo.sourceCanvases
           clearRect canvasCtx
             { height: canvasInfo.h
             , width: canvasInfo.w
@@ -5059,9 +5057,10 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
                 __cvsNow = getFirstCanvas visualInfo.canvases
               canvasInfo <-
                 maybe (pure dummyCanvasInfo)
-                  ( \__cvs -> do
+                  ( \_cvsNow -> do
                       __r <-
                         try do
+                          __cvs <- _cvsNow
                           w <- getCanvasWidth __cvs
                           h <- getCanvasHeight __cvs
                           boundingClientRect <- getBoundingClientRect __cvs

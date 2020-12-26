@@ -29,7 +29,9 @@
             },
           })({
             canvases: {
-              myCanvas: myCanvas,
+              myCanvas: function () {
+                return myCanvas;
+              },
             },
             images: {},
             videos: {},
