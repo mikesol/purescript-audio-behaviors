@@ -434,45 +434,48 @@ scene mouse acc@{ onset } (CanvasInfo { w, h }) time = f time <$> click
   where
   f s cl =
     AV
-      ( Just
-          $ dup1
-              ( (gain' 0.2 $ sinOsc (110.0 + (3.0 * sin (0.5 * rad))))
-                  + (gain' 0.1 (gainT' (epwf pwf s) $ sinOsc 440.0))
-                  + (gain' 0.1 $ sinOsc (220.0 + (if cl then (50.0 + maybe 0.0 (\t -> 10.0 * (s - t)) stTime) else 0.0)))
-                  + ( graph
-                    { aggregators:
-                        { out: Tuple g'add (SLProxy :: SLProxy ("combine" :/ SNil))
-                        , combine: Tuple g'add (SLProxy :: SLProxy ("gain" :/ "mic" :/ SNil))
-                        , gain: Tuple (g'gain 0.9) (SLProxy :: SLProxy ("del" :/ SNil))
-                        }
-                    , processors:
-                        { del: Tuple (g'delay 0.2) (SProxy :: SProxy "filt")
-                        , filt: Tuple (g'bandpass 440.0 1.0) (SProxy :: SProxy "combine")
-                        }
-                    , generators:
-                        { mic: microphone
-                        }
-                    }
-                )
-              ) \mono ->
-              speaker
-                $ ( (panner (-0.5) (merger (mono +> mono +> empty)))
-                      :| (gain' 0.5 $ (playBuf "forest" 1.0))
-                      : Nil
-                  )
-      )
-      ( Just
-          ( GUDrawing
-              $ filled
-                  (fillColor (rgb 0 0 0))
-                  ( circle
-                      (if cl then toNumber ps.x - x else w / 2.0)
-                      (if cl then toNumber ps.y - y else h / 2.0)
-                      (if cl then 25.0 else 5.0)
-                  )
-          )
-      )
-      (acc { onset = stTime })
+      { audio:
+          Just
+            $ dup1
+                ( (gain' 0.2 $ sinOsc (110.0 + (3.0 * sin (0.5 * rad))))
+                    + (gain' 0.1 (gainT' (gn s) $ sinOsc 440.0))
+                    + (gain' 0.1 $ sinOsc (220.0 + (if cl then (50.0 + maybe 0.0 (\t -> 10.0 * (s - t)) stTime) else 0.0)))
+                    + ( graph
+                          { aggregators:
+                              { out: Tuple g'add (SLProxy :: SLProxy ("combine" :/ SNil))
+                              , combine: Tuple g'add (SLProxy :: SLProxy ("gain" :/ "mic" :/ SNil))
+                              , gain: Tuple (g'gain 0.9) (SLProxy :: SLProxy ("del" :/ SNil))
+                              }
+                          , processors:
+                              { del: Tuple (g'delay 0.2) (SProxy :: SProxy "filt")
+                              , filt: Tuple (g'bandpass 440.0 1.0) (SProxy :: SProxy "combine")
+                              }
+                          , generators:
+                              { mic: microphone
+                              }
+                          }
+                      )
+                ) \mono ->
+                speaker
+                  $ ( (panner (-0.5) (merger (mono +> mono +> empty)))
+                        :| (gain' 0.5 $ (play "forest"))
+                        : Nil
+                    )
+      , visual:
+          Just
+            { painting:
+                const
+                  $ filled
+                      (fillColor (rgb 0 0 0))
+                      ( circle
+                          (if cl then toNumber ps.x - x else w / 2.0)
+                          (if cl then toNumber ps.y - y else h / 2.0)
+                          (if cl then 25.0 else 5.0)
+                      )
+            , words: mempty
+            }
+      , accumulator: acc { onset = stTime }
+      }
     where
     rad = pi * s
 
@@ -635,7 +638,7 @@ spago -x examples.dhall bundle-app \
 
 Other examples will work the same way, with the directory and module name changing.
 
-You will also need to copy all of the files from the top-level `custom-units` folter into your project folder. With a correct setup, the hello-world directory should look like this:
+You will also need to copy all of the files from the top-level `custom-units` folder into your project folder. With a correct setup, the hello-world directory should look like this:
 
 ```bash
 examples/

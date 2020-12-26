@@ -15,11 +15,11 @@ import Data.Typelevel.Num (D1, D2)
 import Data.Vec ((+>), empty)
 import Effect (Effect)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AV(..), AudioContext, AudioInfo, AudioUnit, CanvasInfo(..), EngineInfo, Exporter, GraphicUnit(..), IAudioUnit(..), RecorderSignature, VisualInfo, defaultExporter, defaultParam, dup1, g'add, g'bandpass, g'delay, g'gain, gain', gainT', graph, merger, microphone, panner, play, runInBrowser_, sinOsc, speaker, speaker')
+import FRP.Behavior.Audio (AV(..), AudioContext, AudioInfo, AudioUnit, CanvasInfo(..), EngineInfo, Exporter, IAudioUnit(..), RecorderSignature, VisualInfo, defaultExporter, defaultParam, dup1, g'add, g'bandpass, g'delay, g'gain, gain', gainT', graph, merger, microphone, panner, play, runInBrowser_, sinOsc, speaker, speaker')
 import FRP.Behavior.Mouse (buttons, position)
 import FRP.Event.Mouse (Mouse, getMouse)
 import Foreign.Object (Object)
-import Graphics.Drawing (circle, fillColor, filled)
+import Graphics.Painting ( circle, fillColor, filled)
 import Math (pi, sin)
 import Record.Extra (SLProxy(..), SNil)
 import Type.Data.Graph (type (:/))
@@ -329,45 +329,48 @@ scene8 mouse acc@{ onset } (CanvasInfo { w, h, boundingClientRect: { x, y } }) t
 
   f s cl ps =
     AV
-      ( Just
-          $ dup1
-              ( (gain' 0.2 $ sinOsc (110.0 + (3.0 * sin (0.5 * rad))))
-                  + (gain' 0.1 (gainT' (gn s) $ sinOsc 440.0))
-                  + (gain' 0.1 $ sinOsc (220.0 + (if cl then (50.0 + maybe 0.0 (\t -> 10.0 * (s - t)) stTime) else 0.0)))
-                  + ( graph
-                        { aggregators:
-                            { out: Tuple g'add (SLProxy :: SLProxy ("combine" :/ SNil))
-                            , combine: Tuple g'add (SLProxy :: SLProxy ("gain" :/ "mic" :/ SNil))
-                            , gain: Tuple (g'gain 0.9) (SLProxy :: SLProxy ("del" :/ SNil))
-                            }
-                        , processors:
-                            { del: Tuple (g'delay 0.2) (SProxy :: SProxy "filt")
-                            , filt: Tuple (g'bandpass 440.0 1.0) (SProxy :: SProxy "combine")
-                            }
-                        , generators:
-                            { mic: microphone
-                            }
-                        }
+      { audio:
+          Just
+            $ dup1
+                ( (gain' 0.2 $ sinOsc (110.0 + (3.0 * sin (0.5 * rad))))
+                    + (gain' 0.1 (gainT' (gn s) $ sinOsc 440.0))
+                    + (gain' 0.1 $ sinOsc (220.0 + (if cl then (50.0 + maybe 0.0 (\t -> 10.0 * (s - t)) stTime) else 0.0)))
+                    + ( graph
+                          { aggregators:
+                              { out: Tuple g'add (SLProxy :: SLProxy ("combine" :/ SNil))
+                              , combine: Tuple g'add (SLProxy :: SLProxy ("gain" :/ "mic" :/ SNil))
+                              , gain: Tuple (g'gain 0.9) (SLProxy :: SLProxy ("del" :/ SNil))
+                              }
+                          , processors:
+                              { del: Tuple (g'delay 0.2) (SProxy :: SProxy "filt")
+                              , filt: Tuple (g'bandpass 440.0 1.0) (SProxy :: SProxy "combine")
+                              }
+                          , generators:
+                              { mic: microphone
+                              }
+                          }
+                      )
+                ) \mono ->
+                speaker
+                  $ ( (panner (-0.5) (merger (mono +> mono +> empty)))
+                        :| (gain' 0.5 $ (play "forest"))
+                        : Nil
                     )
-              ) \mono ->
-              speaker
-                $ ( (panner (-0.5) (merger (mono +> mono +> empty)))
-                      :| (gain' 0.5 $ (play "forest"))
-                      : Nil
-                  )
-      )
-      ( Just
-          ( GUDrawing
-              $ filled
-                  (fillColor (rgb 0 0 0))
-                  ( circle
-                      (if cl then toNumber ps.x - x else w / 2.0)
-                      (if cl then toNumber ps.y - y else h / 2.0)
-                      (if cl then 25.0 else 5.0)
-                  )
-          )
-      )
-      (acc { onset = stTime })
+      , visual:
+          Just
+            { painting:
+                const
+                  $ filled
+                      (fillColor (rgb 0 0 0))
+                      ( circle
+                          (if cl then toNumber ps.x - x else w / 2.0)
+                          (if cl then toNumber ps.y - y else h / 2.0)
+                          (if cl then 25.0 else 5.0)
+                      )
+            , words: mempty
+            }
+      , accumulator: acc { onset = stTime }
+      }
     where
     rad = pi * s
 

@@ -15,7 +15,6 @@ module FRP.Behavior.Audio
   , audioWorkletProcessor
   , audioWorkletAggregator
   , play
-  , GraphicUnit(..)
   , playBuf
   , playBufWithOffset
   , loopBuf
@@ -288,6 +287,7 @@ module FRP.Behavior.Audio
   , AudioBuffer
   , AudioUnit
   , AudioContext
+  , AnimationInfo
   , CanvasInfo(..)
   , CanvasInfo'
   , EngineInfo
@@ -394,8 +394,8 @@ import FRP.Event.Time (interval)
 import Foreign (Foreign)
 import Foreign.Object (Object, filterWithKey)
 import Foreign.Object as O
-import Graphics.Canvas (CanvasElement, Rectangle, clearRect, getCanvasHeight, getCanvasWidth, getContext2D)
-import Graphics.Drawing (Drawing, render)
+import Graphics.Canvas (CanvasElement, Rectangle, TextMetrics, clearRect, getCanvasHeight, getCanvasWidth, getContext2D)
+import Graphics.Painting (MeasurableText, Painting, render)
 import Heterogeneous.Mapping (class HMap, class Mapping, hmap)
 import Prim.Boolean (False, True, kind Boolean)
 import Prim.Row (class Union)
@@ -411,6 +411,7 @@ import Type.Proxy (Proxy(..))
 import Type.Row.Homogeneous (class Homogeneous)
 import Type.RowList (class ListToRow, RLProxy(..))
 import Unsafe.Coerce (unsafeCoerce)
+import Web.HTML (HTMLCanvasElement, HTMLImageElement, HTMLVideoElement)
 
 foreign import data MediaRecorder :: Type
 
@@ -4745,6 +4746,9 @@ type AudioInfo microphones recorders tracks buffers floatArrays periodicWaves
 -- we want to be able to throw if the canvas does not exist
 type VisualInfo
   = { canvases :: Object (Effect CanvasElement)
+    , images :: Object (Effect HTMLImageElement)
+    , videos :: Object (Effect HTMLVideoElement)
+    , sourceCanvases :: Object (Effect HTMLCanvasElement)
     }
 
 foreign import getAudioClockTime :: AudioContext -> Effect Number
@@ -4844,31 +4848,31 @@ class RunnableMedia callback accumulator env where
     Exporter env accumulator ->
     Effect (Effect Unit)
 
-data GraphicUnit
-  = GUDrawing Drawing
+type AnimationInfo
+  = { painting :: M.Map MeasurableText TextMetrics -> Painting
+    , words :: List MeasurableText
+    }
 
-data AV ch accumulator
-  = AV (Maybe (AudioUnit ch)) (Maybe GraphicUnit) accumulator
+newtype AV ch accumulator
+  = AV
+  { audio :: Maybe (AudioUnit ch)
+  , visual :: Maybe AnimationInfo
+  , accumulator :: accumulator
+  }
 
 type BuildingBlocks accumulator
   = { id :: Int
     , timeStamp :: Number
     , audio :: Maybe (Array Instruction)
-    , canvas :: Maybe GraphicUnit
+    , canvas :: Maybe Painting
     , accumulator :: accumulator
     }
 
-data Time'AudioInstructions
-  = Time'AudioInstructions Number (Array Instruction)
-
-data Time'Drawing
-  = Time'Drawing Number Drawing
-
 data Animation
-  = Animation GraphicUnit
+  = Animation AnimationInfo
 
 data IAnimation accumulator
-  = IAnimation GraphicUnit accumulator
+  = IAnimation AnimationInfo accumulator
 
 data IAudioUnit ch accumulator
   = IAudioUnit (AudioUnit ch) accumulator
@@ -4877,15 +4881,64 @@ getFirstCanvas :: Object (Effect CanvasElement) -> Maybe (Effect CanvasElement)
 getFirstCanvas = map snd <<< A.head <<< O.toUnfoldable
 
 instance soundscapeRunnableMedia :: Pos ch => RunnableMedia (Number -> ABehavior Event (AudioUnit ch)) Unit env where
-  runInBrowser f a ac ei ai vi ex = runInBrowser ((\z wh s -> map (\x -> AV (Just x) Nothing unit) (f s)) :: (Unit -> CanvasInfo -> Number -> ABehavior Event (AV ch Unit))) unit ac ei ai vi ex
+  runInBrowser f a ac ei ai vi ex =
+    runInBrowser
+      ( ( \z wh s ->
+            map
+              ( \x ->
+                  AV
+                    { audio: Just x, visual: Nothing, accumulator: unit }
+              )
+              (f s)
+        ) ::
+          (Unit -> CanvasInfo -> Number -> ABehavior Event (AV ch Unit))
+      )
+      unit
+      ac
+      ei
+      ai
+      vi
+      ex
 
 instance iSoundscapeRunnableMedia :: Pos ch => RunnableMedia (accumulator -> Number -> ABehavior Event (IAudioUnit ch accumulator)) accumulator env where
-  runInBrowser f a ac ei ai vi ex = runInBrowser ((\z wh s -> map (\(IAudioUnit xa xz) -> AV (Just xa) Nothing xz) (f z s)) :: (accumulator -> CanvasInfo -> Number -> ABehavior Event (AV ch accumulator))) a ac ei ai vi ex
+  runInBrowser f a ac ei ai vi ex =
+    runInBrowser
+      ( ( \z wh s ->
+            map
+              ( \(IAudioUnit xa xz) ->
+                  AV
+                    { audio: (Just xa)
+                    , visual: Nothing
+                    , accumulator: xz
+                    }
+              )
+              (f z s)
+        ) ::
+          (accumulator -> CanvasInfo -> Number -> ABehavior Event (AV ch accumulator))
+      )
+      a
+      ac
+      ei
+      ai
+      vi
+      ex
 
 instance animationRunnable :: RunnableMedia (CanvasInfo -> Number -> ABehavior Event Animation) Unit env where
   runInBrowser f a ac ei ai vi ex =
     runInBrowser
-      ((\z wh s -> map (\(Animation x) -> (AV (Nothing :: Maybe (AudioUnit D1)) (Just x) z)) (f wh s)) :: (Unit -> CanvasInfo -> Number -> ABehavior Event (AV D1 Unit)))
+      ( ( \z wh s ->
+            map
+              ( \(Animation x) ->
+                  AV
+                    { audio: Nothing :: Maybe (AudioUnit D1)
+                    , visual: Just x
+                    , accumulator: z
+                    }
+              )
+              (f wh s)
+        ) ::
+          (Unit -> CanvasInfo -> Number -> ABehavior Event (AV D1 Unit))
+      )
       unit
       ac
       ei
@@ -4899,10 +4952,11 @@ instance iAnimationRunnable :: RunnableMedia (accumulator -> CanvasInfo -> Numbe
       ( \z wh s ->
           map
             ( \(IAnimation xv xz) ->
-                ( AV (Nothing :: Maybe (AudioUnit D1))
-                    (Just xv)
-                    xz
-                )
+                AV
+                  { audio: Nothing :: Maybe (AudioUnit D1)
+                  , visual: Just xv
+                  , accumulator: xz
+                  }
             )
             (f z wh s)
       )
@@ -4912,6 +4966,35 @@ instance iAnimationRunnable :: RunnableMedia (accumulator -> CanvasInfo -> Numbe
       ai
       vi
       ex
+
+renderAndGetPainting :: VisualInfo -> CanvasInfo' -> AnimationInfo -> Effect Painting
+renderAndGetPainting visualInfo canvasInfo viz = do
+  let
+    cvs_ = getFirstCanvas visualInfo.canvases
+  case cvs_ of
+    Nothing -> pure mempty
+    Just cvs__ -> do
+      eep <-
+        try do
+          cvs <- cvs__
+          canvasCtx <- getContext2D cvs
+          __images <- sequence visualInfo.images
+          __videos <- sequence visualInfo.videos
+          __canvases <- sequence visualInfo.sourceCanvases
+          clearRect canvasCtx
+            { height: canvasInfo.h
+            , width: canvasInfo.w
+            , x: 0.0
+            , y: 0.0
+            }
+          render canvasCtx
+            { canvases: __canvases
+            , images: __images
+            , videos: __videos
+            }
+            viz.words
+            viz.painting
+      pure $ either (const mempty) identity eep
 
 instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -> Number -> ABehavior Event (AV ch accumulator)) accumulator env where
   runInBrowser scene accumulator ctx engineInfo audioInfo visualInfo exporter = do
@@ -4994,32 +5077,11 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
                 behaviorSampled = sample_ behavior bang.event
               unsub <-
                 subscribe behaviorSampled
-                  ( \(AV ava avv avz) -> do
+                  ( \(AV { audio: ava, visual: avv, accumulator: avz }) -> do
                       write avz __accumulator
-                      maybe (pure unit)
-                        ( \viz' -> case viz' of
-                            GUDrawing viz -> do
-                              let
-                                cvs_ = getFirstCanvas visualInfo.canvases
-                              maybe
-                                (pure unit)
-                                ( \cvs__ -> do
-                                    _ <-
-                                      try do
-                                        cvs <- cvs__
-                                        canvasCtx <- getContext2D cvs
-                                        clearRect canvasCtx
-                                          { height: canvasInfo.h
-                                          , width: canvasInfo.w
-                                          , x: 0.0
-                                          , y: 0.0
-                                          }
-                                        render canvasCtx viz
-                                    pure unit
-                                )
-                                cvs_
-                        )
-                        avv
+                      painting <- case avv of
+                        Nothing -> pure Nothing
+                        Just x -> Just <$> renderAndGetPainting visualInfo canvasInfo x
                       maybe (pure unit)
                         ( \aud -> do
                             -- __t0 <- map getTime now
@@ -5051,7 +5113,7 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
                                     , accumulator: accumulator
                                     , timeStamp: timeInSeconds
                                     , audio: (ava >>= (const $ Just instructions.i))
-                                    , canvas: avv
+                                    , canvas: painting
                                     }
                               )
                               >>= flip write __exporterQueueRef
