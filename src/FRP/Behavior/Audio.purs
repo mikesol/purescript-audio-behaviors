@@ -4746,9 +4746,9 @@ type AudioInfo microphones recorders tracks buffers floatArrays periodicWaves
 -- we want to be able to throw if the canvas does not exist
 type VisualInfo
   = { canvases :: Object (Effect CanvasElement)
-    , images :: Object (Effect HTMLImageElement)
-    , videos :: Object (Effect HTMLVideoElement)
-    , sourceCanvases :: Object (Effect HTMLCanvasElement)
+    , images :: Object HTMLImageElement
+    , videos :: Object HTMLVideoElement
+    , sourceCanvases :: Object HTMLCanvasElement
     }
 
 foreign import getAudioClockTime :: AudioContext -> Effect Number
