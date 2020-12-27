@@ -506,9 +506,7 @@ measurableTextToMetrics ::
 measurableTextToMetrics ctx =
   map Map.fromFoldable
     <<< sequence
-    <<< map \i -> do
-        mtxt <- renderMeasurableText ctx i
-        pure $ Tuple i mtxt
+    <<< map \i -> Tuple i <$> renderMeasurableText ctx i
 
 -- | Render a `Painting` to a canvas.
 render ::
