@@ -464,6 +464,10 @@ everywhere f = go
 
   go (Clipped s d) = f (Clipped s (go d))
 
+  go (PushPixels a b c d fn a' b' p) = f (PushPixels a b c d fn a' b' $ f p)
+
+  go (PushPixelsFull a b c d fn a' b' c' d' e' f' p) = f (PushPixelsFull a b c d fn a' b' c' d' e' f' $ f p)
+
   go (WithShadow s d) = f (WithShadow s (go d))
 
   go (WithComposite s d) = f (WithComposite s (go d))
