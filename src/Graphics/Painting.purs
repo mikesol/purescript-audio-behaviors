@@ -4,6 +4,7 @@ module Graphics.Painting
   , Shape
   , MeasurableText
   , ImageDataTransform
+  , ImageDataRep
   , path
   , closed
   , rectangle
