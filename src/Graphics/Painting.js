@@ -25,6 +25,7 @@ exports.newImageData = function (ctx) {
         for (var i = 0; i < minLen; i++) {
           newData.data[i] = pixels[i];
         }
+        return newData;
       };
     };
   };
