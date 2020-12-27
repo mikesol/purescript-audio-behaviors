@@ -23,7 +23,7 @@ exports.newImageData = function (ctx) {
             ? imageData.data.length
             : imageDataRep.pixels.length;
         for (var i = 0; i < minLen; i++) {
-          newData.data[i] = pixels[i];
+          newData.data[i] = imageDataRep.pixels[i];
         }
         return newData;
       };
