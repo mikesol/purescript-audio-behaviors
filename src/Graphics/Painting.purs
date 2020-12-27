@@ -399,6 +399,15 @@ shadow = WithShadow
 composite :: CanvasComposite -> Painting -> Painting
 composite = WithComposite
 
+drawImage :: ImageSource -> Number -> Number -> Painting
+drawImage = DrawImage
+
+drawImageScale :: ImageSource -> Number -> Number -> Number -> Number -> Painting
+drawImageScale = DrawImageScale
+
+drawImageFull :: ImageSource -> Number -> Number -> Number -> Number -> Number -> Number -> Number -> Number -> Painting
+drawImageFull = DrawImageFull
+
 -- | Apply a scale transformation by providing the x and y scale factors.
 scale :: Number -> Number -> Painting -> Painting
 scale sx sy = Scale { scaleX: sx, scaleY: sy }
