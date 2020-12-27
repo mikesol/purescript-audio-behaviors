@@ -503,14 +503,12 @@ measurableTextToMetrics ::
   Canvas.Context2D ->
   List MeasurableText ->
   Effect (Map MeasurableText Canvas.TextMetrics)
-measurableTextToMetrics ctx lmt = do
-  ( map Map.fromFoldable
-      <<< sequence
-      <<< map \i -> do
-          mtxt <- renderMeasurableText ctx i
-          pure $ Tuple i mtxt
-  )
-    lmt
+measurableTextToMetrics ctx =
+  map Map.fromFoldable
+    <<< sequence
+    <<< map \i -> do
+        mtxt <- renderMeasurableText ctx i
+        pure $ Tuple i mtxt
 
 -- | Render a `Painting` to a canvas.
 render ::
