@@ -52,7 +52,7 @@ import Data.Traversable (sequence)
 import Data.Tuple (Tuple(..))
 import Effect (Effect)
 import Foreign.Object (Object, lookup)
-import Graphics.Canvas (CanvasImageSource, ImageData, setGlobalCompositeOperation)
+import Graphics.Canvas (CanvasImageSource, Context2D, ImageData, setGlobalCompositeOperation)
 import Graphics.Canvas as Canvas
 import Graphics.Drawing (Font)
 import Graphics.Drawing.Font (fontString)
@@ -345,12 +345,15 @@ textMeasurableText :: Font -> String -> MeasurableText
 textMeasurableText = MTText
 
 newtype ImageDataTransform
-  = ImageDataTransform (ImageData -> ImageData)
+  = ImageDataTransform (ImageDataRep -> ImageDataRep)
 
-pushPixels :: Number -> Number -> Number -> Number -> (ImageData -> ImageData) -> Number -> Number -> Painting -> Painting
+type ImageDataRep
+  = { width :: Number, height :: Number, pixels :: Array Int }
+
+pushPixels :: Number -> Number -> Number -> Number -> (ImageDataRep -> ImageDataRep) -> Number -> Number -> Painting -> Painting
 pushPixels a b c d e = PushPixels a b c d (ImageDataTransform e)
 
-pushPixelsFull :: Number -> Number -> Number -> Number -> (ImageData -> ImageData) -> Number -> Number -> Number -> Number -> Number -> Number -> Painting -> Painting
+pushPixelsFull :: Number -> Number -> Number -> Number -> (ImageDataRep -> ImageDataRep) -> Number -> Number -> Number -> Number -> Number -> Number -> Painting -> Painting
 pushPixelsFull a b c d e = PushPixelsFull a b c d (ImageDataTransform e)
 
 -- give up once we get here...
@@ -530,6 +533,10 @@ imageSourcesToImageSource sources = go
           for_ currentTime (flip setCurrentTime (toHTMLMediaElement v))
           Just <$> htmlVideoElemntToImageSource v
 
+foreign import newImageData :: Context2D -> ImageData -> ImageDataRep -> Effect ImageData
+
+foreign import imageDataToRep :: ImageData -> Effect ImageDataRep
+
 measurableTextToMetrics ::
   Canvas.Context2D ->
   List MeasurableText ->
@@ -624,14 +631,18 @@ render ctx sources = go
       $ Canvas.withContext ctx do
           go p
           imgData <- Canvas.getImageData ctx a b c d
-          Canvas.putImageData ctx (fn imgData) a' b'
+          asRep <- imageDataToRep imgData
+          imgData' <- newImageData ctx imgData (fn asRep)
+          Canvas.putImageData ctx imgData' a' b'
 
   go (PushPixelsFull a b c d (ImageDataTransform fn) a' b' c' d' e' f' p) =
     void
       $ Canvas.withContext ctx do
           go p
           imgData <- Canvas.getImageData ctx a b c d
-          Canvas.putImageDataFull ctx (fn imgData) a' b' c' d' e' f'
+          asRep <- imageDataToRep imgData
+          imgData' <- newImageData ctx imgData (fn asRep)
+          Canvas.putImageDataFull ctx imgData' a' b' c' d' e' f'
 
   go (DrawImageFull isrc a b c d e f g h) =
     void
