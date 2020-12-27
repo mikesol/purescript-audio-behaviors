@@ -4850,7 +4850,7 @@ class RunnableMedia callback accumulator env where
     Effect (Effect Unit)
 
 type AnimationInfo
-  = { painting :: M.Map MeasurableText TextMetrics -> Painting
+  = { painting :: { words :: M.Map MeasurableText TextMetrics } -> Painting
     , words :: List MeasurableText
     }
 
@@ -5110,7 +5110,7 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
                               paintingCache <- read __paintingCache
                               __renderTime <- map ((_ / 1000.0) <<< getTime) now
                               let
-                                ptg = x.painting words
+                                ptg = x.painting {words}
 
                                 (Tuple currentPainting newPaintingCache) = getCurrentCacheAndPaintingBasedOnTime (__renderTime - clockClockStart) (paintingCache <> pure (Tuple audioClockOffset ptg))
                               _ <- write newPaintingCache __paintingCache
