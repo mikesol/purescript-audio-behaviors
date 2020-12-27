@@ -29,6 +29,7 @@ module Graphics.Painting
   , rotate
   , text
   , everywhere
+  , measurableTextToMetrics
   , render
   ) where
 
@@ -498,26 +499,26 @@ imageSourcesToImageSource sources = go
           for_ currentTime (flip setCurrentTime (toHTMLMediaElement v))
           Just <$> htmlVideoElemntToImageSource v
 
+measurableTextToMetrics ::
+  Canvas.Context2D ->
+  List MeasurableText ->
+  Effect (Map MeasurableText Canvas.TextMetrics)
+measurableTextToMetrics ctx lmt = do
+  ( map Map.fromFoldable
+      <<< sequence
+      <<< map \i -> do
+          mtxt <- renderMeasurableText ctx i
+          pure $ Tuple i mtxt
+  )
+    lmt
+
 -- | Render a `Painting` to a canvas.
 render ::
   Canvas.Context2D ->
   ImageSources ->
-  List MeasurableText ->
-  (Map MeasurableText Canvas.TextMetrics -> Painting) ->
-  Effect Painting
-render ctx sources lmt paintingF = do
-  mtl <-
-    ( map Map.fromFoldable
-        <<< sequence
-        <<< map \i -> do
-            mtxt <- renderMeasurableText ctx i
-            pure $ Tuple i mtxt
-    )
-      lmt
-  let
-    ptg = paintingF mtl
-  go ptg
-  pure ptg
+  Painting ->
+  Effect Unit
+render ctx sources = go
   where
   go (Fill sh style) =
     void

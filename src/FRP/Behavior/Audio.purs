@@ -356,6 +356,7 @@ module FRP.Behavior.Audio
   ) where
 
 import Prelude
+import Math (abs)
 import Control.Bind (bindFlipped)
 import Control.Promise (Promise)
 import Data.Array (catMaybes, fold, foldl, head, index, length, mapWithIndex, range, replicate, snoc, takeEnd, zipWith, (!!))
@@ -394,8 +395,8 @@ import FRP.Event.Time (interval)
 import Foreign (Foreign)
 import Foreign.Object (Object, filterWithKey)
 import Foreign.Object as O
-import Graphics.Canvas (CanvasElement, Rectangle, TextMetrics, clearRect, getCanvasHeight, getCanvasWidth, getContext2D)
-import Graphics.Painting (MeasurableText, Painting, render)
+import Graphics.Canvas (CanvasElement, Context2D, Rectangle, TextMetrics, clearRect, getCanvasHeight, getCanvasWidth, getContext2D)
+import Graphics.Painting (MeasurableText, Painting, measurableTextToMetrics, render)
 import Heterogeneous.Mapping (class HMap, class Mapping, hmap)
 import Prim.Boolean (False, True, kind Boolean)
 import Prim.Row (class Union)
@@ -4967,34 +4968,44 @@ instance iAnimationRunnable :: RunnableMedia (accumulator -> CanvasInfo -> Numbe
       vi
       ex
 
-renderAndGetPainting :: VisualInfo -> CanvasInfo' -> AnimationInfo -> Effect Painting
-renderAndGetPainting visualInfo canvasInfo viz = do
-  let
-    cvs_ = getFirstCanvas visualInfo.canvases
-  case cvs_ of
-    Nothing -> pure mempty
-    Just cvs__ -> do
-      eep <-
-        try do
-          cvs <- cvs__
-          canvasCtx <- getContext2D cvs
-          __images <- sequence visualInfo.images
-          __videos <- sequence visualInfo.videos
-          __canvases <- sequence visualInfo.sourceCanvases
-          clearRect canvasCtx
-            { height: canvasInfo.h
-            , width: canvasInfo.w
-            , x: 0.0
-            , y: 0.0
-            }
-          render canvasCtx
-            { canvases: __canvases
-            , images: __images
-            , videos: __videos
-            }
-            viz.words
-            viz.painting
-      pure $ either (const mempty) identity eep
+renderPainting :: Context2D -> VisualInfo -> CanvasInfo' -> Painting -> Effect Unit
+renderPainting canvasCtx visualInfo canvasInfo painting =
+  void
+    $ try do
+        __images <- sequence visualInfo.images
+        __videos <- sequence visualInfo.videos
+        __canvases <- sequence visualInfo.sourceCanvases
+        clearRect canvasCtx
+          { height: canvasInfo.h
+          , width: canvasInfo.w
+          , x: 0.0
+          , y: 0.0
+          }
+        render canvasCtx
+          { canvases: __canvases
+          , images: __images
+          , videos: __videos
+          }
+          painting
+
+getCurrentCacheAndPaintingBasedOnTime :: Number -> List (Tuple Number Painting) -> Tuple Painting (List (Tuple Number Painting))
+getCurrentCacheAndPaintingBasedOnTime ct = go
+  where
+  go :: List (Tuple Number Painting) -> Tuple Painting (List (Tuple Number Painting))
+  go Nil = Tuple mempty Nil
+
+  go l@(a : Nil) = Tuple (snd a) l
+
+  go l@((Tuple a a') : (Tuple b b') : c)
+    | ct >= a && ct <= b =
+      let
+        dista = abs (a - ct)
+
+        distb = abs (b - ct)
+      in
+        if dista < distb then Tuple a' l else Tuple b' ((Tuple b b') : c)
+    | ct > b = go c
+    | otherwise = Tuple a' l
 
 instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -> Number -> ABehavior Event (AV ch accumulator)) accumulator env where
   runInBrowser scene accumulator ctx engineInfo audioInfo visualInfo exporter = do
@@ -5007,6 +5018,7 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
     __totalTillProgram <- new 0.0
     __totalProgram <- new 0.0
     __totalPostProgram <- new 0.0
+    __paintingCache <- new (Nil :: List (Tuple Number Painting))
     reconRef <-
       new
         { grouped: M.empty
@@ -5017,6 +5029,7 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
     clock <- new 0
     units <- new ({ generators: [], recorders: [] } :: TouchAudioIO)
     audioClockStart <- getAudioClockTime ctx
+    clockClockStart <- map ((_ / 1000.0) <<< getTime) now
     fiber <- launchAff exporter.acquire
     bam <-
       subscribe
@@ -5078,10 +5091,31 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
               unsub <-
                 subscribe behaviorSampled
                   ( \(AV { audio: ava, visual: avv, accumulator: avz }) -> do
+                      let
+                        audioClockOffset = (toNumber clockNow_ + tOffset) / 1000.0
+
+                        audioTime = audioClockStart + audioClockOffset
                       write avz __accumulator
                       painting <- case avv of
                         Nothing -> pure Nothing
-                        Just x -> Just <$> renderAndGetPainting visualInfo canvasInfo x
+                        Just x -> do
+                          let
+                            cvs_ = getFirstCanvas visualInfo.canvases
+                          case cvs_ of
+                            Nothing -> pure Nothing
+                            Just cvs__ -> do
+                              cvs <- cvs__
+                              canvasCtx <- getContext2D cvs
+                              words <- measurableTextToMetrics canvasCtx x.words
+                              paintingCache <- read __paintingCache
+                              __renderTime <- map ((_ / 1000.0) <<< getTime) now
+                              let
+                                ptg = x.painting words
+
+                                (Tuple currentPainting newPaintingCache) = getCurrentCacheAndPaintingBasedOnTime (__renderTime - clockClockStart) (paintingCache <> pure (Tuple audioClockOffset ptg))
+                              _ <- write newPaintingCache __paintingCache
+                              renderPainting canvasCtx visualInfo canvasInfo currentPainting
+                              pure $ Just currentPainting
                       maybe (pure unit)
                         ( \aud -> do
                             -- __t0 <- map getTime now
@@ -5096,12 +5130,6 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
                             let
                               instructionSet = reconciliationToInstructionSet prev cur
                             --__t3 <- map getTime now
-                            audioClockCur <- getAudioClockTime ctx
-                            let
-                              instructions =
-                                { t: clockNow_
-                                , i: instructionSet
-                                }
                             exporterQueueRef <- read __exporterQueueRef
                             launchAff
                               ( do
@@ -5112,7 +5140,7 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
                                     { id: curIt
                                     , accumulator: accumulator
                                     , timeStamp: timeInSeconds
-                                    , audio: (ava >>= (const $ Just instructions.i))
+                                    , audio: (ava >>= (const $ Just instructionSet))
                                     , canvas: painting
                                     }
                               )
@@ -5122,8 +5150,8 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
                               if engineInfo.doWebAudio then
                                 touchAudio
                                   toFFI
-                                  (audioClockStart + ((toNumber instructions.t + tOffset) / 1000.0))
-                                  instructions.i
+                                  audioTime
+                                  instructionSet
                                   ctx
                                   audioInfo
                                   uts
