@@ -3,6 +3,7 @@ module Graphics.Painting
   ( Point
   , Shape
   , MeasurableText
+  , ImageDataTransform
   , path
   , closed
   , rectangle
@@ -20,6 +21,12 @@ module Graphics.Painting
   , shadowBlur
   , shadowColor
   , shadow
+  , composite
+  , drawImage
+  , drawImageScale
+  , drawImageFull
+  , pushPixels
+  , pushPixelsFull
   , Painting
   , filled
   , outlined
@@ -45,7 +52,7 @@ import Data.Traversable (sequence)
 import Data.Tuple (Tuple(..))
 import Effect (Effect)
 import Foreign.Object (Object, lookup)
-import Graphics.Canvas (CanvasImageSource, setGlobalCompositeOperation)
+import Graphics.Canvas (CanvasImageSource, ImageData, setGlobalCompositeOperation)
 import Graphics.Canvas as Canvas
 import Graphics.Drawing (Font)
 import Graphics.Drawing.Font (fontString)
@@ -337,6 +344,19 @@ rotateMeasurableText = MTRotate
 textMeasurableText :: Font -> String -> MeasurableText
 textMeasurableText = MTText
 
+newtype ImageDataTransform
+  = ImageDataTransform (ImageData -> ImageData)
+
+pushPixels :: Number -> Number -> Number -> Number -> (ImageData -> ImageData) -> Number -> Number -> Painting -> Painting
+pushPixels a b c d e = PushPixels a b c d (ImageDataTransform e)
+
+pushPixelsFull :: Number -> Number -> Number -> Number -> (ImageData -> ImageData) -> Number -> Number -> Number -> Number -> Number -> Number -> Painting -> Painting
+pushPixelsFull a b c d e = PushPixelsFull a b c d (ImageDataTransform e)
+
+-- give up once we get here...
+instance eqImageDataTransform :: Eq ImageDataTransform where
+  eq a b = true
+
 data Painting
   = Fill Shape FillStyle
   | Outline Shape OutlineStyle
@@ -349,6 +369,8 @@ data Painting
   | Translate { translateX :: Number, translateY :: Number } Painting
   | Rotate Number Painting
   | Clipped Shape Painting
+  | PushPixels Number Number Number Number ImageDataTransform Number Number Painting
+  | PushPixelsFull Number Number Number Number ImageDataTransform Number Number Number Number Number Number Painting
   | WithShadow Shadow Painting
   | WithComposite CanvasComposite Painting
 
@@ -596,6 +618,20 @@ render ctx sources = go
       $ Canvas.withContext ctx do
           src <- imageSourcesToImageSource sources isrc
           for_ src \src' -> Canvas.drawImageScale ctx src' a b c d
+
+  go (PushPixels a b c d (ImageDataTransform fn) a' b' p) =
+    void
+      $ Canvas.withContext ctx do
+          go p
+          imgData <- Canvas.getImageData ctx a b c d
+          Canvas.putImageData ctx (fn imgData) a' b'
+
+  go (PushPixelsFull a b c d (ImageDataTransform fn) a' b' c' d' e' f' p) =
+    void
+      $ Canvas.withContext ctx do
+          go p
+          imgData <- Canvas.getImageData ctx a b c d
+          Canvas.putImageDataFull ctx (fn imgData) a' b' c' d' e' f'
 
   go (DrawImageFull isrc a b c d e f g h) =
     void
