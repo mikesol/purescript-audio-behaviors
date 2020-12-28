@@ -356,7 +356,6 @@ module FRP.Behavior.Audio
   ) where
 
 import Prelude
-
 import Control.Bind (bindFlipped)
 import Control.Promise (Promise)
 import Data.Array (catMaybes, fold, foldl, head, index, length, mapWithIndex, range, replicate, snoc, takeEnd, zipWith, (!!))
@@ -4750,7 +4749,7 @@ type VisualInfo
   = { canvases :: Object (Effect CanvasElement)
     , images :: Object HTMLImageElement
     , videos :: Object HTMLVideoElement
-    , sourceCanvases :: Object  HTMLCanvasElement
+    , sourceCanvases :: Object HTMLCanvasElement
     }
 
 foreign import getAudioClockTime :: AudioContext -> Effect Number
@@ -4995,13 +4994,7 @@ getCurrentCacheAndPaintingBasedOnTime ct = go
   go l@(a : Nil) = Tuple (snd a) l
 
   go l@((Tuple a a') : (Tuple b b') : c)
-    | ct >= a && ct <= b =
-      let
-        dista = abs (a - ct)
-
-        distb = abs (b - ct)
-      in
-        if dista < distb then Tuple a' l else Tuple b' ((Tuple b b') : c)
+    | ct >= a && ct <= b = Tuple b' ((Tuple b b') : c)
     | ct > b = go c
     | otherwise = Tuple a' l
 
