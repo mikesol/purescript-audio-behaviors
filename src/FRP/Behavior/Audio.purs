@@ -397,7 +397,6 @@ import Foreign.Object as O
 import Graphics.Canvas (CanvasElement, Context2D, Rectangle, TextMetrics, clearRect, getCanvasHeight, getCanvasWidth, getContext2D)
 import Graphics.Painting (MeasurableText, Painting, measurableTextToMetrics, render)
 import Heterogeneous.Mapping (class HMap, class Mapping, hmap)
-import Math (abs)
 import Prim.Boolean (False, True, kind Boolean)
 import Prim.Row (class Union)
 import Prim.RowList (class RowToList, Cons, Nil, kind RowList)
