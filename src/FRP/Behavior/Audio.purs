@@ -356,7 +356,7 @@ module FRP.Behavior.Audio
   ) where
 
 import Prelude
-import Math (abs)
+
 import Control.Bind (bindFlipped)
 import Control.Promise (Promise)
 import Data.Array (catMaybes, fold, foldl, head, index, length, mapWithIndex, range, replicate, snoc, takeEnd, zipWith, (!!))
@@ -398,6 +398,7 @@ import Foreign.Object as O
 import Graphics.Canvas (CanvasElement, Context2D, Rectangle, TextMetrics, clearRect, getCanvasHeight, getCanvasWidth, getContext2D)
 import Graphics.Painting (MeasurableText, Painting, measurableTextToMetrics, render)
 import Heterogeneous.Mapping (class HMap, class Mapping, hmap)
+import Math (abs)
 import Prim.Boolean (False, True, kind Boolean)
 import Prim.Row (class Union)
 import Prim.RowList (class RowToList, Cons, Nil, kind RowList)
@@ -4747,9 +4748,9 @@ type AudioInfo microphones recorders tracks buffers floatArrays periodicWaves
 -- we want to be able to throw if the canvas does not exist
 type VisualInfo
   = { canvases :: Object (Effect CanvasElement)
-    , images :: Object (Effect HTMLImageElement)
-    , videos :: Object (Effect HTMLVideoElement)
-    , sourceCanvases :: Object (Effect HTMLCanvasElement)
+    , images :: Object HTMLImageElement
+    , videos :: Object HTMLVideoElement
+    , sourceCanvases :: Object  HTMLCanvasElement
     }
 
 foreign import getAudioClockTime :: AudioContext -> Effect Number
@@ -4972,9 +4973,6 @@ renderPainting :: Context2D -> VisualInfo -> CanvasInfo' -> Painting -> Effect U
 renderPainting canvasCtx visualInfo canvasInfo painting =
   void
     $ try do
-        __images <- sequence visualInfo.images
-        __videos <- sequence visualInfo.videos
-        __canvases <- sequence visualInfo.sourceCanvases
         clearRect canvasCtx
           { height: canvasInfo.h
           , width: canvasInfo.w
@@ -4982,9 +4980,9 @@ renderPainting canvasCtx visualInfo canvasInfo painting =
           , y: 0.0
           }
         render canvasCtx
-          { canvases: __canvases
-          , images: __images
-          , videos: __videos
+          { canvases: visualInfo.sourceCanvases
+          , images: visualInfo.images
+          , videos: visualInfo.videos
           }
           painting
 
@@ -5110,7 +5108,7 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
                               paintingCache <- read __paintingCache
                               __renderTime <- map ((_ / 1000.0) <<< getTime) now
                               let
-                                ptg = x.painting {words}
+                                ptg = x.painting { words }
 
                                 (Tuple currentPainting newPaintingCache) = getCurrentCacheAndPaintingBasedOnTime (__renderTime - clockClockStart) (paintingCache <> pure (Tuple audioClockOffset ptg))
                               _ <- write newPaintingCache __paintingCache
