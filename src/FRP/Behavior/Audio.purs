@@ -356,6 +356,7 @@ module FRP.Behavior.Audio
   ) where
 
 import Prelude
+
 import Control.Bind (bindFlipped)
 import Control.Promise (Promise)
 import Data.Array (catMaybes, fold, foldl, head, index, length, mapWithIndex, range, replicate, snoc, takeEnd, zipWith, (!!))
@@ -4749,7 +4750,7 @@ type VisualInfo
   = { canvases :: Object (Effect CanvasElement)
     , images :: Object HTMLImageElement
     , videos :: Object HTMLVideoElement
-    , sourceCanvases :: Object HTMLCanvasElement
+    , sourceCanvases :: Object  HTMLCanvasElement
     }
 
 foreign import getAudioClockTime :: AudioContext -> Effect Number
@@ -5015,7 +5016,7 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
     __totalTillProgram <- new 0.0
     __totalProgram <- new 0.0
     __totalPostProgram <- new 0.0
-    -- __paintingCache <- new (Nil :: List (Tuple Number Painting))
+    __paintingCache <- new (Nil :: List (Tuple Number Painting))
     reconRef <-
       new
         { grouped: M.empty
@@ -5104,12 +5105,13 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
                               cvs <- cvs__
                               canvasCtx <- getContext2D cvs
                               words <- measurableTextToMetrics canvasCtx x.words
-                              --paintingCache <- read __paintingCache
-                              --__renderTime <- map ((_ / 1000.0) <<< getTime) now
+                              paintingCache <- read __paintingCache
+                              __renderTime <- map ((_ / 1000.0) <<< getTime) now
                               let
-                                currentPainting = x.painting { words }
-                              --(Tuple currentPainting newPaintingCache) = getCurrentCacheAndPaintingBasedOnTime (__renderTime - clockClockStart) (paintingCache <> pure (Tuple audioClockOffset ptg))
-                              --_ <- write newPaintingCache __paintingCache
+                                ptg = x.painting { words }
+
+                                (Tuple currentPainting newPaintingCache) = getCurrentCacheAndPaintingBasedOnTime (__renderTime - clockClockStart) (paintingCache <> pure (Tuple audioClockOffset ptg))
+                              _ <- write newPaintingCache __paintingCache
                               renderPainting canvasCtx visualInfo canvasInfo currentPainting
                               pure $ Just currentPainting
                       maybe (pure unit)
