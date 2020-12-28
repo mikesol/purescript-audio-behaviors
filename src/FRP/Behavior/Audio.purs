@@ -4849,7 +4849,11 @@ class RunnableMedia callback accumulator env where
     Effect (Effect Unit)
 
 type AnimationInfo
-  = { painting :: { words :: M.Map MeasurableText TextMetrics } -> Painting
+  = { painting ::
+        { words :: M.Map MeasurableText TextMetrics
+        , audioClockRelativePosition :: Number
+        } ->
+        Painting
     , words :: List MeasurableText
     }
 
@@ -4984,19 +4988,6 @@ renderPainting canvasCtx visualInfo canvasInfo painting =
           }
           painting
 
-getCurrentCacheAndPaintingBasedOnTime :: Number -> List (Tuple Number Painting) -> Tuple Painting (List (Tuple Number Painting))
-getCurrentCacheAndPaintingBasedOnTime ct = go
-  where
-  go :: List (Tuple Number Painting) -> Tuple Painting (List (Tuple Number Painting))
-  go Nil = Tuple mempty Nil
-
-  go l@(a : Nil) = Tuple (snd a) l
-
-  go l@((Tuple a a') : (Tuple b b') : c)
-    | ct >= a && ct <= b = Tuple b' ((Tuple b b') : c)
-    | ct > b = go c
-    | otherwise = Tuple a' l
-
 instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -> Number -> ABehavior Event (AV ch accumulator)) accumulator env where
   runInBrowser scene accumulator ctx engineInfo audioInfo visualInfo exporter = do
     let
@@ -5097,11 +5088,13 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
                               cvs <- cvs__
                               canvasCtx <- getContext2D cvs
                               words <- measurableTextToMetrics canvasCtx x.words
-                              --paintingCache <- read __paintingCache
-                              --__renderTime <- map ((_ / 1000.0) <<< getTime) now
+                              __renderTime <- map ((_ / 1000.0) <<< getTime) now
                               let
-                                currentPainting = x.painting { words }
-                              --(Tuple currentPainting newPaintingCache) = getCurrentCacheAndPaintingBasedOnTime (__renderTime - clockClockStart) (paintingCache <> pure (Tuple audioClockOffset ptg))
+                                currentPainting =
+                                  x.painting
+                                    { words
+                                    , audioClockRelativePosition: audioClockOffset - (__renderTime - clockClockStart)
+                                    }
                               --_ <- write newPaintingCache __paintingCache
                               renderPainting canvasCtx visualInfo canvasInfo currentPainting
                               pure $ Just currentPainting
