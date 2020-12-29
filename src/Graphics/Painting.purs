@@ -217,6 +217,7 @@ data ImageSource
   = FromImage { name :: String }
   | FromVideo { name :: String, currentTime :: Maybe Number }
   | FromCanvas { name :: String }
+  | FromWebcam
 
 derive instance eqImageSource :: Eq ImageSource
 
@@ -507,6 +508,7 @@ type ImageSources
   = { canvases :: Object HTMLCanvasElement
     , images :: Object HTMLImageElement
     , videos :: Object HTMLVideoElement
+    , webcam :: Maybe HTMLVideoElement
     }
 
 imageSourcesToImageSource :: ImageSources -> ImageSource -> Effect (Maybe CanvasImageSource)
@@ -537,6 +539,10 @@ imageSourcesToImageSource sources = go
         Just v -> do
           for_ currentTime (flip setCurrentTime (toHTMLMediaElement v))
           Just <$> htmlVideoElemntToImageSource v
+
+  go FromWebcam = case sources.webcam of
+    Nothing -> pure Nothing
+    Just v -> Just <$> htmlVideoElemntToImageSource v
 
 foreign import newImageData :: Context2D -> ImageData -> ImageDataRep -> Effect ImageData
 
