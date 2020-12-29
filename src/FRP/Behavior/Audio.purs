@@ -4748,7 +4748,7 @@ type VisualInfo
   = { canvases :: Object (Effect CanvasElement)
     , images :: Object HTMLImageElement
     , videos :: Object HTMLVideoElement
-    , webcam :: Maybe HTMLVideoElement
+    , cameras :: Object HTMLVideoElement
     , sourceCanvases :: Object HTMLCanvasElement
     }
 
@@ -4986,7 +4986,7 @@ renderPainting canvasCtx visualInfo canvasInfo painting =
           { canvases: visualInfo.sourceCanvases
           , images: visualInfo.images
           , videos: visualInfo.videos
-          , webcam: visualInfo.webcam
+          , webcam: O.lookup "camera" visualInfo.cameras
           }
           painting
 
