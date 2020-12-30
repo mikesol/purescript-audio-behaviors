@@ -366,7 +366,7 @@ import Data.Generic.Rep.Show (genericShow)
 import Data.Int (floor, toNumber)
 import Data.Int.Parse (parseInt, toRadix)
 import Data.JSDate (getTime, now)
-import Data.Lens (_1, over)
+import Data.Lens (_1, over, traversed)
 import Data.List (List(..), fromFoldable, partition, (:))
 import Data.List as DL
 import Data.Map (Map)
@@ -384,18 +384,18 @@ import Data.Typelevel.Num (class LtEq, class Pos, D1, D2, D3, D4, D5, D20, toInt
 import Data.Vec (Vec, fill)
 import Data.Vec as V
 import Effect (Effect, whileE)
-import Effect.Aff (Aff, joinFiber, launchAff, launchAff_)
+import Effect.Aff (Aff, error, joinFiber, launchAff, launchAff_, throwError)
 import Effect.Class.Console (warn)
 import Effect.Exception (try)
-import Effect.Ref (modify_, new, read, write)
+import Effect.Ref (modify, modify_, new, read, write)
 import FRP.Behavior (ABehavior, Behavior, behavior, sample_)
 import FRP.Event (Event, EventIO, create, makeEvent, subscribe)
 import FRP.Event.Time (interval)
 import Foreign (Foreign)
 import Foreign.Object (Object, filterWithKey)
 import Foreign.Object as O
-import Graphics.Canvas (CanvasElement, Context2D, Rectangle, TextMetrics, clearRect, getCanvasHeight, getCanvasWidth, getContext2D)
-import Graphics.Painting (MeasurableText, Painting, measurableTextToMetrics, render)
+import Graphics.Canvas (CanvasElement, CanvasImageSource, Context2D, Rectangle, TextMetrics, clearRect, drawImage, getCanvasHeight, getCanvasWidth, getContext2D)
+import Graphics.Painting (ImageSources, MeasurableText, Painting, htmlVideoElemntToImageSource, measurableTextToMetrics, render)
 import Heterogeneous.Mapping (class HMap, class Mapping, hmap)
 import Prim.Boolean (False, True, kind Boolean)
 import Prim.Row (class Union)
@@ -411,7 +411,12 @@ import Type.Proxy (Proxy(..))
 import Type.Row.Homogeneous (class Homogeneous)
 import Type.RowList (class ListToRow, RLProxy(..))
 import Unsafe.Coerce (unsafeCoerce)
-import Web.HTML (HTMLCanvasElement, HTMLImageElement, HTMLVideoElement)
+import Web.DOM.Document (createElement)
+import Web.HTML (HTMLCanvasElement, HTMLImageElement, HTMLVideoElement, window)
+import Web.HTML.HTMLCanvasElement as HTMLCanvasElement
+import Web.HTML.HTMLDocument (toDocument)
+import Web.HTML.HTMLVideoElement (videoHeight, videoWidth)
+import Web.HTML.Window (document)
 
 foreign import data MediaRecorder :: Type
 
@@ -4744,11 +4749,15 @@ type AudioInfo microphones recorders tracks buffers floatArrays periodicWaves
 -- unlike audio elements in html,
 -- canvases can be killed off based on a rendering function, ie in halogen
 -- we want to be able to throw if the canvas does not exist
-type VisualInfo
+type VisualInfo accumulator
   = { canvases :: Object (Effect CanvasElement)
     , images :: Object HTMLImageElement
     , videos :: Object HTMLVideoElement
-    , cameras :: Object HTMLVideoElement
+    , cameras ::
+        Object
+          { camera :: HTMLVideoElement
+          , cache :: accumulator -> Number -> List (Tuple Number HTMLCanvasElement) -> List (Tuple Number HTMLCanvasElement)
+          }
     , sourceCanvases :: Object HTMLCanvasElement
     }
 
@@ -4800,7 +4809,7 @@ type RunInBrowser callback accumulator env
     AudioContext ->
     EngineInfo ->
     AudioInfo (Object microphone) (Object (RecorderSignature recorder)) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
-    VisualInfo ->
+    VisualInfo accumulator ->
     Exporter env accumulator ->
     Effect (Effect Unit)
 
@@ -4811,7 +4820,7 @@ type RunInBrowser_ callback accumulator env
     AudioContext ->
     EngineInfo ->
     AudioInfo (Object microphone) (Object (RecorderSignature recorder)) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
-    VisualInfo ->
+    VisualInfo accumulator ->
     Exporter env accumulator ->
     Effect (Effect Unit)
 
@@ -4845,13 +4854,18 @@ class RunnableMedia callback accumulator env where
     AudioContext ->
     EngineInfo ->
     AudioInfo (Object microphone) (Object (RecorderSignature recorder)) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
-    VisualInfo ->
+    VisualInfo accumulator ->
     Exporter env accumulator ->
     Effect (Effect Unit)
 
 type AnimationInfo
   = { painting ::
         { words :: M.Map MeasurableText TextMetrics
+        , webcamInfo ::
+            Maybe
+              { width :: Int
+              , height :: Int
+              }
         , audioClockRelativePosition :: Number
         } ->
         Painting
@@ -4972,8 +4986,24 @@ instance iAnimationRunnable :: RunnableMedia (accumulator -> CanvasInfo -> Numbe
       vi
       ex
 
-renderPainting :: Context2D -> VisualInfo -> CanvasInfo' -> Painting -> Effect Unit
-renderPainting canvasCtx visualInfo canvasInfo painting =
+htmlCanvasElementToCanvasElement :: HTMLCanvasElement -> CanvasElement
+htmlCanvasElementToCanvasElement = unsafeCoerce
+
+webcamToCanvas :: { width :: Int, height :: Int } -> CanvasImageSource -> Effect HTMLCanvasElement
+webcamToCanvas { width, height } src = do
+  document <- (toDocument <$> (document =<< window))
+  node <- HTMLCanvasElement.fromElement <$> (createElement "canvas" document)
+  canvas <- case node of
+    Nothing -> throwError (error "Could not convert to canvas node")
+    Just x -> pure x
+  HTMLCanvasElement.setWidth width canvas
+  HTMLCanvasElement.setHeight height canvas
+  canvasCtx <- getContext2D $ htmlCanvasElementToCanvasElement canvas
+  drawImage canvasCtx src 0.0 0.0
+  pure canvas
+
+renderPainting :: Context2D -> ImageSources -> CanvasInfo' -> Painting -> Effect Unit
+renderPainting canvasCtx imageSources canvasInfo painting =
   void
     $ try do
         clearRect canvasCtx
@@ -4982,13 +5012,7 @@ renderPainting canvasCtx visualInfo canvasInfo painting =
           , x: 0.0
           , y: 0.0
           }
-        render canvasCtx
-          { canvases: visualInfo.sourceCanvases
-          , images: visualInfo.images
-          , videos: visualInfo.videos
-          , webcam: O.lookup "camera" visualInfo.cameras
-          }
-          painting
+        render canvasCtx imageSources painting
 
 instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -> Number -> ABehavior Event (AV ch accumulator)) accumulator env where
   runInBrowser scene accumulator ctx engineInfo audioInfo visualInfo exporter = do
@@ -5001,7 +5025,15 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
     __totalTillProgram <- new 0.0
     __totalProgram <- new 0.0
     __totalPostProgram <- new 0.0
-    --__paintingCache <- new (Nil :: List (Tuple Number Painting))
+    __webcamCache <- new (Nil :: List (Tuple Number HTMLCanvasElement))
+    let
+      webcam = (map snd <<< head <<< O.toUnfoldable) visualInfo.cameras
+    webcamInfo <- case webcam of
+      Nothing -> pure Nothing
+      Just v -> do
+        width <- videoWidth v.camera
+        height <- videoHeight v.camera
+        pure $ Just { width, height, camera: v.camera, cache: v.cache }
     reconRef <-
       new
         { grouped: M.empty
@@ -5095,10 +5127,25 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
                                 currentPainting =
                                   x.painting
                                     { words
+                                    , webcamInfo: (\{ width, height } -> { width, height }) <$> webcamInfo
                                     , audioClockRelativePosition: audioClockOffset - (__renderTime - clockClockStart)
                                     }
-                              --_ <- write newPaintingCache __paintingCache
-                              renderPainting canvasCtx visualInfo canvasInfo currentPainting
+                              -- webcam
+                              case webcamInfo of
+                                Nothing -> pure unit
+                                Just { width, height, camera, cache } -> do
+                                  canvas <- webcamToCanvas { width, height } (htmlVideoElemntToImageSource camera)
+                                  void $ modify (cache avz __renderTime <<< Cons (Tuple __renderTime canvas)) __webcamCache
+                              webcamCache <- over (traversed <<< _1) (__renderTime - _) <$> read __webcamCache
+                              -- end webcam
+                              renderPainting canvasCtx
+                                { images: visualInfo.images
+                                , videos: visualInfo.videos
+                                , canvases: visualInfo.sourceCanvases
+                                , webcam: webcamCache
+                                }
+                                canvasInfo
+                                currentPainting
                               pure $ Just currentPainting
                       maybe (pure unit)
                         ( \aud -> do
@@ -5182,7 +5229,7 @@ runInBrowser_ ::
   AudioContext ->
   EngineInfo ->
   AudioInfo (Object microphone) (Object (RecorderSignature recorder)) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
-  VisualInfo ->
+  VisualInfo accumulator ->
   Exporter env accumulator ->
   Effect (Effect Unit)
 runInBrowser_ scene' accumulator ctx engineInfo audioInfo visualInfo exporter = do

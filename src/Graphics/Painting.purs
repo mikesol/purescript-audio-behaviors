@@ -5,6 +5,7 @@ module Graphics.Painting
   , MeasurableText
   , ImageDataTransform
   , ImageDataRep
+  , ImageSources
   , path
   , closed
   , rectangle
@@ -39,6 +40,9 @@ module Graphics.Painting
   , everywhere
   , measurableTextToMetrics
   , render
+  , htmlVideoElemntToImageSource
+  , htmlCanvasElemntToImageSource
+  , htmlImageElemntToImageSource
   ) where
 
 import Prelude
@@ -57,7 +61,8 @@ import Graphics.Canvas (CanvasImageSource, Context2D, ImageData, setGlobalCompos
 import Graphics.Canvas as Canvas
 import Graphics.Drawing (Font)
 import Graphics.Drawing.Font (fontString)
-import Math (pi)
+import Math (abs, pi)
+import Unsafe.Coerce (unsafeCoerce)
 import Web.HTML (HTMLCanvasElement, HTMLImageElement, HTMLVideoElement)
 import Web.HTML.HTMLMediaElement (setCurrentTime)
 import Web.HTML.HTMLVideoElement (toHTMLMediaElement)
@@ -217,7 +222,7 @@ data ImageSource
   = FromImage { name :: String }
   | FromVideo { name :: String, currentTime :: Maybe Number }
   | FromCanvas { name :: String }
-  | FromWebcam
+  | FromWebcam { rewind :: Number }
 
 derive instance eqImageSource :: Eq ImageSource
 
@@ -498,37 +503,32 @@ renderMeasurableText ctx = go
       _ <- Canvas.setFont ctx (fontString font)
       Canvas.measureText ctx s
 
-foreign import htmlCanvasElemntToImageSource :: HTMLCanvasElement -> Effect CanvasImageSource
+htmlCanvasElemntToImageSource :: HTMLCanvasElement -> CanvasImageSource
+htmlCanvasElemntToImageSource = unsafeCoerce
 
-foreign import htmlVideoElemntToImageSource :: HTMLVideoElement -> Effect CanvasImageSource
+htmlVideoElemntToImageSource :: HTMLVideoElement -> CanvasImageSource
+htmlVideoElemntToImageSource = unsafeCoerce
 
-foreign import htmlImageElemntToImageSource :: HTMLImageElement -> Effect CanvasImageSource
+htmlImageElemntToImageSource :: HTMLImageElement -> CanvasImageSource
+htmlImageElemntToImageSource = unsafeCoerce
 
 type ImageSources
   = { canvases :: Object HTMLCanvasElement
     , images :: Object HTMLImageElement
     , videos :: Object HTMLVideoElement
-    , webcam :: Maybe HTMLVideoElement
+    , webcam :: List (Tuple Number HTMLCanvasElement)
     }
 
 imageSourcesToImageSource :: ImageSources -> ImageSource -> Effect (Maybe CanvasImageSource)
 imageSourcesToImageSource sources = go
   where
   go (FromImage { name }) =
-    let
-      img = lookup name sources.images
-    in
-      case img of
-        Nothing -> pure Nothing
-        Just x -> Just <$> htmlImageElemntToImageSource x
+    pure
+      $ (htmlImageElemntToImageSource <$> lookup name sources.images)
 
   go (FromCanvas { name }) =
-    let
-      img = lookup name sources.canvases
-    in
-      case img of
-        Nothing -> pure Nothing
-        Just x -> Just <$> htmlCanvasElemntToImageSource x
+    pure
+      $ (htmlCanvasElemntToImageSource <$> lookup name sources.canvases)
 
   go (FromVideo { name, currentTime }) =
     let
@@ -538,11 +538,24 @@ imageSourcesToImageSource sources = go
         Nothing -> pure Nothing
         Just v -> do
           for_ currentTime (flip setCurrentTime (toHTMLMediaElement v))
-          Just <$> htmlVideoElemntToImageSource v
+          pure (Just $ htmlVideoElemntToImageSource v)
 
-  go FromWebcam = case sources.webcam of
-    Nothing -> pure Nothing
-    Just v -> Just <$> htmlVideoElemntToImageSource v
+  go (FromWebcam { rewind }) = pure $ gogo sources.webcam
+    where
+    gogo Nil = Nothing
+
+    gogo ((Tuple _ a) : Nil) = Just $ htmlCanvasElemntToImageSource a
+
+    gogo ((Tuple a a') : (Tuple b b') : c)
+      | rewind > b = gogo c
+      | rewind < a = Just $ htmlCanvasElemntToImageSource a'
+      | otherwise =
+        let
+          dista = abs (a - rewind)
+
+          distb = abs (b - rewind)
+        in
+          Just $ htmlCanvasElemntToImageSource (if distb > dista then a' else b')
 
 foreign import newImageData :: Context2D -> ImageData -> ImageDataRep -> Effect ImageData
 
