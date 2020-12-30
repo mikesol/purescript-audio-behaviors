@@ -5028,12 +5028,6 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
     __webcamCache <- new (Nil :: List (Tuple Number HTMLCanvasElement))
     let
       webcam = (map snd <<< head <<< O.toUnfoldable) visualInfo.cameras
-    webcamInfo <- case webcam of
-      Nothing -> pure Nothing
-      Just v -> do
-        width <- videoWidth v.camera
-        height <- videoHeight v.camera
-        pure $ Just { width, height, camera: v.camera, cache: v.cache }
     reconRef <-
       new
         { grouped: M.empty
@@ -5123,6 +5117,12 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
                               canvasCtx <- getContext2D cvs
                               words <- measurableTextToMetrics canvasCtx x.words
                               __renderTime <- map ((_ / 1000.0) <<< getTime) now
+                              webcamInfo <- case webcam of
+                                Nothing -> pure Nothing
+                                Just v -> do
+                                  width <- videoWidth v.camera
+                                  height <- videoHeight v.camera
+                                  pure $ Just { width, height, camera: v.camera, cache: v.cache }
                               let
                                 currentPainting =
                                   x.painting
