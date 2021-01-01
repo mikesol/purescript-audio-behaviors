@@ -1,30 +1,99 @@
-exports.newImageData = function (ctx) {
-  return function (imageData) {
-    return function (imageDataRep) {
-      return function () {
-        var newData = ctx.createImageData(imageData);
-        var minLen =
-          imageDataRep.pixels.length > imageData.data.length
-            ? imageData.data.length
-            : imageDataRep.pixels.length;
-        for (var i = 0; i < minLen; i++) {
-          newData.data[i] = imageDataRep.pixels[i];
-        }
-        return newData;
+exports.pixelTransformImpl = function (ctx) {
+  return function (a) {
+    return function (b) {
+      return function (c) {
+        return function (d) {
+          return function (idt) {
+            return function (a_) {
+              return function (b_) {
+                return function () {
+                  var imageData = ctx.getImageData(a, b, c, d);
+                  var w = imageData.width;
+                  var h = imageData.height;
+                  for (var i = 0; i < imageData.data.length; i += 4) {
+                    var r = imageData.data[i];
+                    var g = imageData.data[i + 1];
+                    var b = imageData.data[i + 2];
+                    var a = imageData.data[i + 3];
+                    var iOver4 = i / 4;
+                    var x = iOver4 % width;
+                    var y = Math.floor(iOver4 / width);
+                    var odt = idt({
+                      r: r,
+                      g: g,
+                      b: b,
+                      a: a,
+                      x: x,
+                      y: y,
+                      w: w,
+                      h: h,
+                    });
+                    imageData.data[i] = odt.r;
+                    imageData.data[i + 1] = odt.g;
+                    imageData.data[i + 2] = odt.b;
+                    imageData.data[i + 3] = odt.a;
+                  }
+                  ctx.putImageData(imageData, a_, b_);
+                };
+              };
+            };
+          };
+        };
       };
     };
   };
 };
-exports.imageDataToRep = function (imageData) {
-  return function () {
-    var pixels = new Array(imageData.data.length);
-    for (var i = 0; i < imageData.data.length; i++) {
-      pixels[i] = imageData.data[i];
-    }
-    return {
-      width: imageData.width,
-      height: imageData.height,
-      pixels: pixels,
+
+exports.pixelTransformFullImpl = function (ctx) {
+  return function (a) {
+    return function (b) {
+      return function (c) {
+        return function (d) {
+          return function (idt) {
+            return function (a_) {
+              return function (b_) {
+                return function (c_) {
+                  return function (d_) {
+                    return function (e_) {
+                      return function (f_) {
+                        return function () {
+                          var imageData = ctx.getImageData(a, b, c, d);
+                          var w = imageData.width;
+                          var h = imageData.height;
+                          for (var i = 0; i < imageData.data.length; i += 4) {
+                            var r = imageData.data[i];
+                            var g = imageData.data[i + 1];
+                            var b = imageData.data[i + 2];
+                            var a = imageData.data[i + 3];
+                            var iOver4 = i / 4;
+                            var x = iOver4 % width;
+                            var y = Math.floor(iOver4 / width);
+                            var odt = idt({
+                              r: r,
+                              g: g,
+                              b: b,
+                              a: a,
+                              x: x,
+                              y: y,
+                              w: w,
+                              h: h,
+                            });
+                            imageData.data[i] = odt.r;
+                            imageData.data[i + 1] = odt.g;
+                            imageData.data[i + 2] = odt.b;
+                            imageData.data[i + 3] = odt.a;
+                          }
+                          ctx.putImageData(imageData, a_, b_, c_, d_, e_, f_);
+                        };
+                      };
+                    };
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
     };
   };
 };

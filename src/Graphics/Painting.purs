@@ -4,8 +4,9 @@ module Graphics.Painting
   , Shape
   , MeasurableText
   , ImageDataTransform
-  , ImageDataRep
   , ImageSources
+  , IPixel
+  , OPixel
   , path
   , closed
   , rectangle
@@ -27,8 +28,8 @@ module Graphics.Painting
   , drawImage
   , drawImageScale
   , drawImageFull
-  , pushPixels
-  , pushPixelsFull
+  , pixelTransform
+  , pixelTransformFull
   , Painting
   , filled
   , outlined
@@ -57,7 +58,7 @@ import Data.Traversable (sequence)
 import Data.Tuple (Tuple(..))
 import Effect (Effect)
 import Foreign.Object (Object, lookup)
-import Graphics.Canvas (CanvasImageSource, Context2D, ImageData, setGlobalCompositeOperation)
+import Graphics.Canvas (CanvasImageSource, Context2D, setGlobalCompositeOperation)
 import Graphics.Canvas as Canvas
 import Graphics.Drawing (Font)
 import Graphics.Drawing.Font (fontString)
@@ -351,17 +352,20 @@ rotateMeasurableText = MTRotate
 textMeasurableText :: Font -> String -> MeasurableText
 textMeasurableText = MTText
 
-newtype ImageDataTransform
-  = ImageDataTransform (ImageDataRep -> ImageDataRep)
+type IPixel
+  = { r :: Int, g :: Int, b :: Int, a :: Int, w :: Int, h :: Int, x :: Int, y :: Int }
 
-type ImageDataRep
-  = { width :: Number, height :: Number, pixels :: Array Int }
+type OPixel
+  = { r :: Int, g :: Int, b :: Int, a :: Int }
 
-pushPixels :: Number -> Number -> Number -> Number -> (ImageDataRep -> ImageDataRep) -> Number -> Number -> Painting -> Painting
-pushPixels a b c d e = PushPixels a b c d (ImageDataTransform e)
+data ImageDataTransform
+  = PixelTransform (IPixel -> OPixel)
 
-pushPixelsFull :: Number -> Number -> Number -> Number -> (ImageDataRep -> ImageDataRep) -> Number -> Number -> Number -> Number -> Number -> Number -> Painting -> Painting
-pushPixelsFull a b c d e = PushPixelsFull a b c d (ImageDataTransform e)
+pixelTransform :: Number -> Number -> Number -> Number -> (IPixel -> OPixel) -> Number -> Number -> Painting -> Painting
+pixelTransform a b c d e = PushPixels a b c d (PixelTransform e)
+
+pixelTransformFull :: Number -> Number -> Number -> Number -> (IPixel -> OPixel) -> Number -> Number -> Number -> Number -> Number -> Number -> Painting -> Painting
+pixelTransformFull a b c d e = PushPixelsFull a b c d (PixelTransform e)
 
 -- give up once we get here...
 instance eqImageDataTransform :: Eq ImageDataTransform where
@@ -557,10 +561,6 @@ imageSourcesToImageSource sources = go
         in
           Just $ htmlCanvasElemntToImageSource (if distb > dista then a' else b')
 
-foreign import newImageData :: Context2D -> ImageData -> ImageDataRep -> Effect ImageData
-
-foreign import imageDataToRep :: ImageData -> Effect ImageDataRep
-
 measurableTextToMetrics ::
   Canvas.Context2D ->
   List MeasurableText ->
@@ -569,6 +569,10 @@ measurableTextToMetrics ctx =
   map Map.fromFoldable
     <<< sequence
     <<< map \i -> Tuple i <$> renderMeasurableText ctx i
+
+foreign import pixelTransformImpl :: Context2D -> Number -> Number -> Number -> Number -> (IPixel -> OPixel) -> Number -> Number -> Effect Unit
+
+foreign import pixelTransformFullImpl :: Context2D -> Number -> Number -> Number -> Number -> (IPixel -> OPixel) -> Number -> Number -> Number -> Number -> Number -> Number -> Effect Unit
 
 -- | Render a `Painting` to a canvas.
 render ::
@@ -650,23 +654,19 @@ render ctx sources = go
           src <- imageSourcesToImageSource sources isrc
           for_ src \src' -> Canvas.drawImageScale ctx src' a b c d
 
-  go (PushPixels a b c d (ImageDataTransform fn) a' b' p) =
+  go (PushPixels a b c d idt a' b' p) =
     void
       $ Canvas.withContext ctx do
           go p
-          imgData <- Canvas.getImageData ctx a b c d
-          asRep <- imageDataToRep imgData
-          imgData' <- newImageData ctx imgData (fn asRep)
-          Canvas.putImageData ctx imgData' a' b'
+          case idt of
+            PixelTransform pt -> pixelTransformImpl ctx a b c d pt a' b'
 
-  go (PushPixelsFull a b c d (ImageDataTransform fn) a' b' c' d' e' f' p) =
+  go (PushPixelsFull a b c d idt a' b' c' d' e' f' p) =
     void
       $ Canvas.withContext ctx do
           go p
-          imgData <- Canvas.getImageData ctx a b c d
-          asRep <- imageDataToRep imgData
-          imgData' <- newImageData ctx imgData (fn asRep)
-          Canvas.putImageDataFull ctx imgData' a' b' c' d' e' f'
+          case idt of
+            PixelTransform pt -> pixelTransformFullImpl ctx a b c d pt a' b' c' d' e' f'
 
   go (DrawImageFull isrc a b c d e f g h) =
     void
