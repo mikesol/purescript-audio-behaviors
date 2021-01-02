@@ -5003,16 +5003,17 @@ webcamToCanvas { width, height } src = do
   pure canvas
 
 renderPainting :: Context2D -> ImageSources -> CanvasInfo' -> Painting -> Effect Unit
-renderPainting canvasCtx imageSources canvasInfo painting =
-  void
-    $ try do
-        clearRect canvasCtx
-          { height: canvasInfo.h
-          , width: canvasInfo.w
-          , x: 0.0
-          , y: 0.0
-          }
-        render canvasCtx imageSources painting
+renderPainting canvasCtx imageSources canvasInfo painting = do
+  res <-
+    try do
+      clearRect canvasCtx
+        { height: canvasInfo.h
+        , width: canvasInfo.w
+        , x: 0.0
+        , y: 0.0
+        }
+      render canvasCtx imageSources painting
+  either (warn <<< show) pure res
 
 instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -> Number -> ABehavior Event (AV ch accumulator)) accumulator env where
   runInBrowser scene accumulator ctx engineInfo audioInfo visualInfo exporter = do
