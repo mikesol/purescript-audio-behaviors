@@ -1,13 +1,13 @@
 exports.pixelTransformImpl = function (ctx) {
-  return function (a) {
-    return function (b) {
+  return function (za) {
+    return function (zb) {
       return function (c) {
         return function (d) {
           return function (idt) {
             return function (a_) {
               return function (b_) {
                 return function () {
-                  var imageData = ctx.getImageData(a, b, c, d);
+                  var imageData = ctx.getImageData(za, zb, c, d);
                   var w = imageData.width;
                   var h = imageData.height;
                   for (var i = 0; i < imageData.data.length; i += 4) {
@@ -45,8 +45,8 @@ exports.pixelTransformImpl = function (ctx) {
 };
 
 exports.pixelTransformFullImpl = function (ctx) {
-  return function (a) {
-    return function (b) {
+  return function (za) {
+    return function (zb) {
       return function (c) {
         return function (d) {
           return function (idt) {
@@ -57,7 +57,7 @@ exports.pixelTransformFullImpl = function (ctx) {
                     return function (e_) {
                       return function (f_) {
                         return function () {
-                          var imageData = ctx.getImageData(a, b, c, d);
+                          var imageData = ctx.getImageData(za, zb, c, d);
                           var w = imageData.width;
                           var h = imageData.height;
                           for (var i = 0; i < imageData.data.length; i += 4) {
