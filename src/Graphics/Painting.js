@@ -16,8 +16,8 @@ exports.pixelTransformImpl = function (ctx) {
                     var b = imageData.data[i + 2];
                     var a = imageData.data[i + 3];
                     var iOver4 = i / 4;
-                    var x = iOver4 % width;
-                    var y = Math.floor(iOver4 / width);
+                    var x = iOver4 % imageData.width;
+                    var y = Math.floor(iOver4 / imageData.width);
                     var odt = idt({
                       r: r,
                       g: g,
