@@ -13,7 +13,7 @@ module Graphics.Painting
   , circle
   , arc
   , FillStyle
-  , Gradient
+  , Gradient(..)
   , GradientColorStop
   , fillColor
   , OutlineStyle
