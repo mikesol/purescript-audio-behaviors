@@ -7,6 +7,8 @@ module Graphics.Painting
   , ImageSources
   , IPixel
   , OPixel
+  , Pattern(..)
+  , PatternRepeat(..)
   , path
   , closed
   , rectangle
@@ -16,6 +18,8 @@ module Graphics.Painting
   , Gradient(..)
   , GradientColorStop
   , fillColor
+  , fillGradient
+  , fillPattern
   , OutlineStyle
   , ImageSource(..)
   , CanvasComposite(..)
@@ -268,6 +272,12 @@ derive instance eqFillStyle :: Eq FillStyle
 -- | Set the fill color.
 fillColor :: Color -> FillStyle
 fillColor = ColorFill
+
+fillGradient :: Gradient -> FillStyle
+fillGradient = GradientFill
+
+fillPattern :: Pattern -> FillStyle
+fillPattern = PatternFill
 
 -- | Encapsulates outline color etc.
 newtype OutlineStyle
