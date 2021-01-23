@@ -45,6 +45,10 @@ module Graphics.Painting
   , rotate
   , text
   , everywhere
+  , scaleMeasurableText
+  , translateMeasurableText
+  , rotateMeasurableText
+  , textMeasurableText 
   , measurableTextToMetrics
   , render
   , htmlVideoElemntToImageSource
