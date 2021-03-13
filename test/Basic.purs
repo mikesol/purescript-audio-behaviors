@@ -183,7 +183,7 @@ basicTestSuite = do
       (snd <$> (asProcessor $ Tuple (g'bandpass 440.0 1.0) "a string")) `shouldEqual` Nothing
     it "should correctly transform a processors object" do
       let
-        apo :: forall (t :: # Type) tl. RowToList t tl => AsProcessorObject tl t => (Record t) -> O.Object (Tuple (AudioGraphProcessor) String)
+        apo :: forall t tl. RowToList t tl => AsProcessorObject tl t => (Record t) -> O.Object (Tuple (AudioGraphProcessor) String)
         apo r = asProcessorObject (Proxy :: Proxy tl) r
 
         g =
