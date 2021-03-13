@@ -116,23 +116,58 @@ let additions =
   }
 -------------------------------
 -}
-
-
 let upstream =
-      https://github.com/purescript/package-sets/releases/download/psc-0.13.8-20200911-2/packages.dhall sha256:872c06349ed9c8210be43982dc6466c2ca7c5c441129826bcb9bf3672938f16e
+      https://github.com/purescript/package-sets/releases/download/psc-0.14.0-20210311/packages.dhall sha256:3da8be2b7b4a0e7de6186591167b363023695accffb98a8639e9e7d06e2070d6
 
 let overrides = {=}
 
-let additions = {
-    typelevel-graph =
-      { dependencies =
-          [ "record-extra", "typelevel-peano"
+let additions =
+      { typelevel-graph =
+        { dependencies = [ "typelevel-peano" ]
+        , repo = "https://github.com/mikesol/purescript-typelevel-graph.git"
+        , version = "main"
+        }
+      , typelevel-peano =
+        { dependencies =
+          [ "arrays"
+          , "console"
+          , "effect"
+          , "prelude"
+          , "psci-support"
+          , "typelevel-prelude"
+          , "unsafe-coerce"
           ]
-      , repo =
-          "https://github.com/mikesol/purescript-typelevel-graph.git"
-      , version =
-          "main"
+        , repo = "https://github.com/csicar/purescript-typelevel-peano.git"
+        , version = "v1.0.1"
+        }
+      , event =
+        { dependencies =
+          [ "console"
+          , "effect"
+          , "filterable"
+          , "nullable"
+          , "unsafe-reference"
+          , "js-timers"
+          , "now"
+          ]
+        , repo = "https://github.com/mikesol/purescript-event.git"
+        , version = "master"
+        }
+      , behaviors =
+        { dependencies =
+          [ "psci-support"
+          , "effect"
+          , "ordered-collections"
+          , "filterable"
+          , "nullable"
+          , "event"
+          , "web-html"
+          , "web-events"
+          , "web-uievents"
+          ]
+        , repo = "https://github.com/mikesol/purescript-behaviors.git"
+        , version = "master"
+        }
       }
-}
 
 in  upstream // overrides // additions

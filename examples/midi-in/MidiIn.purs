@@ -42,22 +42,6 @@ scene midiIn time = f <$> (midi midiIn)
     speaker'
       (gain' (if simpleOnOff md then 0.6 else 0.0) $ sinOsc 440.0)
 
-run ::
-  forall microphone recorder track buffer floatArray periodicWave.
-  MIDIAccess ->
-  Unit ->
-  AudioContext ->
-  EngineInfo ->
-  AudioInfo
-    (Object microphone)
-    (Object (RecorderSignature recorder))
-    (Object track)
-    (Object buffer)
-    (Object floatArray)
-    (Object periodicWave) ->
-  VisualInfo ->
-  Exporter Unit Unit ->
-  Effect (Effect Unit)
 run max =
   runInBrowser_ do
     md <- getMidi max

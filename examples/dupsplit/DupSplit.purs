@@ -12,15 +12,6 @@ import Math (pi, sin)
 sceneDup :: Number -> Behavior (AudioUnit D1)
 sceneDup t = pure (speaker' $ dup1 microphone (\u -> (sinOsc (5.0 + 10.0 * (sin (0.2 * t * pi))) * u)))
 
-run ::
-  forall microphone recorder track buffer floatArray periodicWave.
-  Unit ->
-  AudioContext ->
-  EngineInfo ->
-  AudioInfo (Object microphone) (Object (RecorderSignature recorder)) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
-  VisualInfo ->
-  Exporter Unit Unit ->
-  Effect (Effect Unit)
 run = runInBrowser sceneDup
 
 exporter = defaultExporter :: Exporter Unit Unit

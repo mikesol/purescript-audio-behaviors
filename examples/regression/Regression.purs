@@ -8,7 +8,6 @@ import Data.Map as M
 import Data.Maybe (fromMaybe)
 import Data.NonEmpty ((:|))
 import Data.Profunctor (lcmap)
-import Data.Symbol (SProxy(..))
 import Data.Tuple (Tuple(..))
 import Data.Typelevel.Num (D2)
 import Effect (Effect)
@@ -16,8 +15,8 @@ import Effect.Class.Console (log)
 import FRP.Behavior (Behavior)
 import FRP.Behavior.Audio (AudioContext, AudioInfo, AudioParameter, AudioUnit, EngineInfo, Exporter, VisualInfo, RecorderSignature, defaultExporter, evalPiecewise, g'add_, g'delay_, g'gain_, graph_, playBufWithOffset_, runInBrowser, speaker)
 import Foreign.Object (Object)
-import Record.Extra (SLProxy(..), SNil)
-import Type.Data.Graph (type (:/))
+import Type.Data.Graph (SNil, type (:/))
+import Type.Proxy (Proxy(..))
 
 sounds =
   [ Tuple 105 1.3107256235827665
@@ -53,12 +52,12 @@ playerSen name' opts' time =
     pure
       $ ( graph_ (opts.tag <> "_graph")
             { aggregators:
-                { out: Tuple (g'add_ (opts.tag <> "_out")) (SLProxy :: SLProxy ("combine" :/ SNil))
-                , combine: Tuple (g'add_ (opts.tag <> "_cbn")) (SLProxy :: SLProxy ("gain" :/ "senn" :/ SNil))
-                , gain: Tuple (g'gain_ (opts.tag <> "_gnlp") 0.4) (SLProxy :: SLProxy ("del" :/ SNil))
+                { out: Tuple (g'add_ (opts.tag <> "_out")) (Proxy :: Proxy ("combine" :/ SNil))
+                , combine: Tuple (g'add_ (opts.tag <> "_cbn")) (Proxy :: Proxy ("gain" :/ "senn" :/ SNil))
+                , gain: Tuple (g'gain_ (opts.tag <> "_gnlp") 0.4) (Proxy :: Proxy ("del" :/ SNil))
                 }
             , processors:
-                { del: Tuple (g'delay_ (opts.tag <> "_dl") 0.5) (SProxy :: SProxy "combine")
+                { del: Tuple (g'delay_ (opts.tag <> "_dl") 0.5) (Proxy :: Proxy "combine")
                 }
             , generators:
                 { senn:
@@ -110,15 +109,6 @@ scene time =
                 )
         )
 
-run ::
-  forall microphone recorder track buffer floatArray periodicWave.
-  Unit ->
-  AudioContext ->
-  EngineInfo ->
-  AudioInfo (Object microphone) (Object (RecorderSignature recorder)) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
-  VisualInfo ->
-  Exporter Unit Unit ->
-  Effect (Effect Unit)
 run = runInBrowser scene
 
 exporter =

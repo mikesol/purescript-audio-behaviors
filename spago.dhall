@@ -9,7 +9,6 @@
   , "effect"
   , "foreign-object"
   , "heterogeneous"
-  , "parseint"
   , "psci-support"
   , "sized-vectors"
   , "typelevel-graph"

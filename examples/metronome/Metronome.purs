@@ -33,15 +33,6 @@ scene time =
     $ speaker'
         (gain' 0.1 (gainT' (evalPiecewise kr pwf time) $ sinOsc 440.0))
 
-run ::
-  forall microphone recorder track buffer floatArray periodicWave.
-  Unit ->
-  AudioContext ->
-  EngineInfo ->
-  AudioInfo (Object microphone) (Object (RecorderSignature recorder)) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
-  VisualInfo ->
-  Exporter Unit Unit ->
-  Effect (Effect Unit)
 run = runInBrowser scene
 
 exporter = defaultExporter :: Exporter Unit Unit
