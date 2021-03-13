@@ -9,7 +9,6 @@ import Data.List ((:), List(..))
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.NonEmpty ((:|))
 import Data.Set (isEmpty)
-import Data.Symbol (SProxy(..))
 import Data.Tuple (Tuple(..), fst, snd)
 import Data.Typelevel.Num (D1, D2)
 import Data.Vec ((+>), empty)
@@ -19,10 +18,10 @@ import FRP.Behavior.Audio (AV(..), AudioContext, AudioInfo, AudioUnit, CanvasInf
 import FRP.Behavior.Mouse (buttons, position)
 import FRP.Event.Mouse (Mouse, getMouse)
 import Foreign.Object (Object)
-import Graphics.Painting ( circle, fillColor, filled)
+import Graphics.Painting (circle, fillColor, filled)
 import Math (pi, sin)
-import Record.Extra (SLProxy(..), SNil)
-import Type.Data.Graph (type (:/))
+import Type.Data.Graph (type (:/), SNil)
+import Type.Proxy (Proxy(..))
 
 scene0 :: Number -> Behavior (AudioUnit D1)
 scene0 = const $ pure (speaker' $ (gain' 0.5 $ sinOsc 440.0))
@@ -264,13 +263,13 @@ scene7_1 mouse acc@{ onset } time = f time <$> click
               + (gain' 0.1 $ sinOsc (220.0 + (if cl then (50.0 + maybe 0.0 (\t -> 10.0 * (s - t)) stTime) else 0.0)))
               + ( graph
                     { aggregators:
-                        { out: Tuple g'add (SLProxy :: SLProxy ("combine" :/ SNil))
-                        , combine: Tuple g'add (SLProxy :: SLProxy ("gain" :/ "mic" :/ SNil))
-                        , gain: Tuple (g'gain 0.9) (SLProxy :: SLProxy ("del" :/ SNil))
+                        { out: Tuple g'add (Proxy :: Proxy ("combine" :/ SNil))
+                        , combine: Tuple g'add (Proxy :: Proxy ("gain" :/ "mic" :/ SNil))
+                        , gain: Tuple (g'gain 0.9) (Proxy :: Proxy ("del" :/ SNil))
                         }
                     , processors:
-                        { del: Tuple (g'delay 0.2) (SProxy :: SProxy "filt")
-                        , filt: Tuple (g'bandpass 440.0 1.0) (SProxy :: SProxy "combine")
+                        { del: Tuple (g'delay 0.2) (Proxy :: Proxy "filt")
+                        , filt: Tuple (g'bandpass 440.0 1.0) (Proxy :: Proxy "combine")
                         }
                     , generators:
                         { mic: microphone
@@ -337,13 +336,13 @@ scene8 mouse acc@{ onset } (CanvasInfo { w, h, boundingClientRect: { x, y } }) t
                     + (gain' 0.1 $ sinOsc (220.0 + (if cl then (50.0 + maybe 0.0 (\t -> 10.0 * (s - t)) stTime) else 0.0)))
                     + ( graph
                           { aggregators:
-                              { out: Tuple g'add (SLProxy :: SLProxy ("combine" :/ SNil))
-                              , combine: Tuple g'add (SLProxy :: SLProxy ("gain" :/ "mic" :/ SNil))
-                              , gain: Tuple (g'gain 0.9) (SLProxy :: SLProxy ("del" :/ SNil))
+                              { out: Tuple g'add (Proxy :: Proxy ("combine" :/ SNil))
+                              , combine: Tuple g'add (Proxy :: Proxy ("gain" :/ "mic" :/ SNil))
+                              , gain: Tuple (g'gain 0.9) (Proxy :: Proxy ("del" :/ SNil))
                               }
                           , processors:
-                              { del: Tuple (g'delay 0.2) (SProxy :: SProxy "filt")
-                              , filt: Tuple (g'bandpass 440.0 1.0) (SProxy :: SProxy "combine")
+                              { del: Tuple (g'delay 0.2) (Proxy :: Proxy "filt")
+                              , filt: Tuple (g'bandpass 440.0 1.0) (Proxy :: Proxy "combine")
                               }
                           , generators:
                               { mic: microphone
@@ -385,15 +384,6 @@ scene8 mouse acc@{ onset } (CanvasInfo { w, h, boundingClientRect: { x, y } }) t
   pos :: Behavior { x :: Int, y :: Int }
   pos = map (fromMaybe { x: 0, y: 0 }) (position mouse)
 
-run ::
-  forall microphone recorder track buffer floatArray periodicWave.
-  { onset :: Maybe Number } ->
-  AudioContext ->
-  EngineInfo ->
-  AudioInfo (Object microphone) (Object (RecorderSignature recorder)) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
-  VisualInfo ->
-  Exporter Unit { onset :: Maybe Number } ->
-  Effect (Effect Unit)
 run =
   runInBrowser_ do
     mouse <- getMouse

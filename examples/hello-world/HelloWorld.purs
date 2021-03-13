@@ -26,15 +26,6 @@ scene time =
               )
           )
 
-run ::
-  forall microphone recorder track buffer floatArray periodicWave.
-  Unit ->
-  AudioContext ->
-  EngineInfo ->
-  AudioInfo (Object microphone) (Object (RecorderSignature recorder)) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
-  VisualInfo ->
-  Exporter Unit Unit ->
-  Effect (Effect Unit)
 run = runInBrowser scene
 
 mr2url = mediaRecorderToUrl :: String -> (String -> Effect Unit) -> MediaRecorder -> Effect Unit

@@ -3,7 +3,6 @@ module FRP.Behavior.Audio.Example.Koans where
 import Prelude
 import Data.List ((:), List(..))
 import Data.NonEmpty ((:|))
-import Data.Symbol (SProxy(..))
 import Data.Tuple (Tuple(..))
 import Data.Typelevel.Num (D1, D2)
 import Data.Vec ((+>), empty)
@@ -12,8 +11,8 @@ import FRP.Behavior (Behavior)
 import FRP.Behavior.Audio (AudioContext, AudioInfo, AudioParameterTransition, AudioUnit, EngineInfo, Exporter, Oversample(..), VisualInfo, RecorderSignature, allpass, bandpass, constant, convolver, defaultExporter, defaultParam, delay, dup1, dynamicsCompressor, evalPiecewise, g'add, g'bandpass, g'delay, g'gain, gain', gainT_', graph, highpass, highshelf, iirFilter, loopBuf, loopBufT, lowpass, lowshelf, merger, microphone, notch, panner, pannerMono, pannerVars', peaking, periodicOsc, play, playBuf, playBufWithOffset, playBuf_, play_, runInBrowser, sawtoothOsc, sinOsc, sinOsc_, spatialPanner, speaker, speaker', squareOsc, triangleOsc, waveShaper)
 import Foreign.Object (Object)
 import Math (pi, sin)
-import Record.Extra (SLProxy(..), SNil)
-import Type.Data.Graph (type (:/))
+import Type.Data.Graph (type (:/), SNil)
+import Type.Proxy (Proxy(..))
 
 -- constant
 nothing :: Number -> Behavior (AudioUnit D1)
@@ -238,13 +237,13 @@ feedback _ =
     ( speaker'
         $ ( graph
               { aggregators:
-                  { out: Tuple g'add (SLProxy :: SLProxy ("combine" :/ SNil))
-                  , combine: Tuple g'add (SLProxy :: SLProxy ("gain" :/ "mic" :/ SNil))
-                  , gain: Tuple (g'gain 0.5) (SLProxy :: SLProxy ("del" :/ SNil))
+                  { out: Tuple g'add (Proxy :: Proxy ("combine" :/ SNil))
+                  , combine: Tuple g'add (Proxy :: Proxy ("gain" :/ "mic" :/ SNil))
+                  , gain: Tuple (g'gain 0.5) (Proxy :: Proxy ("del" :/ SNil))
                   }
               , processors:
-                  { del: Tuple (g'delay 0.2) (SProxy :: SProxy "filt")
-                  , filt: Tuple (g'bandpass 440.0 1.0) (SProxy :: SProxy "combine")
+                  { del: Tuple (g'delay 0.2) (Proxy :: Proxy "filt")
+                  , filt: Tuple (g'bandpass 440.0 1.0) (Proxy :: Proxy "combine")
                   }
               , generators:
                   { mic: microphone
@@ -253,15 +252,6 @@ feedback _ =
           )
     )
 
-run ::
-  forall microphone recorder track buffer floatArray periodicWave.
-  Unit ->
-  AudioContext ->
-  EngineInfo ->
-  AudioInfo (Object microphone) (Object (RecorderSignature recorder)) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
-  VisualInfo ->
-  Exporter Unit Unit ->
-  Effect (Effect Unit)
 run = runInBrowser onoffb2
 
 exporter =

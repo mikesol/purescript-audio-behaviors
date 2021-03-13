@@ -278,13 +278,11 @@ module FRP.Behavior.Audio
   , PannerVars
   , PannerVars'
   , AudioUnit'(..)
-  , SampleFrame
-  , AudioProcessor
   , defaultParam
   , AudioParameter
   , evalPiecewise
   , AudioParameterTransition(..)
-  , AudioBuffer
+  , AudioBuffer(..)
   , AudioUnit
   , AudioContext
   , AnimationInfo
@@ -339,8 +337,6 @@ module FRP.Behavior.Audio
   , makeFloatArray
   , makeAudioBuffer
   , makeAudioTrack
-  , makeAudioWorkletProcessor
-  , audioIO
   , Instruction(..)
   , Reconcilable
   , GroupedAudio
@@ -348,23 +344,22 @@ module FRP.Behavior.Audio
   , AudioTag
   , PtrInfo
   , MString
-  , audioIOInterleaved
   , Status(..)
   , AudioUnit''(..)
-  , IdxContext
   , audioToPtr
   ) where
 
 import Prelude
+
 import Control.Bind (bindFlipped)
 import Control.Promise (Promise)
-import Data.Array (catMaybes, fold, foldl, head, index, length, mapWithIndex, range, replicate, snoc, takeEnd, zipWith, (!!))
+import Data.Array (catMaybes, head, takeEnd, (!!))
 import Data.Array as A
 import Data.Either (either)
+import Data.Foldable (foldl)
+import Data.Function.Uncurried (Fn2, runFn2)
 import Data.Generic.Rep (class Generic)
-import Data.Generic.Rep.Show (genericShow)
-import Data.Int (floor, toNumber)
-import Data.Int.Parse (parseInt, toRadix)
+import Data.Int (round, toNumber)
 import Data.JSDate (getTime, now)
 import Data.Lens (_1, over, traversed)
 import Data.List (List(..), fromFoldable, partition, (:))
@@ -376,40 +371,39 @@ import Data.NonEmpty (NonEmpty, (:|))
 import Data.NonEmpty as NE
 import Data.Set (Set, member)
 import Data.Set as DS
+import Data.Show.Generic (genericShow)
 import Data.String (Pattern(..), split, take)
-import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
+import Data.Symbol (class IsSymbol, reflectSymbol)
 import Data.Traversable (sequence, traverse_)
 import Data.Tuple (Tuple(..), fst, snd)
 import Data.Typelevel.Num (class LtEq, class Pos, D1, D2, D3, D4, D5, D20, toInt')
 import Data.Vec (Vec, fill)
 import Data.Vec as V
-import Effect (Effect, whileE)
+import Effect (Effect)
 import Effect.Aff (Aff, error, joinFiber, launchAff, launchAff_, throwError)
 import Effect.Class.Console (warn)
 import Effect.Exception (try)
-import Effect.Ref (modify, modify_, new, read, write)
-import FRP.Behavior (ABehavior, Behavior, behavior, sample_)
-import FRP.Event (Event, EventIO, create, makeEvent, subscribe)
+import Effect.Ref (modify, new, read, write)
+import FRP.Behavior (ABehavior, Behavior, sample_)
+import FRP.Event (Event, EventIO, create, subscribe)
 import FRP.Event.Time (interval)
 import Foreign (Foreign)
 import Foreign.Object (Object, filterWithKey)
 import Foreign.Object as O
 import Graphics.Canvas (CanvasElement, CanvasImageSource, Context2D, Rectangle, TextMetrics, clearRect, drawImage, getCanvasHeight, getCanvasWidth, getContext2D)
 import Graphics.Painting (ImageSources, MeasurableText, Painting, htmlVideoElemntToImageSource, measurableTextToMetrics, render)
-import Heterogeneous.Mapping (class HMap, class Mapping, hmap)
-import Prim.Boolean (False, True, kind Boolean)
+import Prim.Boolean (False, True)
 import Prim.Row (class Union)
-import Prim.RowList (class RowToList, Cons, Nil, kind RowList)
+import Prim.RowList (class RowToList, Cons, Nil, RowList)
 import Prim.Symbol (class Compare)
 import Prim.TypeError (class Fail, Text)
 import Record (merge)
-import Record.Extra (SLProxy(..), SNil, kind SList)
 import Record.Unsafe (unsafeGet)
 import Type.Data.Boolean (class And, class Not)
-import Type.Data.Graph (class FlipDirection, class HasDuplicateEdges, class HasDuplicateNodes, class HasOrphanNodes, class HasUniqueTerminus, class IsConnected, class IsEq, type (:/))
+import Type.Data.Graph (class FlipDirection, class HasDuplicateEdges, class HasDuplicateNodes, class HasOrphanNodes, class HasUniqueTerminus, class IsConnected, class IsEq, type (:/), SNil, SList)
 import Type.Proxy (Proxy(..))
 import Type.Row.Homogeneous (class Homogeneous)
-import Type.RowList (class ListToRow, RLProxy(..))
+import Type.RowList (class ListToRow)
 import Unsafe.Coerce (unsafeCoerce)
 import Web.DOM.Document (createElement)
 import Web.HTML (HTMLCanvasElement, HTMLImageElement, HTMLVideoElement, window)
@@ -471,336 +465,6 @@ audioBuffer ::
   Vec bch (Vec blen Number) ->
   AudioBuffer
 audioBuffer i v = AudioBuffer i (map V.toArray $ V.toArray v)
-
-newtype IdxContext i
-  = IdxContext i
-
-instance deArr ::
-  Mapping (IdxContext Int) (Array Number) Number where
-  mapping (IdxContext i) = \a -> fromMaybe 0.0 $ (a !! if length a == 1 then 0 else i)
-
-paramGetter ::
-  forall (a :: # Type) (b :: # Type).
-  Homogeneous a (Array Number) =>
-  Homogeneous b Number =>
-  HMap (IdxContext Int) (Record a) (Record b) =>
-  Int ->
-  { | a } ->
-  { | b }
-paramGetter i a = hmap (IdxContext i) a
-
-type SampleFrame
-  = Array (Array Number) -- inputs [ channels [ ] ]
-
-type Audio
-  = Array (Array (Array Number)) -- inputs [ channels [ samples [] ] ]
-
-type AudioProcessor (r :: # Type)
-  = Behavior Number -> -- current time
-    ( Number -> -- offset from current time - a positive float. 0.0 = now, 0.58 = 0.58 seconds ago, etc
-      Behavior SampleFrame -- a sample frame at that time
-    ) ->
-    Behavior (Record r) -> -- custom parameters at the current time
-    Behavior SampleFrame -- a sample frame at the current time
-
-type AudioSink
-  = SampleFrame -> Effect Unit
-
-writeToOutput ::
-  Event Unit ->
-  Behavior SampleFrame ->
-  (SampleFrame -> Effect Unit) ->
-  Effect (Effect Unit)
-writeToOutput e scene render = subscribe (sample_ scene e) render
-
--- | Create an event which fires for every audio frame.
--- | Note that this does not have a canceler.  Cancellation from audio
--- | processing should be handled in the `process()` function of the worklet.
-audioDriver :: Effect Boolean -> Event Unit
-audioDriver incr =
-  makeEvent \k -> do
-    whileE incr (k unit)
-    pure (pure unit)
-
-withParam ::
-  forall a r.
-  Effect r ->
-  Event a ->
-  Event { value :: a, param :: r }
-withParam incr e =
-  makeEvent \k ->
-    e
-      `subscribe`
-        \value -> do
-          param <- incr
-          k { value, param }
-
--- | A generic behavior from a parameter
-_behavior :: forall r. Effect r -> Behavior r
-_behavior eff = behavior \e -> map (\{ value, param } -> value param) (withParam eff e)
-
-currentTime = _behavior :: Effect Number -> Behavior Number
-
-sampleFrame = _behavior :: Effect SampleFrame -> Behavior SampleFrame
-
-controlParams =
-  _behavior ::
-    forall (r :: # Type).
-    Homogeneous r Number =>
-    Effect (Record r) ->
-    Behavior (Record r)
-
-foreign import _makeAudioWorkletProcessor ::
-  forall (r :: # Type).
-  String -> -- name
-  Number -> -- retention
-  Record r -> -- defaults
-  (Effect Boolean -> Event Unit) -> -- driver
-  (Effect Number -> Behavior Number) -> -- currentTime
-  (Effect SampleFrame -> Behavior SampleFrame) -> -- sampleFrame
-  (Effect (Record r) -> Behavior (Record r)) -> -- control params
-  AudioProcessor r -> -- audio processor
-  ( Event Unit ->
-    Behavior SampleFrame ->
-    (SampleFrame -> Effect Unit) ->
-    Effect (Effect Unit)
-  ) -> -- animator
-  Effect Unit
-
--- | Make an audio worklet processor
--- | - the name of the processor
--- | - the number of seconds worth of audio to retain
--- | - default parameters
--- | - a function accepting
--- |   - a `Behavior` that reports the current time
--- |   - a function that takes a positive number of seconds and returns a `Behavior` that reports audio that many seconds into the past. Reaching back beyond the retention window causes undefined behavior.
--- |   - a `Behavior` that reports all control parameters at the current time
--- |   and returns a behavior reporting on a single sample
-makeAudioWorkletProcessor ::
-  forall (param :: # Type).
-  Homogeneous param Number =>
-  String -> -- name
-  Number -> -- seconds of audio to retain
-  Record param -> -- default values
-  AudioProcessor param -> -- the audio processor
-  Effect Unit
-makeAudioWorkletProcessor name retention defaults proc =
-  _makeAudioWorkletProcessor
-    name
-    retention
-    defaults
-    audioDriver
-    currentTime
-    sampleFrame
-    controlParams
-    proc
-    writeToOutput
-
-audiol :: forall a. Array (Array (Array a)) -> Int
-audiol a = length $ fromMaybe [] ((head a) >>= head)
-
--- | The inner audio loop
--- | Useful when an audio plugin is an external module and you need to
--- | import a function to do processing.  Accepts:
--- | - an audio processor
--- | - the sample rate
--- | - the length of the current input
--- | - the current parameters
--- | - the current inputs
--- | - the current sample rate
--- | - the current buffer
--- | returns the processed audio in an effect
-audioIO ::
-  forall (params :: # Type) (param :: # Type).
-  Homogeneous params (Array Number) =>
-  Homogeneous param Number =>
-  HMap (IdxContext Int) (Record params) (Record param) =>
-  AudioProcessor param ->
-  Int ->
-  Int ->
-  Record params ->
-  Int ->
-  Audio ->
-  Effect Audio
-audioIO processor sampleRate inputl params currentSample sink = do
-  curpos <- new 0
-  output <- new [ [ [] ] ]
-  let
-    _driver =
-      audioDriver do
-        cp <- read curpos
-        write (cp + 1) curpos
-        pure $ cp < inputl
-
-    _behaviorCurrentTime =
-      currentTime do
-        cp <- read curpos
-        let
-          ct = cp + currentSample
-        pure $ (toNumber ct) / (toNumber sampleRate)
-
-    _secondsToBehaviorSampleFrame = \lb ->
-      sampleFrame do
-        cp0 <- read curpos
-        let
-          lookback = if lb < 0.0 then 0.0 else lb
-
-          lookbackInSamples = floor (lookback * toNumber sampleRate)
-
-          cp = (audiol sink) - inputl - lookbackInSamples
-        pure
-          $ if (cp < 0) then
-              replicate
-                (length sink)
-                (replicate (length (fromMaybe [] $ head sink)) 0.0)
-            else
-              map (map (fromMaybe 0.0 <<< flip index cp)) sink
-
-    _behaviorControlParams =
-      controlParams
-        $ do
-            cp <- read curpos
-            pure $ paramGetter cp params
-
-    chain =
-      processor
-        _behaviorCurrentTime
-        _secondsToBehaviorSampleFrame
-        _behaviorControlParams
-  bam <-
-    writeToOutput _driver chain \frame -> do
-      modify_ (flip (zipWith (zipWith snoc)) frame) output
-      pure unit
-  bam
-  read output
-
--- | The inner audio loop
--- | The same as audioIO, but it keeps the sink interleaved.
--- | For web audio, this avoids additional memory copying.
--- | Note that the outer array enclosing the samples is not used here.
-audioIOInterleaved ::
-  forall (params :: # Type) (param :: # Type).
-  Homogeneous params (Array Number) =>
-  Homogeneous param Number =>
-  HMap (IdxContext Int) (Record params) (Record param) =>
-  AudioProcessor param ->
-  Int ->
-  Record params ->
-  Int ->
-  Int ->
-  Int ->
-  Array Number ->
-  Effect (Array Number)
-audioIOInterleaved processor sampleRate params currentSample nChannels bufferLength sink = do
-  curpos <- new 0
-  output <- sequence (replicate (nChannels * bufferLength) $ new 0.0)
-  let
-    _driver =
-      audioDriver do
-        cp <- read curpos
-        write (cp + 1) curpos
-        pure $ cp < bufferLength
-
-    _behaviorCurrentTime =
-      currentTime do
-        cp <- read curpos
-        let
-          ct = cp + currentSample
-        pure $ (toNumber ct) / (toNumber sampleRate)
-
-    _secondsToBehaviorSampleFrame = \lb ->
-      sampleFrame do
-        cp0 <- read curpos
-        let -- how far we're looking back in seconds
-          lookback = if lb < 0.0 then 0.0 else lb
-
-          -- how many samples we're looking back
-          lookbackInSamples = (bufferLength - cp0) + floor (lookback * toNumber sampleRate)
-
-          -- number of blocs to rewind
-          numberOfBlocsToSkip = lookbackInSamples / bufferLength
-
-          -- the offset from the end of the bloc we are reading
-          offsetFromEndOfBloc = lookbackInSamples - (numberOfBlocsToSkip * bufferLength)
-
-          -- number of floats to read back to get to bloc
-          floatsToSkipUntilDesiredBloc = numberOfBlocsToSkip * bufferLength * nChannels
-
-          -- number of floats to read back to get to channel (in stereo, L goes to blocLength, R to 0)
-          floatsToSkipUntilDesiredChannel i = ((nChannels - 1 - i) * bufferLength)
-
-          sinkLen = length sink
-
-          frame =
-            [ map
-                ( \i ->
-                    fromMaybe 0.0
-                      ( sink
-                          !! ( sinkLen - floatsToSkipUntilDesiredBloc
-                                - (floatsToSkipUntilDesiredChannel i)
-                                - offsetFromEndOfBloc
-                            )
-                      )
-                )
-                (range 0 (nChannels - 1))
-            ]
-        -- useful for debugging
-        --        log
-        --          $ "cp0 "
-        --          <> show cp0
-        --          <> " lb "
-        --          <> show lb
-        --          <> " lookback "
-        --          <> show lookback
-        --          <> " lookbackInSamples "
-        --          <> show lookbackInSamples
-        --          <> " numberOfBlocsToSkip "
-        --          <> show numberOfBlocsToSkip
-        --          <> " offsetFromEndOfBloc "
-        --          <> show offsetFromEndOfBloc
-        --          <> " floatsToSkipUntilDesiredBloc "
-        --          <> show floatsToSkipUntilDesiredBloc
-        --          <> " floatsToSkipUntilDesiredChannel0 "
-        --          <> show (floatsToSkipUntilDesiredChannel 0)
-        --          <> " floatsToSkipUntilDesiredChannel1 "
-        --          <> show (floatsToSkipUntilDesiredChannel 1)
-        --          <> " frame "
-        --          <> show frame
-        pure frame
-
-    _behaviorControlParams =
-      controlParams
-        $ do
-            cp <- read curpos
-            pure $ paramGetter cp params
-
-    chain =
-      processor
-        _behaviorCurrentTime
-        _secondsToBehaviorSampleFrame
-        _behaviorControlParams
-  bam <-
-    writeToOutput _driver chain \frame -> do
-      cp <- read curpos
-      void
-        $ sequence
-            ( head frame
-                >>= \channels ->
-                    pure
-                      $ sequence
-                          ( mapWithIndex
-                              ( \i sample ->
-                                  sequence
-                                    ( output !! ((i * bufferLength) + cp)
-                                        >>= \ref -> pure $ (write sample ref)
-                                    )
-                              )
-                              channels
-                          )
-            )
-      pure unit
-  bam
-  sequence $ map read output
 
 type PtrInfo'
   = { ptr :: Int
@@ -976,6 +640,31 @@ evalPiecewise kr p s =
         in
           defaultParam { param = (m * s + b), timeOffset = 0.0 }
 
+
+foreign import isNaN :: forall a. a -> Boolean
+
+foreign import unsafeParseInt :: Fn2 String Int Number
+
+newtype Radix
+  = Radix Int
+
+-- | Enforces the base to be between `2` and `36`
+toRadix :: Int -> Radix
+toRadix x = Radix (if x < 2 then 2 else if x > 36 then 36 else x)
+
+-- | Warning - this function follows the same semantics as native JS's `parseInt()` function -
+-- | it will parse "as much as it can", when it can - sometimes it succeeds when the input isn't
+-- | completely sanitary.
+parseInt :: String -> Radix -> Maybe Int
+parseInt s (Radix r) =
+  let
+    x = runFn2 unsafeParseInt s r
+  in
+    if isNaN x then
+      Nothing
+    else
+      Just (round x)
+
 type PannerVars
   = { coneInnerAngle :: (AudioParameter)
     , coneOuterAngle :: (AudioParameter)
@@ -1055,13 +744,13 @@ data AudioGraphAggregator
   | GAdd MString
   | GGain MString (AudioParameter)
 
-type AudioGraph ch
+type AudioGraph (ch :: Type)
   = { generators :: O.Object (AudioUnit ch)
     , processors :: O.Object (Tuple (AudioGraphProcessor) String)
     , aggregators :: O.Object (Tuple (AudioGraphAggregator) (Set String))
     }
 
-data AudioUnit ch
+data AudioUnit (ch :: Type)
   = Microphone MString
   | AudioWorkletGenerator MString String (Object (AudioParameter))
   | AudioWorkletProcessor MString String (Object (AudioParameter)) (AudioUnit ch)
@@ -1843,7 +1532,7 @@ audioToPtr = go (-1) DS.empty
     in
       { len: r.len + 1
       , p
-      , flat: r.flat <> (M.singleton ptr.ptr p)
+      , flat: r.flat `M.union` (M.singleton ptr.ptr p)
       }
 
   listthrough ::
@@ -1890,7 +1579,7 @@ audioToPtr = go (-1) DS.empty
           ptr
     in
       { len: (foldl (+) 0 (map _.len r.acc)) + 1
-      , flat: (foldl (<>) M.empty (map _.flat r.acc)) <> M.singleton ptr.ptr p
+      , flat: (foldl M.union M.empty (map _.flat r.acc)) `M.union` M.singleton ptr.ptr p
       , p
       }
 
@@ -1941,13 +1630,13 @@ audioToPtr = go (-1) DS.empty
                   let
                     o = go curP (getNexts k pag g) z
                   in
-                    { curP: o.len + curP, algSteps: M.singleton k o <> algSteps }
+                    { curP: o.len + curP, algSteps: M.singleton k o `M.union` algSteps }
               )
               { curP: ptr.ptr + (M.size pag) - 1, algSteps: M.empty }
               ((O.toUnfoldable g.generators) :: Array (Tuple String (AudioUnit ich)))
 
           -- add the generators to the pag map so that we can reason about their ids
-          pagWithGens = pag <> M.mapMaybeWithKey (\_ z -> Just z.p.ptr) r.algSteps
+          pagWithGens = pag `M.union` M.mapMaybeWithKey (\_ z -> Just z.p.ptr) r.algSteps
 
           -- run processing chains on all processors and aggregators, giving them correct prev and next
           pc = chainsForProcessors ptr.next auHack.name pagWithGens g.processors g <> chainsForAggregators ptr.next auHack.name pagWithGens g.aggregators g
@@ -1955,7 +1644,7 @@ audioToPtr = go (-1) DS.empty
           -- tack on all processors, aggregators and generators to flat
           flat =
             (M.fromFoldable $ map (\i -> Tuple i.ptr i) pc)
-              <> (fold (map _.flat (M.values r.algSteps)))
+              `M.union` (foldl M.union M.empty (map _.flat (M.values r.algSteps)))
 
           p = DL.head (DL.filter (\i -> i.next == ptr.next) $ M.values flat)
         -- length is sum of generator lengths plus sum of aggregators plus sum of processors
@@ -2009,8 +1698,8 @@ audioToPtr = go (-1) DS.empty
         -- needs to have myPtr as its prev
         , flat:
             closureResult.flat
-              <> continuation.flat
-              <> (M.singleton ptr.ptr p)
+              `M.union` continuation.flat
+              `M.union` (M.singleton ptr.ptr p)
         , p
         }
     in
@@ -3032,14 +2721,15 @@ gain_' s n = Gain (Just s) (ap_ n) <<< NE.singleton
 gainT_' :: forall ch. Pos ch => String -> (AudioParameter) -> AudioUnit ch -> AudioUnit ch
 gainT_' s n = Gain (Just s) n <<< NE.singleton
 
-class AggregatorsToGraphInternal (aggregators :: RowList) (graph :: RowList) | aggregators -> graph
+class AggregatorsToGraphInternal :: forall k1 k2. RowList k1 -> RowList k2 -> Constraint
+class AggregatorsToGraphInternal aggregators graph | aggregators -> graph
 
 instance aggregatorsToGraphInternalNil :: AggregatorsToGraphInternal Nil Nil
 
 instance aggregatorsToGraphInternalCons ::
   ( AggregatorsToGraphInternal t newT
     ) =>
-  AggregatorsToGraphInternal (Cons k (Tuple (AudioGraphAggregator) (SLProxy v)) t) (Cons k (SLProxy v) newT)
+  AggregatorsToGraphInternal (Cons k (Tuple (AudioGraphAggregator) (Proxy v)) t) (Cons k (Proxy v) newT)
 
 instance aggregatorsToGraph ::
   ( RowToList aggregators ag
@@ -3048,18 +2738,21 @@ instance aggregatorsToGraph ::
   ) =>
   AggregatorsToGraph aggregators graph
 
-class AggregatorsToGraph (aggregators :: # Type) (graph :: # Type) | aggregators -> graph
+class AggregatorsToGraph :: forall k1 k2. Row k1 -> Row k2 -> Constraint
+class AggregatorsToGraph aggregators graph  | aggregators -> graph
 
-class ProcessorsToGraphInternal (processors :: RowList) (graph :: RowList) | processors -> graph
+class ProcessorsToGraphInternal :: forall k1 k2. RowList k1 -> RowList k2 -> Constraint
+class ProcessorsToGraphInternal processors graph | processors -> graph
 
 instance processorsToGraphInternalNil :: ProcessorsToGraphInternal Nil Nil
 
 instance processorsToGraphInternalCons ::
   ( ProcessorsToGraphInternal t newT
     ) =>
-  ProcessorsToGraphInternal (Cons k (Tuple (AudioGraphProcessor) (SProxy v)) t) (Cons k (SLProxy (v :/ SNil)) newT)
+  ProcessorsToGraphInternal (Cons k (Tuple (AudioGraphProcessor) (Proxy v)) t) (Cons k (Proxy (v :/ SNil)) newT)
 
-class ProcessorsToGraph (processors :: # Type) (graph :: # Type) | processors -> graph
+class ProcessorsToGraph :: forall k1 k2. Row k1 -> Row k2 -> Constraint
+class ProcessorsToGraph processors graph | processors -> graph
 
 instance porocessorsToGraph ::
   ( RowToList processors ps
@@ -3068,16 +2761,18 @@ instance porocessorsToGraph ::
   ) =>
   ProcessorsToGraph processors graph
 
-class GeneratorsToGraphInternal (generators :: RowList) (graph :: RowList) | generators -> graph
+class GeneratorsToGraphInternal :: forall k1 k2. RowList k1 -> RowList k2 -> Constraint
+class GeneratorsToGraphInternal generators graph | generators -> graph
 
 instance generatorsToGraphInternalNil :: GeneratorsToGraphInternal Nil Nil
 
 instance generatorsToGraphInternalCons ::
   ( GeneratorsToGraphInternal t newT
     ) =>
-  GeneratorsToGraphInternal (Cons k (AudioUnit ch) t) (Cons k (SLProxy SNil) newT)
+  GeneratorsToGraphInternal (Cons k (AudioUnit ch) t) (Cons k (Proxy SNil) newT)
 
-class GeneratorsToGraph (generators :: # Type) (graph :: # Type) | generators -> graph
+class GeneratorsToGraph :: forall k1 k2. Row k1 -> Row k2 -> Constraint
+class GeneratorsToGraph generators graph | generators -> graph
 
 instance generatorsToGraph ::
   ( RowToList generators gn
@@ -3086,9 +2781,11 @@ instance generatorsToGraph ::
   ) =>
   GeneratorsToGraph generators graph
 
-class LookUpProcessorsInternal (rowList :: RowList) (graph :: RowList) (processors :: # Type) | rowList graph -> processors
+class LookUpProcessorsInternal :: forall k1 k2 k3. RowList k1 -> RowList k2 -> Row k3 -> Constraint
+class LookUpProcessorsInternal rowList graph  processors| rowList graph -> processors
 
-class LookupProcessors (audioGraph :: # Type) (processors :: # Type) | audioGraph -> processors
+class LookupProcessors :: forall k1 k2. Row k1 -> Row k2 -> Constraint 
+class LookupProcessors audioGraph processors | audioGraph -> processors
 
 instance lookUpProcessorsInternalNil :: (ListToRow rl r) => LookUpProcessorsInternal rl Nil r
 else instance lookUpProcessorsInternalCons :: (ListToRow (Cons k v t) r) => LookUpProcessorsInternal (Cons k v t) g r
@@ -3104,9 +2801,11 @@ instance lookupProcessors ::
   ) =>
   LookupProcessors audioGraph processors
 
-class LookUpAggregatorsInternal (rowList :: RowList) (graph :: RowList) (aggregators :: # Type) | rowList graph -> aggregators
+class LookUpAggregatorsInternal :: forall k1 k2 k3. RowList k1 -> RowList k2 -> Row k3 -> Constraint
+class LookUpAggregatorsInternal rowList graph aggregators | rowList graph -> aggregators
 
-class LookupAggregators (audioGraph :: # Type) (aggregators :: # Type) | audioGraph -> aggregators
+class LookupAggregators :: forall k1 k2. Row k1 -> Row k2 -> Constraint
+class LookupAggregators audioGraph  aggregators | audioGraph -> aggregators
 
 instance lookUpAggregatorsInternalNil :: (ListToRow rl r) => LookUpAggregatorsInternal rl Nil r
 else instance lookUpAggregatorsInternalCons :: (ListToRow (Cons k v t) r) => LookUpAggregatorsInternal (Cons k v t) g r
@@ -3122,9 +2821,11 @@ instance lookupAggregators ::
   ) =>
   LookupAggregators audioGraph aggregators
 
-class LookUpGeneratorsInternal (rowList :: RowList) (graph :: RowList) (generators :: # Type) | rowList graph -> generators
+class LookUpGeneratorsInternal :: forall k1 k2 k3. RowList k1 -> RowList k2 -> Row k3 -> Constraint
+class LookUpGeneratorsInternal rowList graph generators | rowList graph -> generators
 
-class LookupGenerators (audioGraph :: # Type) (generators :: # Type) | audioGraph -> generators
+class LookupGenerators :: forall k1 k2. Row k1 -> Row k2 -> Constraint
+class LookupGenerators audioGraph generators | audioGraph -> generators
 
 instance lookUpGeneratorsInternalNil :: (ListToRow rl r) => LookUpGeneratorsInternal rl Nil r
 else instance lookUpGeneratorsInternalCons :: (ListToRow (Cons k v t) r) => LookUpGeneratorsInternal (Cons k v t) g r
@@ -3140,7 +2841,8 @@ instance lookupGenerators ::
   ) =>
   LookupGenerators audioGraph generators
 
-class AudioGraphToGraph (audioGraph :: # Type) (graph :: # Type) | audioGraph -> graph
+class AudioGraphToGraph :: forall k1 k2. Row k1 -> Row k2 -> Constraint
+class AudioGraphToGraph audioGraph graph | audioGraph -> graph
 
 instance audioGraphToGraph ::
   ( LookupGenerators audioGraph generators
@@ -3154,7 +2856,8 @@ instance audioGraphToGraph ::
   ) =>
   AudioGraphToGraph audioGraph graph
 
-class RecordHomogeneousInAudioUnits (gate :: Boolean) (generators :: Type) ch
+class RecordHomogeneousInAudioUnits :: Boolean -> Type -> Type -> Constraint
+class RecordHomogeneousInAudioUnits gate generators ch
 
 instance recordHomogeneousInAudioUnitsFalse :: RecordHomogeneousInAudioUnits False g ch
 
@@ -3166,7 +2869,8 @@ instance recordNotEmptyInternalFalse :: RecordNotEmptyInternal False g False
 else instance recordNotEmptyInternalTrue :: (RowToList g (Cons k v t)) => RecordNotEmptyInternal True (Record g) True
 else instance recordNotEmptyInternalF :: RecordNotEmptyInternal True g False
 
-class HasOneGeneratorInternal (gate :: Boolean) (graph :: RowList) ch (b :: Boolean) | gate graph -> b
+class HasOneGeneratorInternal :: forall k. Boolean -> RowList k -> Type -> Boolean -> Constraint
+class HasOneGeneratorInternal gate graph ch b| gate graph -> b
 
 instance hasOneGeneratorInternalNil :: HasOneGeneratorInternal b Nil ch b
 else instance hasOneGeneratorInternalTrue :: HasOneGeneratorInternal True g ch True
@@ -3179,7 +2883,8 @@ else instance hasOneGeneratorInternalCons ::
   ) =>
   HasOneGeneratorInternal False (Cons k v t) ch b
 
-class HasOneGenerator (graph :: # Type) ch (b :: Boolean) | graph ch -> b
+class HasOneGenerator :: forall k. Row k -> Type -> Boolean -> Constraint
+class HasOneGenerator graph ch b | graph ch -> b
 
 instance hasOneGenerator ::
   ( RowToList graph gl
@@ -3207,9 +2912,10 @@ instance isValidAudioGraph ::
   ) =>
   IsValidAudioGraph audioGraph ch b
 
-class IsValidAudioGraph (graph :: # Type) ch (b :: Boolean) | graph -> b
-
-class ValidAudioGraph (graph :: # Type) ch
+class IsValidAudioGraph :: forall k. Row k -> Type -> Boolean -> Constraint
+class IsValidAudioGraph graph ch b  | graph -> b
+class ValidAudioGraph :: forall k. Row k -> Type -> Constraint
+class ValidAudioGraph graph ch
 
 instance validAudioGraph :: (IsValidAudioGraph graph ch True) => ValidAudioGraph graph ch
 else instance validAudioGraphFail ::
@@ -3221,40 +2927,44 @@ else instance validAudioGraphFail ::
 class AsProcessor v where
   asProcessor :: v -> Maybe (Tuple AudioGraphProcessor String)
 
-instance asProcessorJust :: (IsSymbol k) => AsProcessor (Tuple (AudioGraphProcessor) (SProxy k)) where
+instance asProcessorJust :: (IsSymbol k) => AsProcessor (Tuple (AudioGraphProcessor) (Proxy k)) where
   asProcessor (Tuple a b) = Just (Tuple a $ reflectSymbol b)
 else instance asProcessorOther :: AsProcessor x where
   asProcessor _ = Nothing
 
-class AsProcessorObject (iter :: RowList) (processors :: # Type) where
-  asProcessorObject :: RLProxy iter -> Record processors -> Object (Tuple (AudioGraphProcessor) String)
+class AsProcessorObject :: forall k1. RowList k1 -> Row Type -> Constraint
+class AsProcessorObject iter processors where
+  asProcessorObject :: Proxy iter -> {|processors} -> Object (Tuple (AudioGraphProcessor) String)
 
 instance asProcessorObjectCons ::
   (IsSymbol k, AsProcessorObject tail graph, AsProcessor v) =>
   AsProcessorObject (Cons k v tail) graph where
-  asProcessorObject _ g = let asStr = reflectSymbol (SProxy :: SProxy k) in O.union (maybe O.empty (O.singleton asStr) $ asProcessor ((unsafeGet asStr g) :: v)) (asProcessorObject (RLProxy :: RLProxy tail) g)
+  asProcessorObject _ g = let asStr = reflectSymbol (Proxy :: Proxy k) in O.union (maybe O.empty (O.singleton asStr) $ asProcessor ((unsafeGet asStr g) :: v)) (asProcessorObject (Proxy :: Proxy tail) g)
 else instance asProcessorObjectNil :: AsProcessorObject Nil g where
   asProcessorObject _ g = O.empty
 
-class AudioGraphProcessors (iter :: RowList) (graph :: # Type) where
-  processors :: RLProxy iter -> Record graph -> O.Object (Tuple (AudioGraphProcessor) String)
+class AudioGraphProcessors :: forall k1. RowList k1 -> Row Type -> Constraint
+class AudioGraphProcessors iter graph where
+  processors :: Proxy iter -> {| graph} -> O.Object (Tuple (AudioGraphProcessor) String)
 
 instance audioGraphProcessorsNil :: AudioGraphProcessors Nil graph where
   processors _ g = O.empty
 else instance audioGraphProcessorsCons ::
   (RowToList g gl, AsProcessorObject gl g, AudioGraphProcessors tail graph) =>
   AudioGraphProcessors (Cons "processors" (Record g) tail) graph where
-  processors _ g = O.union (asProcessorObject (RLProxy :: RLProxy gl) ((unsafeGet "processors" g) :: (Record g))) (processors (RLProxy :: RLProxy tail) g)
+  processors _ g = O.union (asProcessorObject (Proxy :: Proxy gl) ((unsafeGet "processors" g) :: (Record g))) (processors (Proxy :: Proxy tail) g)
 else instance audioGraphProcessorsGiveUp0 ::
   (IsSymbol k, AudioGraphProcessors tail graph) =>
   AudioGraphProcessors (Cons k v tail) graph where
-  processors _ g = processors (RLProxy :: RLProxy tail) g
+  processors _ g = processors (Proxy :: Proxy tail) g
 
 ---------------------
 ----------------
 -------
-class AudioGraphGenerators (iter :: RowList) (graph :: # Type) ch where
-  generators :: RLProxy iter -> Record graph -> O.Object (AudioUnit ch)
+class AudioGraphGenerators :: forall k1. RowList k1 -> Row Type -> Type -> Constraint
+
+class AudioGraphGenerators iter graph ch where
+  generators :: Proxy iter ->  {| graph} -> O.Object (AudioUnit ch)
 
 instance audioGraphGeneratorsNil :: AudioGraphGenerators Nil graph ch where
   generators _ g = O.empty
@@ -3266,54 +2976,58 @@ else instance audioGraphGeneratorsCons ::
 else instance audioGraphGeneratorsGiveUp0 ::
   (IsSymbol k, AudioGraphGenerators tail graph ch) =>
   AudioGraphGenerators (Cons k v tail) graph ch where
-  generators _ g = generators (RLProxy :: RLProxy tail) g
+  generators _ g = generators (Proxy :: Proxy tail) g
 
 -----------------
 ---------
 class ReflectSymbols (sl :: SList) where
-  reflectSymbols :: SLProxy sl -> List String
+  reflectSymbols :: Proxy sl -> List String
 
 instance reflectSymbolsNil :: ReflectSymbols SNil where
   reflectSymbols _ = Nil
 else instance reflectSymbolsCons :: (IsSymbol h, ReflectSymbols t) => ReflectSymbols (h :/ t) where
-  reflectSymbols _ = reflectSymbol (SProxy :: SProxy h) : reflectSymbols (SLProxy :: SLProxy t)
+  reflectSymbols _ = reflectSymbol (Proxy :: Proxy h) : reflectSymbols (Proxy :: Proxy t)
 else instance reflectSymbolsBad :: ReflectSymbols x where
   reflectSymbols _ = Nil
 
 class AsAggregator v where
   asAggregator :: v -> Maybe (Tuple AudioGraphAggregator (Set String))
 
-instance asAggregatorJust :: (ReflectSymbols k) => AsAggregator (Tuple (AudioGraphAggregator) (SLProxy k)) where
+instance asAggregatorJust :: (ReflectSymbols k) => AsAggregator (Tuple (AudioGraphAggregator) (Proxy k)) where
   asAggregator (Tuple a b) = Just (Tuple a (DS.fromFoldable $ reflectSymbols b))
 else instance asAggregatorOther :: AsAggregator x where
   asAggregator _ = Nothing
 
-class AsAggregatorObject (iter :: RowList) (aggregators :: # Type) where
-  asAggregatorObject :: RLProxy iter -> Record aggregators -> Object (Tuple (AudioGraphAggregator) (Set String))
+
+class AsAggregatorObject :: forall k1. RowList k1 -> Row Type -> Constraint
+class AsAggregatorObject iter aggregators where
+  asAggregatorObject :: Proxy iter -> {|aggregators} -> Object (Tuple (AudioGraphAggregator) (Set String))
 
 instance asAggregatorObjectCons ::
   (IsSymbol k, AsAggregatorObject tail graph, AsAggregator v) =>
   AsAggregatorObject (Cons k v tail) graph where
-  asAggregatorObject _ g = let asStr = reflectSymbol (SProxy :: SProxy k) in O.union (maybe O.empty (O.singleton asStr) $ asAggregator ((unsafeGet asStr g) :: v)) (asAggregatorObject (RLProxy :: RLProxy tail) g)
+  asAggregatorObject _ g = let asStr = reflectSymbol (Proxy :: Proxy k) in O.union (maybe O.empty (O.singleton asStr) $ asAggregator ((unsafeGet asStr g) :: v)) (asAggregatorObject (Proxy :: Proxy tail) g)
 else instance asAggregatorObjectNil :: AsAggregatorObject Nil g where
   asAggregatorObject _ g = O.empty
 
-class AudioGraphAggregators (iter :: RowList) (graph :: # Type) where
-  aggregators :: RLProxy iter -> Record graph -> O.Object (Tuple (AudioGraphAggregator) (Set String))
+class AudioGraphAggregators :: forall k1. RowList k1 -> Row Type -> Constraint
+class AudioGraphAggregators iter graph where
+  aggregators :: Proxy iter ->  {| graph} -> O.Object (Tuple (AudioGraphAggregator) (Set String))
 
 instance audioGraphAggregatorsNil :: AudioGraphAggregators Nil graph where
   aggregators _ g = O.empty
 else instance audioGraphAggregatorsCons ::
   (RowToList g gl, AsAggregatorObject gl g, AudioGraphAggregators tail graph) =>
   AudioGraphAggregators (Cons "aggregators" (Record g) tail) graph where
-  aggregators _ g = O.union (asAggregatorObject (RLProxy :: RLProxy gl) ((unsafeGet "aggregators" g) :: (Record g))) (aggregators (RLProxy :: RLProxy tail) g)
+  aggregators _ g = O.union (asAggregatorObject (Proxy :: Proxy gl) ((unsafeGet "aggregators" g) :: (Record g))) (aggregators (Proxy :: Proxy tail) g)
 else instance audioGraphAggregatorsGiveUp0 ::
   (IsSymbol k, AudioGraphAggregators tail graph) =>
   AudioGraphAggregators (Cons k v tail) graph where
-  aggregators _ g = aggregators (RLProxy :: RLProxy tail) g
+  aggregators _ g = aggregators (Proxy :: Proxy tail) g
 
-class AudioGraphToObject (graph :: # Type) ch where
-  toObject :: Record graph -> AudioGraph ch
+class AudioGraphToObject :: Row Type -> Type -> Constraint
+class AudioGraphToObject graph ch where
+  toObject :: {| graph} -> AudioGraph ch
 
 instance audioGraphToObject ::
   ( ValidAudioGraph graph ch
@@ -3324,13 +3038,13 @@ instance audioGraphToObject ::
   ) =>
   AudioGraphToObject graph ch where
   toObject g =
-    { generators: generators (RLProxy :: RLProxy gl) g
-    , processors: processors (RLProxy :: RLProxy gl) g
-    , aggregators: aggregators (RLProxy :: RLProxy gl) g
+    { generators: generators (Proxy :: Proxy gl) g
+    , processors: processors (Proxy :: Proxy gl) g
+    , aggregators: aggregators (Proxy :: Proxy gl) g
     }
 
 graph ::
-  forall (graph :: # Type) ch.
+  forall graph ch.
   Pos ch =>
   AudioGraphToObject graph ch =>
   Record graph ->
@@ -3338,7 +3052,7 @@ graph ::
 graph g = Graph Nothing (toObject g)
 
 graph_ ::
-  forall (graph :: # Type) ch.
+  forall graph ch.
   Pos ch =>
   AudioGraphToObject graph ch =>
   String ->
@@ -3780,7 +3494,7 @@ audioGrouper (h : t) =
           }
           (h :| pt.yes)
       )
-        <> audioGrouper pt.no
+        `M.union` audioGrouper pt.no
     )
 
 type TouchAudioIO
@@ -4794,10 +4508,12 @@ type RunInBrowserAV_ accumulator ch env
   = RunInBrowser_ (accumulator -> CanvasInfo -> Number -> Behavior (AV ch accumulator)) accumulator
       env
 
+type RunInBrowserIAnimation :: Type -> Type -> Type -> Type
 type RunInBrowserIAnimation accumulator ch env
   = RunInBrowser (accumulator -> CanvasInfo -> Number -> Behavior (IAnimation accumulator)) accumulator
       env
 
+type RunInBrowserIAnimation_ :: Type -> Type -> Type -> Type
 type RunInBrowserIAnimation_ accumulator ch env
   = RunInBrowser_ (accumulator -> CanvasInfo -> Number -> Behavior (IAnimation accumulator)) accumulator
       env
