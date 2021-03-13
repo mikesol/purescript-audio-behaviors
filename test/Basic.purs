@@ -2,7 +2,7 @@ module Test.Basic where
 
 import Prelude
 import Control.Monad.Error.Class (class MonadThrow)
-import Data.Array (replicate, zipWith)
+import Data.Array (replicate)
 import Data.List (List(..), (:))
 import Data.List as DL
 import Data.Map as DM
@@ -10,34 +10,20 @@ import Data.Maybe (Maybe(..))
 import Data.NonEmpty ((:|))
 import Data.Set (fromFoldable)
 import Data.Set as DS
-import Data.Symbol (SProxy(..))
 import Data.Tuple (Tuple(..), snd)
 import Data.Typelevel.Num (D1, d3)
 import Data.Vec as V
 import Effect.Aff (Error)
 import Effect.Class (class MonadEffect)
-import FRP.Behavior.Audio (class AsProcessorObject, class IsValidAudioGraph, AudioGraph, AudioGraphProcessor, AudioParameterTransition(..), AudioProcessor, AudioUnit, AudioUnit'(..), SampleFrame, Status(..), asProcessor, asProcessorObject, audioToPtr, dup1, g'add, g'bandpass, g'delay, gain, gain', graph, merger, microphone, sinOsc, speaker', split3, toObject)
+import FRP.Behavior.Audio (class AsProcessorObject, class IsValidAudioGraph, AudioGraph, AudioGraphProcessor, AudioParameterTransition(..), AudioUnit, AudioUnit'(..), Status(..), asProcessor, asProcessorObject, audioToPtr, dup1, g'add, g'bandpass, g'delay, gain, gain', graph, merger, microphone, sinOsc, speaker', split3, toObject)
 import Foreign.Object as O
 import Prim.Boolean (False, True)
 import Prim.RowList (class RowToList)
-import Record.Extra (SLProxy(..), SNil)
 import Test.Spec (SpecT, describe, it)
 import Test.Spec.Assertions (shouldEqual)
 import Type.Data.Boolean (BProxy(..))
-import Type.Data.Graph (type (:/))
-import Type.Data.RowList (RLProxy(..))
-
-frameZip :: SampleFrame -> SampleFrame -> SampleFrame
-frameZip = zipWith (zipWith (+))
-
-mulSampleFrame :: Number -> SampleFrame -> SampleFrame
-mulSampleFrame n = map (map (_ * n))
-
-simpleProcessor :: forall (r :: # Type). AudioProcessor r
-simpleProcessor _ audio params = mulSampleFrame 0.25 <$> (audio 0.0)
-
-delayProcessor :: forall (r :: # Type). AudioProcessor r
-delayProcessor _ audio params = frameZip <$> (mulSampleFrame 0.25 <$> (audio 0.0)) <*> (mulSampleFrame 0.5 <$> (audio 1.0))
+import Type.Data.Graph (type (:/), SNil)
+import Type.Proxy (Proxy(..))
 
 isValidAudioGraph1 :: BProxy True
 isValidAudioGraph1 =
@@ -65,7 +51,7 @@ isValidAudioGraph3 =
   BProxy ::
     forall b ch.
     IsValidAudioGraph
-      ( processors :: Record ( goodbye :: Tuple (AudioGraphProcessor) (SProxy "hello") )
+      ( processors :: Record ( goodbye :: Tuple (AudioGraphProcessor) (Proxy "hello") )
       , generators :: Record ( hello :: AudioUnit ch )
       )
       ch
@@ -77,7 +63,7 @@ isValidAudioGraph4 =
   BProxy ::
     forall b ch.
     IsValidAudioGraph
-      ( processors :: Record ( goodbye :: Tuple (AudioGraphProcessor) (SProxy "notThere") )
+      ( processors :: Record ( goodbye :: Tuple (AudioGraphProcessor) (Proxy "notThere") )
       , generators :: Record ( hello :: AudioUnit ch )
       )
       ch
@@ -193,16 +179,16 @@ basicTestSuite = do
             AudioGraph D1
       O.size g.generators `shouldEqual` 1
     it "should correctly transform a processor" do
-      (snd <$> (asProcessor $ Tuple (g'bandpass 440.0 1.0) (SProxy :: SProxy "mic"))) `shouldEqual` Just "mic"
+      (snd <$> (asProcessor $ Tuple (g'bandpass 440.0 1.0) (Proxy :: Proxy "mic"))) `shouldEqual` Just "mic"
       (snd <$> (asProcessor $ Tuple (g'bandpass 440.0 1.0) "a string")) `shouldEqual` Nothing
     it "should correctly transform a processors object" do
       let
         apo :: forall (t :: # Type) tl. RowToList t tl => AsProcessorObject tl t => (Record t) -> O.Object (Tuple (AudioGraphProcessor) String)
-        apo r = asProcessorObject (RLProxy :: RLProxy tl) r
+        apo r = asProcessorObject (Proxy :: Proxy tl) r
 
         g =
           apo
-            { filt: Tuple (g'bandpass 440.0 1.0) (SProxy :: SProxy "mic")
+            { filt: Tuple (g'bandpass 440.0 1.0) (Proxy :: Proxy "mic")
             }
       O.size g `shouldEqual` 1
   it "should correctly transform a complex object" do
@@ -210,7 +196,7 @@ basicTestSuite = do
       g =
         toObject
           { processors:
-              { filt: Tuple (g'bandpass 440.0 1.0) (SProxy :: SProxy "mic")
+              { filt: Tuple (g'bandpass 440.0 1.0) (Proxy :: Proxy "mic")
               }
           , generators: { mic: microphone }
           } ::
@@ -223,10 +209,10 @@ basicTestSuite = do
       g =
         toObject
           { aggregators:
-              { combine: Tuple g'add (SLProxy :: SLProxy ("filt" :/ "sosc" :/ SNil))
+              { combine: Tuple g'add (Proxy :: Proxy ("filt" :/ "sosc" :/ SNil))
               }
           , processors:
-              { filt: Tuple (g'bandpass 440.0 1.0) (SProxy :: SProxy "mic")
+              { filt: Tuple (g'bandpass 440.0 1.0) (Proxy :: Proxy "mic")
               }
           , generators:
               { mic: microphone
@@ -246,10 +232,10 @@ basicTestSuite = do
             ( speaker'
                 $ ( graph
                       { aggregators:
-                          { combine: Tuple g'add (SLProxy :: SLProxy ("filt" :/ "sosc" :/ SNil))
+                          { combine: Tuple g'add (Proxy :: Proxy ("filt" :/ "sosc" :/ SNil))
                           }
                       , processors:
-                          { filt: Tuple (g'bandpass 440.0 1.0) (SProxy :: SProxy "mic")
+                          { filt: Tuple (g'bandpass 440.0 1.0) (Proxy :: Proxy "mic")
                           }
                       , generators:
                           { mic: microphone
@@ -333,11 +319,11 @@ basicTestSuite = do
             ( speaker'
                 $ ( graph
                       { aggregators:
-                          { combine: Tuple g'add (SLProxy :: SLProxy ("del" :/ "mic" :/ SNil))
+                          { combine: Tuple g'add (Proxy :: Proxy ("del" :/ "mic" :/ SNil))
                           }
                       , processors:
-                          { filt: Tuple (g'bandpass 440.0 1.0) (SProxy :: SProxy "mic")
-                          , del: Tuple (g'delay 0.2) (SProxy :: SProxy "filt")
+                          { filt: Tuple (g'bandpass 440.0 1.0) (Proxy :: Proxy "mic")
+                          , del: Tuple (g'delay 0.2) (Proxy :: Proxy "filt")
                           }
                       , generators:
                           { mic: microphone
