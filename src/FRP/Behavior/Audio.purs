@@ -290,12 +290,13 @@ module FRP.Behavior.Audio
   , CanvasInfo'
   , EngineInfo
   , AudioInfo
-  , AudioInfoExists
+  , AudioInfo'
   , RecorderInfo
   , RecorderSignature
   , MediaRecorder
   , VisualInfo
   , TouchAudioIO
+  , BrowserMicrophone
   , BrowserPeriodicWave
   , BrowserAudioTrack
   , BrowserAudioBuffer
@@ -425,6 +426,7 @@ foreign import data BrowserFloatArray :: Type
 foreign import data BrowserAudioTrack :: Type
 
 foreign import data AudioContext :: Type
+foreign import data BrowserMicrophone :: Type
 
 foreign import stopMediaRecorder :: MediaRecorder -> Effect Unit
 
@@ -3514,7 +3516,7 @@ foreign import touchAudio ::
   Number ->
   Array Instruction ->
   AudioContext ->
-  AudioInfoExists ->
+  AudioInfo ->
   TouchAudioIO ->
   Effect TouchAudioIO
 
@@ -4451,10 +4453,10 @@ type RecorderInfo dataavailableEvent errorEvent pauseEvent resumeEvent startEven
     , onstop :: stopEvent -> Effect Unit
     }
 
-type AudioInfoExists = forall microphone recorder track buffer floatArray periodicWave.
-    AudioInfo (Object microphone) (Object (RecorderSignature recorder)) (Object track) (Object buffer) (Object floatArray) (Object periodicWave)
+type AudioInfo = 
+    AudioInfo' (Object BrowserMicrophone) (Object (RecorderSignature MediaRecorder)) (Object BrowserAudioTrack) (Object BrowserAudioBuffer) (Object BrowserFloatArray) (Object BrowserPeriodicWave)
 
-type AudioInfo microphones recorders tracks buffers floatArrays periodicWaves
+type AudioInfo' microphones recorders tracks buffers floatArrays periodicWaves
   = { microphones :: microphones
     , recorders :: recorders
     , tracks :: tracks
@@ -4526,7 +4528,7 @@ type Run accumulator env
   = accumulator ->
     AudioContext ->
     EngineInfo ->
-    AudioInfoExists ->
+    AudioInfo ->
     VisualInfo accumulator ->
     Exporter env accumulator ->
     Effect (Effect Unit)
@@ -4565,7 +4567,7 @@ class RunnableMedia callback accumulator env where
     accumulator ->
     AudioContext ->
     EngineInfo ->
-    AudioInfoExists ->
+    AudioInfo ->
     VisualInfo accumulator ->
     Exporter env accumulator ->
     Effect (Effect Unit)
@@ -4941,7 +4943,7 @@ runInBrowser_ ::
   accumulator ->
   AudioContext ->
   EngineInfo ->
-  AudioInfoExists ->
+  AudioInfo ->
   VisualInfo accumulator ->
   Exporter env accumulator ->
   Effect (Effect Unit)
