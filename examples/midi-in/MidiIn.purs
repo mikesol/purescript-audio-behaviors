@@ -10,10 +10,9 @@ import Data.Tuple (snd)
 import Data.Typelevel.Num (D1)
 import Effect (Effect)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AudioContext, AudioInfo, AudioUnit, EngineInfo, Exporter, VisualInfo, RecorderSignature, defaultExporter, gain', runInBrowser_, sinOsc, speaker')
+import FRP.Behavior.Audio (AudioUnit, Exporter, Run, defaultExporter, gain', runInBrowser_, sinOsc, speaker')
 import FRP.Behavior.MIDI (midi)
 import FRP.Event.MIDI (MIDI, MIDIAccess, MIDIEvent(..), MIDIEventInTime, getMidi, midiAccess)
-import Foreign.Object (Object)
 import Math (pi)
 
 simpleOnOff :: M.Map String (List MIDIEventInTime) -> Boolean
@@ -42,6 +41,7 @@ scene midiIn time = f <$> (midi midiIn)
     speaker'
       (gain' (if simpleOnOff md then 0.6 else 0.0) $ sinOsc 440.0)
 
+run :: MIDIAccess -> Run Unit Unit
 run max =
   runInBrowser_ do
     md <- getMidi max

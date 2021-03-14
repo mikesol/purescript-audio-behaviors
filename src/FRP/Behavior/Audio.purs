@@ -290,6 +290,7 @@ module FRP.Behavior.Audio
   , CanvasInfo'
   , EngineInfo
   , AudioInfo
+  , AudioInfoExists
   , RecorderInfo
   , RecorderSignature
   , MediaRecorder
@@ -301,6 +302,7 @@ module FRP.Behavior.Audio
   , BrowserFloatArray
   , Exporter
   , BuildingBlocks
+  , Run
   , RunInBrowser
   , RunInBrowser_
   , RunInBrowserAudioUnit
@@ -3508,12 +3510,11 @@ type TouchAudioIO
 -- | audio units
 -- | audio units
 foreign import touchAudio ::
-  forall microphone recorder track buffer floatArray periodicWave.
   FFIPredicates ->
   Number ->
   Array Instruction ->
   AudioContext ->
-  AudioInfo (Object microphone) (Object (RecorderSignature recorder)) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
+  AudioInfoExists ->
   TouchAudioIO ->
   Effect TouchAudioIO
 
@@ -4450,6 +4451,9 @@ type RecorderInfo dataavailableEvent errorEvent pauseEvent resumeEvent startEven
     , onstop :: stopEvent -> Effect Unit
     }
 
+type AudioInfoExists = forall microphone recorder track buffer floatArray periodicWave.
+    AudioInfo (Object microphone) (Object (RecorderSignature recorder)) (Object track) (Object buffer) (Object floatArray) (Object periodicWave)
+
 type AudioInfo microphones recorders tracks buffers floatArrays periodicWaves
   = { microphones :: microphones
     , recorders :: recorders
@@ -4518,27 +4522,20 @@ type RunInBrowserIAnimation_ accumulator ch env
   = RunInBrowser_ (accumulator -> CanvasInfo -> Number -> Behavior (IAnimation accumulator)) accumulator
       env
 
-type RunInBrowser callback accumulator env
-  = forall microphone recorder track buffer floatArray periodicWave.
-    callback ->
-    accumulator ->
+type Run accumulator env
+  = accumulator ->
     AudioContext ->
     EngineInfo ->
-    AudioInfo (Object microphone) (Object (RecorderSignature recorder)) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
+    AudioInfoExists ->
     VisualInfo accumulator ->
     Exporter env accumulator ->
     Effect (Effect Unit)
 
+type RunInBrowser callback accumulator env
+  = callback -> Run accumulator env
+
 type RunInBrowser_ callback accumulator env
-  = forall microphone recorder track buffer floatArray periodicWave.
-    Effect callback ->
-    accumulator ->
-    AudioContext ->
-    EngineInfo ->
-    AudioInfo (Object microphone) (Object (RecorderSignature recorder)) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
-    VisualInfo accumulator ->
-    Exporter env accumulator ->
-    Effect (Effect Unit)
+  = Effect callback -> Run accumulator env
 
 type Exporter env accumulator
   = { acquire :: Aff env
@@ -4564,12 +4561,11 @@ type EngineInfo
 
 class RunnableMedia callback accumulator env where
   runInBrowser ::
-    forall microphone recorder track buffer floatArray periodicWave.
     callback ->
     accumulator ->
     AudioContext ->
     EngineInfo ->
-    AudioInfo (Object microphone) (Object (RecorderSignature recorder)) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
+    AudioInfoExists ->
     VisualInfo accumulator ->
     Exporter env accumulator ->
     Effect (Effect Unit)
@@ -4939,13 +4935,13 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
 -- | The main executor loop in the browser
 -- | Accepts an effectful scene
 runInBrowser_ ::
-  forall accumulator microphone recorder track buffer floatArray periodicWave callback env.
+  forall accumulator callback env.
   RunnableMedia callback accumulator env =>
   Effect callback ->
   accumulator ->
   AudioContext ->
   EngineInfo ->
-  AudioInfo (Object microphone) (Object (RecorderSignature recorder)) (Object track) (Object buffer) (Object floatArray) (Object periodicWave) ->
+  AudioInfoExists ->
   VisualInfo accumulator ->
   Exporter env accumulator ->
   Effect (Effect Unit)

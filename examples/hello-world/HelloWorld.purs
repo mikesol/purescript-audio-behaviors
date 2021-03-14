@@ -6,8 +6,7 @@ import Data.NonEmpty ((:|))
 import Data.Typelevel.Num (D1)
 import Effect (Effect)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AudioContext, AudioInfo, AudioUnit, EngineInfo, Exporter, MediaRecorder, RecorderSignature, VisualInfo, defaultExporter, gain', mediaRecorderToUrl, recorder, runInBrowser, sinOsc, speaker)
-import Foreign.Object (Object)
+import FRP.Behavior.Audio (AudioUnit, Exporter, MediaRecorder, Run, defaultExporter, gain', mediaRecorderToUrl, recorder, runInBrowser, sinOsc, speaker)
 import Math (pi, sin)
 
 scene :: Number -> Behavior (AudioUnit D1)
@@ -26,6 +25,7 @@ scene time =
               )
           )
 
+run :: Run Unit Unit
 run = runInBrowser scene
 
 mr2url = mediaRecorderToUrl :: String -> (String -> Effect Unit) -> MediaRecorder -> Effect Unit

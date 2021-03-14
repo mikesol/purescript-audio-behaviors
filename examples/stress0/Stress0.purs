@@ -11,8 +11,7 @@ import Data.Tuple (Tuple(..))
 import Data.Typelevel.Num (D1)
 import Effect (Effect)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AudioContext, AudioInfo, AudioParameter, AudioUnit, EngineInfo, Exporter, VisualInfo, RecorderSignature, defaultExporter, evalPiecewise, gain', gainT', gainT_', gain_', runInBrowser, sinOsc, sinOsc_, speaker, speaker_)
-import Foreign.Object (Object)
+import FRP.Behavior.Audio (AudioParameter, AudioUnit, Exporter, Run, defaultExporter, evalPiecewise, gain', gainT', gainT_', gain_', runInBrowser, sinOsc, sinOsc_, speaker, speaker_)
 
 pwf0 :: Array (Tuple Number Number)
 pwf0 =
@@ -115,6 +114,7 @@ sceneNN s =
             : Nil
         )
 
+run :: Run Unit Unit
 run = runInBrowser sceneNN
 
 exporter = defaultExporter :: Exporter Unit Unit

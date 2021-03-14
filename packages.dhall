@@ -168,6 +168,20 @@ let additions =
         , repo = "https://github.com/mikesol/purescript-behaviors.git"
         , version = "master"
         }
+      , painting =
+        { dependencies =
+          [ "canvas"
+          , "colors"
+          , "console"
+          , "effect"
+          , "foldable-traversable"
+          , "foreign-object"
+          , "psci-support"
+          , "web-html"
+          ]
+        , repo = "https://github.com/mikesol/purescript-painting.git"
+        , version = "main"
+        }
       }
 
 in  upstream // overrides // additions

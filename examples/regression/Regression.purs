@@ -13,8 +13,7 @@ import Data.Typelevel.Num (D2)
 import Effect (Effect)
 import Effect.Class.Console (log)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AudioContext, AudioInfo, AudioParameter, AudioUnit, EngineInfo, Exporter, VisualInfo, RecorderSignature, defaultExporter, evalPiecewise, g'add_, g'delay_, g'gain_, graph_, playBufWithOffset_, runInBrowser, speaker)
-import Foreign.Object (Object)
+import FRP.Behavior.Audio (AudioParameter, AudioUnit, Exporter, Run, defaultExporter, evalPiecewise, g'add_, g'delay_, g'gain_, graph_, playBufWithOffset_, runInBrowser, speaker)
 import Type.Data.Graph (SNil, type (:/))
 import Type.Proxy (Proxy(..))
 
@@ -109,6 +108,7 @@ scene time =
                 )
         )
 
+run :: Run Unit Unit
 run = runInBrowser scene
 
 exporter =

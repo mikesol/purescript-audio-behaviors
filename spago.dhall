@@ -9,6 +9,7 @@
   , "effect"
   , "foreign-object"
   , "heterogeneous"
+  , "painting"
   , "psci-support"
   , "sized-vectors"
   , "typelevel-graph"

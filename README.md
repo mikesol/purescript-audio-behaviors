@@ -1,6 +1,6 @@
 # purescript-audio-behaviors
 
-[`purescript-behaviors`](https://github.com/paf31/purescript-behaviors) for web audio.
+[`purescript-behaviors`](https://github.com/mikesol/purescript-behaviors) for web audio.
 
 ## Demo
 

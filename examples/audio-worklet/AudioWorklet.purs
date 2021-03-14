@@ -4,8 +4,7 @@ import Prelude
 import Data.Typelevel.Num (D1)
 import Effect (Effect)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AudioContext, AudioInfo, AudioUnit, EngineInfo, Exporter, VisualInfo, RecorderSignature, audioWorkletAggregator, audioWorkletGenerator, audioWorkletProcessor, defaultExporter, gain', runInBrowser, sinOsc, speaker')
-import Foreign.Object (Object)
+import FRP.Behavior.Audio (AudioUnit, Exporter, Run, audioWorkletAggregator, audioWorkletGenerator, audioWorkletProcessor, defaultExporter, gain', runInBrowser, sinOsc, speaker')
 import Foreign.Object as O
 import Math (pi, sin)
 
@@ -69,6 +68,7 @@ scene2p time =
   where
   rad = time * pi
 
+run :: Run Unit Unit
 run = runInBrowser scene1
 
 exporter = defaultExporter :: Exporter Unit Unit

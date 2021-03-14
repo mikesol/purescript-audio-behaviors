@@ -7,8 +7,7 @@ import Data.Typelevel.Num (D1)
 import Effect (Effect)
 import Effect.Class.Console (log)
 import FRP.Behavior (Behavior)
-import FRP.Behavior.Audio (AudioContext, AudioInfo, AudioUnit, EngineInfo, Exporter, VisualInfo, RecorderSignature, gain', runInBrowser, sinOsc, speaker)
-import Foreign.Object (Object)
+import FRP.Behavior.Audio (AudioUnit, Exporter, Run, gain', runInBrowser, sinOsc, speaker)
 import Math (pi, sin)
 
 scene :: Number -> Behavior (AudioUnit D1)
@@ -25,6 +24,7 @@ scene time =
               : Nil
           )
 
+run :: Run Unit String
 run = runInBrowser scene
 
 exporter :: Exporter String Unit
