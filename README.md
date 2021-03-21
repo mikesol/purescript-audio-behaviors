@@ -4,7 +4,7 @@
 
 ## Demo
 
-Check out [klank.dev](https://github.com/mikesol/klank-dev), where the `klank-studio` directory has examples of this being used in the browser.
+Check out [klank.dev](https://github.com/mikesol/klank.dev), where the `klank-studio` directory has examples of this being used in the browser.
 
 ## Installation
 
