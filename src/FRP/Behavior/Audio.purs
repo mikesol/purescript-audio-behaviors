@@ -4884,12 +4884,18 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
                             write cur reconRef
                             --__t2 <- map getTime now
                             let debug = false
-                            case debug of
-                              true -> Log.info ("prev@ " <> show prev <> "cur@ " <> show cur)
-                              false -> pure unit
                             let
                               instructionSet = reconciliationToInstructionSet prev cur
                             --__t3 <- map getTime now
+                            case debug of
+                              true -> do
+                                Log.info "prev"
+                                Log.info (show prev)
+                                Log.info "cur"
+                                Log.info (show cur)
+                                Log.info "instructionSet"
+                                Log.info (show instructionSet)
+                              false -> pure unit
                             exporterQueueRef <- read __exporterQueueRef
                             launchAff
                               ( do
