@@ -4613,8 +4613,38 @@ data IAudioUnit ch accumulator
 getFirstCanvas :: Object (Effect CanvasElement) -> Maybe (Effect CanvasElement)
 getFirstCanvas = map snd <<< A.head <<< O.toUnfoldable
 
+instance pureSoundRunnableMedia :: Pos ch => RunnableMedia (AudioUnit ch) Unit env where
+  runInBrowser f a =
+    runInBrowser
+      ( ( \z wh s ->
+            map
+              ( \x ->
+                  AV
+                    { audio: Just x, visual: Nothing, accumulator: unit }
+              )
+              ((const $ pure f) s)
+        ) ::
+          (Unit -> CanvasInfo -> Number -> ABehavior Event (AV ch Unit))
+      )
+      unit
+
+instance timedSoundRunnableMedia :: Pos ch => RunnableMedia (Number -> AudioUnit ch) Unit env where
+  runInBrowser f a =
+    runInBrowser
+      ( ( \z wh s ->
+            map
+              ( \x ->
+                  AV
+                    { audio: Just x, visual: Nothing, accumulator: unit }
+              )
+              ((pure <<< f) s)
+        ) ::
+          (Unit -> CanvasInfo -> Number -> ABehavior Event (AV ch Unit))
+      )
+      unit
+
 instance soundscapeRunnableMedia :: Pos ch => RunnableMedia (Number -> ABehavior Event (AudioUnit ch)) Unit env where
-  runInBrowser f a ac ei ai vi ex =
+  runInBrowser f a =
     runInBrowser
       ( ( \z wh s ->
             map
@@ -4627,14 +4657,9 @@ instance soundscapeRunnableMedia :: Pos ch => RunnableMedia (Number -> ABehavior
           (Unit -> CanvasInfo -> Number -> ABehavior Event (AV ch Unit))
       )
       unit
-      ac
-      ei
-      ai
-      vi
-      ex
 
 instance iSoundscapeRunnableMedia :: Pos ch => RunnableMedia (accumulator -> Number -> ABehavior Event (IAudioUnit ch accumulator)) accumulator env where
-  runInBrowser f a ac ei ai vi ex =
+  runInBrowser f a =
     runInBrowser
       ( ( \z wh s ->
             map
@@ -4650,14 +4675,9 @@ instance iSoundscapeRunnableMedia :: Pos ch => RunnableMedia (accumulator -> Num
           (accumulator -> CanvasInfo -> Number -> ABehavior Event (AV ch accumulator))
       )
       a
-      ac
-      ei
-      ai
-      vi
-      ex
 
 instance animationRunnable :: RunnableMedia (CanvasInfo -> Number -> ABehavior Event Animation) Unit env where
-  runInBrowser f a ac ei ai vi ex =
+  runInBrowser f a =
     runInBrowser
       ( ( \z wh s ->
             map
@@ -4673,14 +4693,9 @@ instance animationRunnable :: RunnableMedia (CanvasInfo -> Number -> ABehavior E
           (Unit -> CanvasInfo -> Number -> ABehavior Event (AV D1 Unit))
       )
       unit
-      ac
-      ei
-      ai
-      vi
-      ex
 
 instance iAnimationRunnable :: RunnableMedia (accumulator -> CanvasInfo -> Number -> ABehavior Event (IAnimation accumulator)) accumulator env where
-  runInBrowser f a ac ei ai vi ex =
+  runInBrowser f =
     runInBrowser
       ( \z wh s ->
           map
@@ -4693,12 +4708,6 @@ instance iAnimationRunnable :: RunnableMedia (accumulator -> CanvasInfo -> Numbe
             )
             (f z wh s)
       )
-      a
-      ac
-      ei
-      ai
-      vi
-      ex
 
 htmlCanvasElementToCanvasElement :: HTMLCanvasElement -> CanvasElement
 htmlCanvasElementToCanvasElement = unsafeCoerce

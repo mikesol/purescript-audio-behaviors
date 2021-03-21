@@ -4,7 +4,7 @@
 
 ## Demo
 
-Check out [klank.dev](https://klank.dev), where you can use this library interactively in the browser.
+Check out [klank.dev](https://github.com/mikesol/klank-dev), where the `klank-studio` directory has examples of this being used in the browser.
 
 ## Installation
 
@@ -23,8 +23,6 @@ spago build
 This library uses the [behaviors pattern](https://wiki.haskell.org/Functional_Reactive_Programming) pioneered by Conal Elliott and Paul Hudak. You describe the way audio should behave at a given time, and the function is sampled at regular intervals to build the audio graph.
 
 For example, consider the following behavior, taken from [`HelloWorld.purs`](./examples/hello-world/HelloWorld.purs):
-
-[Try me on klank.dev](https://klank.dev/?k&url=https://klank-share.s3.amazonaws.com/K16084000683023921.purs&klank=https://klank-share.s3.amazonaws.com/klank16084000721812905.js)
 
 ```haskell
 scene ::  Number -> Behavior (AudioUnit D1)
@@ -63,8 +61,6 @@ In this section, we'll build a scene from the ground up. In doing so, we'll acco
 
 Let's start with a sine wave at A440 playing at a volume of `0.5` (where `1.0` is the loudest volume).
 
-[Try me on klank.dev](https://klank.dev/?k&url=https://klank-share.s3.eu-west-1.amazonaws.com/K16084001257983247.purs&klank=https://klank-share.s3.eu-west-1.amazonaws.com/klank16084001276737565.js)
-
 ```haskell
 scene :: Number -> Behavior (AudioUnit D1)
 scene = const $ pure (speaker' $ (gain' 0.5 $ sinOsc 440.0))
@@ -75,8 +71,6 @@ Note that, because this function does not depend on time, we can ignore the inpu
 ### Adding sound via the microphone
 
 Let's add our voice to the mix! We'll put it above a nice low drone.
-
-[Try me on klank.dev](https://klank.dev/?k&url=https://klank-share.s3.eu-west-1.amazonaws.com/K16084001860847436.purs&klank=https://klank-share.s3.eu-west-1.amazonaws.com/klank16084001880123757.js)
 
 ```haskell
 scene :: Number -> Behavior (AudioUnit D1)
@@ -97,8 +91,6 @@ Make sure to wear headphones to avoid feedback!
 ### Adding playback from an audio tag
 
 Let's add some soothing jungle sounds to the mix. We use the function `play` to add an audio element. This function assumes that you provide an audio element with the appropriate tag to the toplevel `runInBrowser` function. In this case, the tag is `"forest"`.
-
-[Try me on klank.dev](https://klank.dev/?k&url=https://klank-share.s3.eu-west-1.amazonaws.com/K16084006090986919.purs&klank=https://klank-share.s3.eu-west-1.amazonaws.com/klank16084006109696103.js)
 
 ```haskell
 -- assuming we have passed in an object
@@ -146,8 +138,6 @@ scene =
 
 Up until this point, our audio hasn't reacted to many behaviors. Let's fix that! One behavior to react to is the passage of time. Let's add a slow undulation to the lowest pitch in the drone that is based on the passage of time
 
-[Try me on klank.dev](https://klank.dev/?k&url=https://klank-share.s3.amazonaws.com/K1608453374107641.purs&klank=https://klank-share.s3.amazonaws.com/klank16084533778906742.js)
-
 ```haskell
 scene :: Number -> Behavior (AudioUnit D2)
 scene time =
@@ -170,8 +160,6 @@ scene time =
 ### Getting the sound to change as a function of a mouse input event
 
 The next snippet of code uses the mouse to modulate the pitch of the higher note by roughly a major third.
-
-[Try me on klank.dev](https://klank.dev/?k&url=https://klank-share.s3.eu-west-1.amazonaws.com/K16084535789877191.purs&klank=https://klank-share.s3.eu-west-1.amazonaws.com/klank16084535806767881.js)
 
 ```haskell
 scene :: Mouse -> Number -> Behavior (AudioUnit D2)
@@ -401,8 +389,6 @@ scene mouse acc@{ onset } time = f time <$> click
 
 Let's add a little dot that gets bigger when we click. We'll do that using the `AV` constructor that accepts a [Drawing](https://pursuit.purescript.org/packages/purescript-drawing/4.0.0/docs/Graphics.Drawing#t:Drawing).
 
-[Try me on klank.dev](https://klank.dev/?k&ec&url=https://klank-share.s3.amazonaws.com/K16043869640467459.purs)
-
 ```haskell
 pwf :: Array (Tuple Number Number)
 pwf =
@@ -581,7 +567,7 @@ type AudioParameter
 - sending to a server for dispatching to MIDI devices or SuperCollider
 - tweeting your audio graph every 20ms (I don't know why you'd do this... but you could!)
 
-The library provides a `defaultExporter` that is a no-op. To override this, pass an exporter with type `Exporter` to the `runInBrowser` function. [Here is an example on klank.dev of an exporter that prints to `console.log`](https://link.klank.dev/6N3KnLpyiZJJm14m7).
+The library provides a `defaultExporter` that is a no-op. To override this, pass an exporter with type `Exporter` to the `runInBrowser` function.
 
 ### Named units
 
@@ -621,7 +607,7 @@ type EngineInfo
 - `msBetweenPings` - The number of milliseconds between pings to the sampling engine. The lower the rate, the less chance that you will miss a sampling deadline but the higher chance your page will lock up. This _must_ be less than `msBetweenSamples`. Try 15.
 - `fastforwardLowerBound` - The number of seconds below which the audio engine will skip a frame. The lower this is, the less likely there will be a skip, but the more likely the skip will sound jarring if it happens. Try `0.025`.
 - `rewindUpperBound` - The number of seconds of look-ahead. For uses that have no interactive component other than starting and stopping the sound (meaning no mouse, no MIDI Keyboard, etc) this can be large (ie `1.0` or even higher). For apps with an interactive component, you want this as low as possible, ie `0.06` or even lower. Note that this should be _at least_ twice `msBetweenSamples`.
-- `initialOffset` - The number of seconds to wait before playing. JavaScript does a lot of memory allocation when a klank starts playing, which sometimes results in jank. Try something between `0.1` and `0.4`.
+- `initialOffset` - The number of seconds to wait before playing. JavaScript does a lot of memory allocation when audio starts playing, which sometimes results in jank. Try something between `0.1` and `0.4`.
 - `doWebAudio` - Should we render all of this stuff towith the web audio API? If true, then yes, otherwise the Web Audio API won't be called. Useful when you want to use an exporter without making sound in the browser.
 
 ## Bundling on your site
