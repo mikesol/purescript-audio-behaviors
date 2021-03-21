@@ -385,6 +385,7 @@ import Data.Vec as V
 import Effect (Effect)
 import Effect.Aff (Aff, error, joinFiber, launchAff, launchAff_, throwError)
 import Effect.Class.Console (warn)
+import Effect.Class.Console as Log
 import Effect.Exception (try)
 import Effect.Ref (modify, new, read, write)
 import FRP.Behavior (ABehavior, Behavior, sample_)
@@ -4882,6 +4883,10 @@ instance avRunnableMedia :: Pos ch => RunnableMedia (accumulator -> CanvasInfo -
                             prev <- read reconRef
                             write cur reconRef
                             --__t2 <- map getTime now
+                            let debug = false
+                            case debug of
+                              true -> Log.info ("prev@ " <> show prev <> "cur@ " <> show cur)
+                              false -> pure unit
                             let
                               instructionSet = reconciliationToInstructionSet prev cur
                             --__t3 <- map getTime now
