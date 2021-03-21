@@ -62,28 +62,25 @@ In this section, we'll build a scene from the ground up. In doing so, we'll acco
 Let's start with a sine wave at A440 playing at a volume of `0.5` (where `1.0` is the loudest volume).
 
 ```haskell
-scene :: Number -> Behavior (AudioUnit D1)
-scene = const $ pure (speaker' $ (gain' 0.5 $ sinOsc 440.0))
+scene :: AudioUnit D1
+scene = speaker' $ (gain' 0.5 $ sinOsc 440.0)
 ```
 
-Note that, because this function does not depend on time, we can ignore the input.
+For simple audio graphs, we do not need to use behaviors and can just use the `AudioUnit ch` type, where `ch` is the number of channels prefixed by `D`. As the example above is mono, `D1` is the number of channels.
 
 ### Adding sound via the microphone
 
 Let's add our voice to the mix! We'll put it above a nice low drone.
 
 ```haskell
-scene :: Number -> Behavior (AudioUnit D1)
+scene :: AudioUnit D1
 scene =
-  const
-    $ pure
-        ( speaker
-            $ ( (gain' 0.2 $ sinOsc 110.0)
-                  :| (gain' 0.1 $ sinOsc 220.0)
-                  : microphone
-                  : Nil
-              )
-        )
+  speaker
+    $ ( (gain' 0.2 $ sinOsc 110.0)
+          :| (gain' 0.1 $ sinOsc 220.0)
+          : microphone
+          : Nil
+      )
 ```
 
 Make sure to wear headphones to avoid feedback!
@@ -96,18 +93,15 @@ Let's add some soothing jungle sounds to the mix. We use the function `play` to 
 -- assuming we have passed in an object
 -- with { forest: new Audio("my-recording.mp3") }
 -- to `runInBrowser`
-scene :: Number -> Behavior (AudioUnit D1)
+scene :: AudioUnit D1
 scene =
-  const
-    $ pure
-        ( speaker
-            $ ( (gain' 0.2 $ sinOsc 110.0)
-                  :| (gain' 0.1 $ sinOsc 220.0)
-                  : (gain' 0.5 $ (playBuf "forest" 1.0))
-                  : microphone
-                  : Nil
-              )
-        )
+  speaker
+    $ ( (gain' 0.2 $ sinOsc 110.0)
+          :| (gain' 0.1 $ sinOsc 220.0)
+          : (gain' 0.5 $ (playBuf "forest" 1.0))
+          : microphone
+          : Nil
+      )
 ```
 
 ### Going from mono to stereo
@@ -117,20 +111,17 @@ To go from mono to stereo, there is a class of functions called `dupX`, `splitX`
 If you want to make two separate audio units, then you can use a normal let block. If, on the other hand, you want to use the same underlying unit, use `dupX`. When in doubt, use `dupX`, as you'll rarely need to duplicate an identical audio source.
 
 ```haskell
-scene :: Number -> Behavior (AudioUnit D2)
+scene :: AudioUnit D2
 scene =
-  const
-    $ pure
-        ( dup1
-            ( (gain' 0.2 $ sinOsc 110.0)
-                + (gain' 0.1 $ sinOsc 220.0)
-                + microphone
-            ) \mono ->
-            speaker
-              $ ( (panner (-0.5) (merger (mono +> mono +> empty)))
-                    :| (gain' 0.5 $ (playBuf "forest" 1.0))
-                    : Nil
-                )
+  dup1
+    ( (gain' 0.2 $ sinOsc 110.0)
+        + (gain' 0.1 $ sinOsc 220.0)
+        + microphone
+    ) \mono ->
+    speaker
+      $ ( (panner (-0.5) (merger (mono +> mono +> empty)))
+            :| (gain' 0.5 $ (playBuf "forest" 1.0))
+            : Nil
         )
 ```
 
@@ -139,22 +130,21 @@ scene =
 Up until this point, our audio hasn't reacted to many behaviors. Let's fix that! One behavior to react to is the passage of time. Let's add a slow undulation to the lowest pitch in the drone that is based on the passage of time
 
 ```haskell
-scene :: Number -> Behavior (AudioUnit D2)
+scene :: Number -> AudioUnit D2
 scene time =
   let
     rad = pi * time
   in
-    pure
-      $ dup1
-          ( (gain' 0.2 $ sinOsc (110.0 + (10.0 * sin (0.2 * rad))))
-              + (gain' 0.1 $ sinOsc 220.0)
-              + microphone
-          ) \mono ->
-          speaker
-            $ ( (panner (-0.5) (merger (mono +> mono +> empty)))
-                  :| (gain' 0.5 $ (playBuf "forest" 1.0))
-                  : Nil
-              )
+    dup1
+      ( (gain' 0.2 $ sinOsc (110.0 + (10.0 * sin (0.2 * rad))))
+          + (gain' 0.1 $ sinOsc 220.0)
+          + microphone
+      ) \mono ->
+      speaker
+        $ ( (panner (-0.5) (merger (mono +> mono +> empty)))
+              :| (gain' 0.5 $ (playBuf "forest" 1.0))
+              : Nil
+          )
 ```
 
 ### Getting the sound to change as a function of a mouse input event
