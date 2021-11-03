@@ -1,5 +1,7 @@
 # purescript-audio-behaviors
 
+> UPDATE. This repo is archived and is no longer being maintained. I've since created [`purescript-wags`](https://github.com/mikesol/purescript-wags), which is faster and more ergonomic. Please use that!
+
 [`purescript-behaviors`](https://github.com/mikesol/purescript-behaviors) for web audio.
 
 ## Demo
